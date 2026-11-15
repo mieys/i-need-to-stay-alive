@@ -14,19 +14,17 @@ const FireworkScene: PackedScene = preload("res://scenes/firework_projectile.tsc
 ## anahtar -> assets/weapons/yeni/ dosyası (Tüftüf 2026-11-06'dan beri ZEHİR ASASI, anahtar aynı; Yay + Arbalet madde 413; Pençe 2026-11-09'dan
 ## beri TIRPAN, anahtar aynı, madde 505; Bıçak 2026-11-09 kullanıcının eğri hançer çizimi, madde 522)
 const DESKTOP_ART := {"uzunkilic": "uzunkilic", "arcane": "arcane", "fire_staff": "fire_staff", "buz_asasi": "buz_asasi",
-	"gokkusagi": "gokkusagi", "tuftuf": "zehir_asasi", "crossbow": "arbalet", "yay": "yay", "pence": "tirpan", "dagger": "bicak"}
+	"gokkusagi": "gokkusagi", "tuftuf": "zehir_asasi", "crossbow": "arbalet", "yay": "yay", "pence": "tirpan", "dagger": "bicak",
+	"topuz": "topuz", "lightning_staff": "yildirim_asasi", "tabanca": "tabanca", "tufek": "tufek", "boomerang": "chakram", "fisek": "dinamit"}
 ## Yay'ın ipi sol-üst köşegende, ok sağ-alta uçar (+45); diğer çizimler sol-alt -> sağ-üst (-45).
-const DESKTOP_FORWARD := {"yay": 45.0}
+## Tırpan (madde 589 32x32 çizim): sap -62; çakram dört kat simetrik daire, eski bumerang açısı -90.
+const DESKTOP_FORWARD := {"yay": 45.0, "tabanca": 0.0, "tufek": 0.0, "pence": -62.0, "boomerang": -90.0}
 const NEW_WEAPONS := ["mizrak", "kalkan", "yinyang"]
 ## Kendi klasöründe çizimi olan yeni silahlar (madde 448 Pompalı Tüfek).
-const OWN_ART := {"pompali": "res://assets/weapons/pompali/icon.png"}
+const OWN_ART := {"pompali": "res://assets/weapons/pompali/icon.png", "makineli": "res://assets/weapons/makineli/icon.png"} ## + madde 652
 ## Zanaatkâr öncesi ikonlarına dönenler: sahne dokusu (asalarda weapon.gd'nin v3 ikonu).
-const OLD_ICONS := {
-	"weapon_topuz": "topuz/icon.png",
-	"weapon_lightning": "lightning/icon_v3.png", "weapon_tabanca": "tabanca/icon_v2.png", "weapon_tufek": "tufek/icon.png",
-	"weapon_boomerang": "boomerang/icon.png",
-	"weapon_fisek": "fisek/icon.png",
-}
+## Madde 651: son eski ikonlu silah Fişek de artık kullanıcının Dinamit çizimi -> liste boş (test kalıp olarak duruyor).
+const OLD_ICONS := {}
 
 
 func test_art_table_is_desktop_art_plus_new_weapons() -> void:
@@ -41,8 +39,7 @@ func test_art_table_is_desktop_art_plus_new_weapons() -> void:
 	for key in OWN_ART:
 		assert(WeaponTierArt.texture(key) != null and WeaponTierArt.texture(key).resource_path == OWN_ART[key], "%s kendi çizimi" % key)
 	assert(WeaponTierArt.ART.size() == DESKTOP_ART.size() + NEW_WEAPONS.size() + OWN_ART.size(), "tabloda başka silah yok")
-	for key in ["topuz", "lightning_staff", "tabanca", "tufek", "boomerang", "fisek"]:
-		assert(not WeaponTierArt.has_art(key) and WeaponTierArt.texture(key) == null, "%s eski ikonunda" % key)
+	assert(WeaponCatalog.display_name("fisek") == "Dinamit", "Fişek -> Dinamit (madde 651)")
 	for t in range(1, 6):
 		assert(WeaponTierArt.texture("arcane", t) == WeaponTierArt.texture("arcane", 1), "doku kademeyle değişmez")
 	for scene_name in WeaponTierArt.SCENE_KEYS:
@@ -51,6 +48,40 @@ func test_art_table_is_desktop_art_plus_new_weapons() -> void:
 	assert(GlowScript.GLOW_ENABLED, "kademe göstergesi kontür parıltısı açık")
 	assert(WeaponCatalog.display_name("tuftuf") == "Zehir Asası", "Tüftüf -> Zehir Asası")
 	assert(WeaponCatalog.icon("tuftuf") == WeaponTierArt.texture("tuftuf"), "arayüz ikonu = oyundaki çizim")
+
+
+## 2026-11-10 oyuncu bildirimi: Bıçak Buz Asası gibi, Yıldırım Asası yay gibi görünüyordu - içe aktarma iki dosyayı başka silahın
+## baytlarıyla doldurmuştu (aynı md5). Her silahın arayüz/oyun ikonu kendi dosyası olmalı; iki silah aynı görseli paylaşamaz.
+func test_every_weapon_icon_is_its_own_image() -> void:
+	var by_md5: Dictionary = {}
+	for key: String in WeaponCatalog.KEYS:
+		var tex: Texture2D = WeaponCatalog.icon(key)
+		assert(tex != null and tex.resource_path != "", "%s ikonu yok" % key)
+		var md5: String = FileAccess.get_md5(tex.resource_path)
+		assert(md5 != "", "%s ikon dosyası okunamadı: %s" % [key, tex.resource_path])
+		assert(not by_md5.has(md5), "%s ve %s AYNI görseli kullanıyor (%s)" % [key, by_md5.get(md5, ""), tex.resource_path])
+		by_md5[md5] = key
+	assert(WeaponCatalog.icon("lightning_staff").resource_path == "res://assets/weapons/yeni/yildirim_asasi.png", "Yıldırım Asası kullanıcının çizimi")
+	assert(WeaponCatalog.icon("dagger").resource_path == "res://assets/weapons/yeni/bicak.png", "Bıçak kullanıcının çizimi")
+
+
+## 2026-11-11 (madde 581): seçim ızgarasında Tüfek + Pompalı yatay 64x32 / 64x64 çizimle `DK.icon` tam kat kuralında 1x kalıp ufak duruyordu ->
+## menü ikonu çapraz 48x48 (96 kutuda 2x). Oyundaki doku (`icon`) aynı kalır; çapraz ikon kutunun kenarına değmez.
+func test_menu_icons_of_horizontal_rifles_are_diagonal_and_fill_the_slot() -> void:
+	var dk: GDScript = preload("res://scripts/menu_dark_kit.gd")
+	for key: String in ["tufek", "pompali", "makineli"]:
+		var tex: Texture2D = WeaponCatalog.menu_icon(key)
+		assert(tex != null and tex.resource_path == WeaponCatalog.MENU_ICONS[key], "%s menü ikonu içe aktarılmamış" % key)
+		assert(tex != WeaponCatalog.icon(key), "%s menü ikonu oyundaki yatay doku olmamalı" % key)
+		assert(tex.get_size() == Vector2(48, 48), "%s menü ikonu 48x48 (96 kutuda tam 2x)" % key)
+		var used: Rect2i = tex.get_image().get_used_rect()
+		## Makineli (madde 652) çizimi 60x32 (Tüfek 64x32) -> çaprazı 35 px eninde; eşik 34.
+		assert(used.size.x >= 34 and used.size.y >= 40, "%s çapraz ikon kutuyu dolduruyor (%s)" % [key, used])
+		assert(used.position.x >= 1 and used.position.y >= 1 and used.end.x <= 47 and used.end.y <= 47, "%s ikon kutu kenarına değmemeli (%s)" % [key, used])
+		var box: Control = dk.icon(tex, 96.0)
+		assert((box.get_child(0) as TextureRect).custom_minimum_size == Vector2(96, 96), "%s 96 kutuda 2x" % key)
+		box.free()
+	assert(WeaponCatalog.menu_icon("dagger") == WeaponCatalog.icon("dagger"), "çapraz menü ikonu olmayan silah aynen")
 
 
 func _local_weapon(scene_path: String) -> Node2D:
@@ -73,7 +104,7 @@ func test_local_weapon_keeps_fixed_art_and_glows_with_tier() -> void:
 	assert(icon.texture.resource_path == "res://assets/weapons/yeni/uzunkilic.png", "masaüstü kılıcı: %s" % icon.texture.resource_path)
 	assert(is_equal_approx(float(w.get("sprite_forward_angle_deg")), -45.0), "sanat çapraz")
 	assert(is_equal_approx(float(w.get("melee_icon_rest_rotation_deg")), -45.0), "dinlenmede uç yukarı (-45)")
-	assert(icon.scale.is_equal_approx(Vector2.ONE * WeaponTierArt.WORLD_PX / 0.5), "yakın dövüş ikon ölçeği -> dünya pikseli WORLD_PX")
+	assert(icon.scale.is_equal_approx(Vector2.ONE * WeaponTierArt.WORLD_PX * WeaponTierArt.size_mult("uzunkilic") / 0.5), "yakın dövüş ikon ölçeği -> dünya pikseli WORLD_PX x boyut çarpanı")
 	w.call("set_enchant", {"id": "ates_nefesi", "ups": [0, 1, 2], "final": false})
 	assert(int(w.get("enchant_glow_tier")) == 4, "3 geliştirme = kademe 4")
 	assert(icon.texture.resource_path == "res://assets/weapons/yeni/uzunkilic.png", "kademe 4'te doku AYNI")
@@ -85,7 +116,7 @@ func test_local_weapon_keeps_fixed_art_and_glows_with_tier() -> void:
 	var staff: Node2D = _local_weapon("res://scenes/weapon_fire.tscn")
 	var sicon: Sprite2D = staff.get("icon_sprite")
 	assert(sicon.texture.resource_path == "res://assets/weapons/yeni/fire_staff.png", "masaüstü ateş asası")
-	assert(is_equal_approx(sicon.scale.x * 0.5 * 0.3, WeaponTierArt.WORLD_PX), "asa dünya pikseli WORLD_PX, bulunan %f" % (sicon.scale.x * 0.15))
+	assert(is_equal_approx(sicon.scale.x * 0.5 * 0.3, WeaponTierArt.WORLD_PX * WeaponTierArt.size_mult("fire_staff")), "asa dünya pikseli WORLD_PX x boyut çarpanı, bulunan %f" % (sicon.scale.x * 0.15))
 	staff.get_parent().queue_free()
 
 
@@ -94,10 +125,11 @@ func test_pence_is_scythe() -> void:
 	var w: Node2D = _local_weapon("res://scenes/weapon_pence.tscn")
 	var icon: Sprite2D = w.get("icon_sprite")
 	assert(icon.texture.resource_path == "res://assets/weapons/yeni/tirpan.png", "tırpan çizimi: %s" % icon.texture.resource_path)
-	assert(is_equal_approx(float(w.get("sprite_forward_angle_deg")), -45.0), "tırpan çapraz (sap sol-alt, baş sağ-üst)")
-	assert(is_equal_approx(float(w.get("melee_icon_rest_rotation_deg")), -45.0), "dinlenmede dik")
-	assert(icon.scale.is_equal_approx(Vector2.ONE * WeaponTierArt.WORLD_PX * 1.57 / 0.5), "tırpan x1,57: piksel = karakter pikseli (0,903)")
-	assert(is_equal_approx(WeaponTierArt.size_mult("pence"), 1.57), "boyut çarpanı")
+	assert(icon.texture.get_size() == Vector2(32, 32), "madde 589: 32x32 yeni çizim")
+	assert(is_equal_approx(float(w.get("sprite_forward_angle_deg")), -62.0), "tırpan sapı -62 (sol-alt -> baş)")
+	assert(is_equal_approx(float(w.get("melee_icon_rest_rotation_deg")), -28.0), "dinlenmede dik (-62 - 28 = -90)")
+	assert(icon.scale.is_equal_approx(Vector2.ONE * WeaponTierArt.WORLD_PX * 1.55 / 0.5), "tırpan x1,55 (2026-11-13 boyut turu; eskiden x1,74)")
+	assert(is_equal_approx(WeaponTierArt.size_mult("pence"), 1.55), "boyut çarpanı")
 	assert(WeaponCatalog.icon("pence") == icon.texture, "arayüz ikonu = oyundaki çizim")
 	assert(WeaponCatalog.display_name("pence") == "Tırpan", "ad Tırpan")
 	w.get_parent().queue_free()
@@ -159,7 +191,7 @@ func test_bow_and_crossbow_use_desktop_art() -> void:
 	var bicon: AnimatedSprite2D = bow.get("icon_sprite")
 	assert(bicon.sprite_frames == sf and bicon.animation == &"draw", "yerel yay çekiş kareleri")
 	assert(is_equal_approx(float(bow.get("sprite_forward_angle_deg")), 45.0), "yay ok yönü +45")
-	assert(bicon.scale.is_equal_approx(Vector2.ONE * WeaponTierArt.WORLD_PX / 0.5), "yay ikon ölçeği -> dünya pikseli WORLD_PX")
+	assert(bicon.scale.is_equal_approx(Vector2.ONE * WeaponTierArt.WORLD_PX * WeaponTierArt.size_mult("yay") / 0.5), "yay ikon ölçeği -> dünya pikseli WORLD_PX x boyut çarpanı")
 	assert(bicon.texture_filter == CanvasItem.TEXTURE_FILTER_NEAREST, "piksel keskin")
 	var arrow: Sprite2D = bicon.get_node_or_null("HeldArrow") as Sprite2D
 	assert(arrow == null or arrow.texture == null, "ayrı eski ok gizli (ok karelerin içinde)")
@@ -171,7 +203,7 @@ func test_bow_and_crossbow_use_desktop_art() -> void:
 	var cicon: Sprite2D = cb.get("icon_sprite")
 	assert(cicon.texture.resource_path == "res://assets/weapons/yeni/arbalet.png", "masaüstü arbalet")
 	assert(is_equal_approx(float(cb.get("sprite_forward_angle_deg")), -45.0), "arbalet çapraz (uç sağ-üst)")
-	assert(cicon.scale.is_equal_approx(Vector2.ONE * WeaponTierArt.WORLD_PX / 0.5), "arbalet dünya pikseli WORLD_PX")
+	assert(cicon.scale.is_equal_approx(Vector2.ONE * WeaponTierArt.WORLD_PX * WeaponTierArt.size_mult("crossbow") / 0.5), "arbalet dünya pikseli WORLD_PX x boyut çarpanı")
 	cb.get_parent().queue_free()
 	## Kukla: yerel ile aynı kareler/doku, ölçek ve duruş
 	var puppet: RemotePlayer = RemotePlayerScene.instantiate()
@@ -189,7 +221,7 @@ func test_bow_and_crossbow_use_desktop_art() -> void:
 	var parrow: Sprite2D = pb.get_node_or_null("HeldArrow") as Sprite2D
 	assert(parrow == null or parrow.texture == null, "kuklada ayrı ok gizli")
 	assert(pc.texture.resource_path == "res://assets/weapons/yeni/arbalet.png", "kukla arbalet")
-	assert(pb.scale.is_equal_approx(Vector2.ONE * WeaponTierArt.PUPPET_ICON_SCALE) and pc.scale.is_equal_approx(Vector2.ONE * WeaponTierArt.PUPPET_ICON_SCALE), "kukla ölçeği yerel ile aynı dünya pikseli")
+	assert(pb.scale.is_equal_approx(Vector2.ONE * WeaponTierArt.PUPPET_ICON_SCALE * WeaponTierArt.size_mult("yay")) and pc.scale.is_equal_approx(Vector2.ONE * WeaponTierArt.PUPPET_ICON_SCALE * WeaponTierArt.size_mult("crossbow")), "kukla ölçeği yerel ile aynı dünya pikseli")
 	assert(is_equal_approx(float(pfwd[0]), 45.0) and is_equal_approx(float(pfwd[1]), -45.0), "kukla duruşları sanattan")
 	puppet.queue_free()
 
@@ -201,29 +233,51 @@ func test_remote_puppet_matches_local_art_and_only_glows_with_ench_tiers() -> vo
 	puppet.update_weapon_visuals(["tufek", "fire_staff"])
 	var i0: Sprite2D = puppet.get_weapon_icon_info(0)[0]
 	var i1: Sprite2D = puppet.get_weapon_icon_info(1)[0]
-	assert(i0.texture.resource_path.ends_with("tufek/icon.png"), "kukla tüfek eski ikon")
+	assert(i0.texture.resource_path.ends_with("yeni/tufek.png"), "kukla tüfek yeni çizim")
 	assert(i1.texture.resource_path == "res://assets/weapons/yeni/fire_staff.png", "kukla asa masaüstü çizimi")
-	assert(i1.scale.is_equal_approx(Vector2.ONE * WeaponTierArt.PUPPET_ICON_SCALE), "kukla asa ölçeği yerel ile aynı dünya pikseli")
+	assert(i1.scale.is_equal_approx(Vector2.ONE * WeaponTierArt.PUPPET_ICON_SCALE * WeaponTierArt.size_mult("fire_staff")), "kukla asa ölçeği yerel ile aynı dünya pikseli")
 	assert(is_equal_approx(float(puppet.get_weapon_icon_info(1)[1]), -45.0), "kukla ileri açısı sanattan")
 	puppet.call("_apply_enchant_glows", [2, 5])
-	assert(i0.texture.resource_path.ends_with("tufek/icon.png") and i1.texture.resource_path.ends_with("yeni/fire_staff.png"), "ench_tiers dokuyu değiştirmez")
+	assert(i0.texture.resource_path.ends_with("yeni/tufek.png") and i1.texture.resource_path.ends_with("yeni/fire_staff.png"), "ench_tiers dokuyu değiştirmez")
 	assert(_glow_alive(i0) and _glow_alive(i1), "ench_tiers -> kontür")
 	assert(int(i1.get_meta("ench_tier", 0)) == 5 and int(i0.get_meta("ench_tier", 0)) == 2, "uç parıltısı kademesi meta'da")
 	puppet.queue_free()
 
 
-func test_projectiles_fly_with_old_art() -> void:
+## Bumerang artık ÇAKRAM (madde 589): kafadaki ikon kullanıcının çizimi (yerel + kukla aynı), mermi aynı çizimin dönüş kareleri +
+## arkasında Çelik Girdap; mermi pikseli = kafadaki ikonun pikseli; ad "Çakram".
+func test_boomerang_is_chakram() -> void:
+	var w: Node2D = _local_weapon("res://scenes/weapon_boomerang.tscn")
+	var icon: Sprite2D = w.get("icon_sprite")
+	assert(icon.texture.resource_path == "res://assets/weapons/yeni/chakram.png", "çakram çizimi: %s" % icon.texture.resource_path)
+	assert(icon.scale.is_equal_approx(Vector2.ONE * WeaponTierArt.WORLD_PX * 1.3 / 0.5), "çakram x1,3")
+	assert(WeaponCatalog.icon("boomerang") == icon.texture, "arayüz ikonu = oyundaki çizim")
+	assert(WeaponCatalog.display_name("boomerang") == "Çakram", "ad Çakram")
+	w.get_parent().queue_free()
+	var puppet: RemotePlayer = RemotePlayerScene.instantiate()
+	puppet.peer_id = 4245
+	add_child(puppet)
+	puppet.update_weapon_visuals(["boomerang"])
+	var pi: Sprite2D = puppet.get_weapon_icon_info(0)[0]
+	assert(pi.texture.resource_path == "res://assets/weapons/yeni/chakram.png", "kukla çakram çizimi")
+	assert(pi.scale.is_equal_approx(Vector2.ONE * WeaponTierArt.PUPPET_ICON_SCALE * 1.3), "kukla ölçeği yerel ile aynı")
+	puppet.queue_free()
 	var b: Node2D = BoomerangProjScene.instantiate()
 	add_child(b)
 	b.set("impact_sounds", [] as Array[AudioStream])
+	b.scale = Vector2(0.5, 0.5)
 	var body: AnimatedSprite2D = b.get("_body")
-	assert(body.sprite_frames.resource_path.ends_with("boomerang/rot24_frames.tres"), "bumerang mermisi eski dönüş kareleri")
+	assert(body.sprite_frames.resource_path.ends_with("chakram/spin_frames.tres"), "çakram dönüş kareleri")
+	assert(body.sprite_frames.get_frame_count("spin") == 24, "24 kare")
+	assert(is_equal_approx(body.global_scale.x, WeaponTierArt.WORLD_PX * WeaponTierArt.size_mult("boomerang")), "mermi pikseli = ikon pikseli")
+	var whirl: AnimatedSprite2D = b.get("_whirl")
+	assert(whirl != null and whirl.get_index() < body.get_index(), "Çelik Girdap gövdenin arkasında")
 	assert(not b.has_method("set_art_tier"), "kademe sanatı yok")
 	b.queue_free()
 	var f: Node2D = FireworkScene.instantiate()
 	add_child(f)
 	var ficon: Sprite2D = f.get_node("Icon")
-	assert(ficon.texture.resource_path.ends_with("fisek/icon.png"), "fişek mermisi eski roket")
+	assert(ficon.texture == WeaponTierArt.texture("fisek"), "dinamit mermisi = kafadaki dinamit çizimi")
 	assert(not f.has_method("set_art_tier"), "kademe sanatı yok")
 	f.queue_free()
 

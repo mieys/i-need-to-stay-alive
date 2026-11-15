@@ -25,25 +25,53 @@ const EVO_SLOW_TIME := 1.5 ## alan tiki 1 sn'de bir - yavaşlatma bir sonraki ti
 const EVO_PUSH_DISTANCE := 34.0 ## İtici Dalga (shaman_ef): her hasar tikinde merkezden dışarı itme (dünya birimi)
 const EVO_BUFF_TIME := 1.6 ## player.gd EVO_BUFF_REFRESH_TIME ile aynı (tik 1 sn; buff tikler arasında düşmesin)
 
-## Kullanıcı isteği: "totemden diğer oyunculara doğru ses ince sihirli bir
-## ses dalgasına benzer bir efektle kalkan göndersin menzilin içindeyken.
-## sadece efektini böyle yap skilin mantığına falan dokunma" - aşağıdaki
-## dalga efekt bölümü TAMAMEN kozmetiktir: _tick'teki kalkan miktarı
-## hesaplarına HİÇBİR etkisi yoktur, silinse bile skil aynı çalışır.
-const TotemShieldWave := preload("res://scripts/totem_shield_wave.gd")
-## Bu kadar yakın (totemin dibindeki = dikeni Shaman'ın kendisi) hedeflere
-## dalga çizilmez - dalga zaten "totemden DİĞER oyunculara" doğru akmalı.
+## KALKAN ŞERİDİ (madde 567, kullanıcı: "kalkan göndermenin tick-tick olması şart değil devamlı veren bir şey de olabilir" -> prototip
+## madde 562, seçilen "D Işık Tülü" ince + dünya ızgarası): taştan menzildeki her hedefe SÜREKLİ ışık tülü (`totem_link_ribbon.gd`),
+## hedefin kendi kalkan baloncuğuna bağlanır ve onun renginde biter; bağlıyken yerel oyuncunun baloncuğu açık kalır
+## (player.gd set_shaman_link -> _bubble_active -> ağda "shield_bubble_visible"). TAMAMEN kozmetik: _tick'teki kalkan hesabına etkisi yok.
+## Her istemcide yerel çizilir (gerçek totem + ağ görsel kopyası aynı _process yolu), ek RPC yok. Eski tikte uçan kalkan simgesi
+## (totem_shield_wave.gd) silindi.
+const LinkRibbonScript := preload("res://scripts/totem_link_ribbon.gd")
+## Bu kadar yakın (totemin dibindeki = dikeni Shaman'ın kendisi) hedeflere şerit çizilmez.
 const WAVE_MIN_DISTANCE := 40.0
+## Kalkan şeridi RÜN TAŞINDAN çıkar (madde 557: "kalkan orbları bu taştan gönderilecek"): E taşının rün merkezi - rünlerin birleşik
+## kutusu 32x32 karede (15, 15.5) -> (-1, -0.5) x 0.632 + TotemSprite y -8 (bkz. totem_shield.tscn) = (-0.6, -8.3).
+const ORB_ORIGIN_OFFSET := Vector2(-1, -8)
 
 var _wave_timer: float = 0.0
+## hedefin instance_id -> TotemLinkRibbon
+var _links: Dictionary = {}
+
+## AURA SINIRI (madde 586, kullanıcı: "Shaman'ın E yeteneğinin aura sınırının görünmesini sağla", prototip C "Işık Perdesi"): totem_radius
+## çemberinde yerde çizgi + alçak ışık duvarı. Totemin çocuğu DEĞİL - haritanın içinde zemin katmanlarının hemen arkasında (GroundSlot.
+## add_on_floor; ağaç/ev/karakterler onu örter). Totemi izler, totem gidince kendisi söner (totem_aura_border.gd). Gerçek totem ve ağ
+## görsel kopyası aynı _ready yolu -> herkes görür. Madde 557 ek 2'de silinen halkalardan (noktalı halka, dönen rün, dolgu, nabız) ayrı.
+const AuraBorderScript := preload("res://scripts/totem_aura_border.gd")
+const GroundSlotScript := preload("res://scripts/ground_slot.gd")
+var _aura_border: Node2D = null
+
+
+func _ready() -> void:
+	super()
+	_aura_border = AuraBorderScript.new()
+	_aura_border.set("totem", self)
+	GroundSlotScript.add_on_floor(_aura_border, self)
+
+
+## Test / ayıklama: bu totemin aura sınırı düğümü (sönmüşse null).
+func aura_border() -> Node2D:
+	return _aura_border if is_instance_valid(_aura_border) else null
 
 
 func _init() -> void:
 	totem_kind = "shield"
 	totem_color = Color(0.35, 0.65, 1.0)
 	totem_radius = 220.0
+	rune_center = ORB_ORIGIN_OFFSET
 	## Kullanıcı isteği (2026-09-30): Saldırı Totemi'nin alan hasarı bu totemde de (bkz. totem_base.gd "ALAN HASARI").
 	area_damage_enabled = true
+	## Mor alan çemberi + tik nabız halkası çizilmez (madde 557 ek 2, kullanıcı: "dış halkaları kaldır"); alan hasarı aynen çalışır.
+	show_area_aura = false
 
 
 ## Kalkan Totemi evrimleri (alan hasar tiki, bkz. totem_base.gd _on_area_enemy_tick): "Yapışkan Zemin" ve final "İtici Dalga".
@@ -60,57 +88,74 @@ func _on_area_enemy_tick(enemy: Node2D) -> void:
 
 
 func _process(delta: float) -> void:
-	## Gerçek mantık: TotemBase._process - _tick YALNIZCA dikeni oyuncunun
-	## kendi client'ında, ağ kopyalarında asla çalışmaz (bkz. totem_base.gd).
+	## Gerçek mantık: TotemBase._process - _tick YALNIZCA dikeni oyuncunun kendi client'ında, ağ kopyalarında asla çalışmaz.
 	super(delta)
-	## Kozmetik dalga döngüsü: ağ GÖRSEL kopyalarında DA çalışır ki her oyuncu
-	## totemden müttefiklere akan dalgayı görsün (efekt salt görseldir, her
-	## client kendi sahnesindeki oyuncu kopyalarına dalga çizer - "kastın
-	## ekranında doğru, diğerinde yok" hatasına bununla düşmez, çünkü burada
-	## hiçbir oyun durumu paylaşılmıyor, sadece çizim var).
+	## Kozmetik şerit + tik parlaması ağ GÖRSEL kopyalarında DA çalışır (salt çizim, oyun durumu paylaşılmaz).
+	_update_links(delta)
 	_wave_timer -= delta
 	if _wave_timer > 0.0:
 		return
 	_wave_timer += TICK_INTERVAL
-	_spawn_shield_waves()
+	## Tikte taş kısa parlar + çok kısık kalkan cıngırtısı (30 sn boyunca saniyede bir - rahatsız etmesin diye çok yumuşak).
+	_flare_stone()
+	ShamanSfx.play_at(get_tree().current_scene, ShamanSfx.SHIELD_PULSE, global_position, -19.0, 0.04)
 
 
-## AYNI menzil/koşul kontrolleri (menzil + item_shield_max) - yani dalga
-## SADECECE gerçekten kalkan alan müttefiklere doğru çizilir, ama hiçbir
-## kalkan değeri burada hesaplanmaz/uygulanmaz.
-##
-## GÖRÜNÜRLÜK DÜZELTMESİ (kullanıcı bildirimi: "görünmüyor efekt falan"):
-## "player_ally" grubu SADECE uzak oyuncu kopyalarını (ve petleri) içerir -
-## YEREL oyuncu (player.tscn groups=["player"]) bu grupta DEĞİL. Tek
-## oyunculu modda grup tamamen boş olduğundan efekt HİÇ spawn olmuyordu.
-## Şimdi hedef aramasına yerel oyuncu (grup "player") DAHİL - totemin
-## dibinde durmuyorsan (WAVE_MIN_DISTANCE) kendi kalkanına giden dalgayı
-## da görürsün. Petler item_shield_max'a sahip olmadığından (kalkan
-## mantığıyla AYNI koşul) yine filtrelenir.
-func _spawn_shield_waves() -> void:
-	if caster == null or not is_instance_valid(caster):
-		return
-	var targets: Array = []
-	for ally in caster.get_tree().get_nodes_in_group("player_ally"):
-		targets.append(ally)
-	for p in caster.get_tree().get_nodes_in_group("player"):
-		if not targets.has(p):
-			targets.append(p)
-	for target in targets:
+## Şerit hedefleri: _tick'in kalkan verdiği kişiler (menzilde + item_shield_max), yaşayan, totemin dibinde olmayan. "player_ally" grubu
+## yalnız uzak kuklaları (ve evcilleri) içerir, yerel oyuncu "player" grubunda - ikisi birden taranır (tek oyunculu dahil).
+func _link_targets() -> Array:
+	var out: Array = []
+	if not is_inside_tree():
+		return out
+	var pool: Array = get_tree().get_nodes_in_group("player_ally")
+	for p in get_tree().get_nodes_in_group("player"):
+		if not pool.has(p):
+			pool.append(p)
+	for target in pool:
 		if not is_instance_valid(target) or not (target is Node2D):
-			continue
-		var target_n2d := target as Node2D
-		var dist: float = global_position.distance_to(target_n2d.global_position)
-		if dist > totem_radius or dist < WAVE_MIN_DISTANCE:
 			continue
 		if not ("item_shield_max" in target):
 			continue
-		TotemShieldWave.spawn(get_tree().current_scene, global_position, target_n2d, totem_color)
-	## Totemin kendisinde kısa bir "yayılma" halkası - her tick'te kalkan
-	## verildiğini TÜM modlarda (tek oyunculu dahil) her açıdan görünür kılar.
-	TotemShieldWave.spawn_pulse(get_tree().current_scene, global_position, totem_color)
-	## Her tik'te çok kısık, ince bir "kalkan cıngırtısı" (30sn boyunca saniyede bir - rahatsız etmesin diye çok yumuşak).
-	ShamanSfx.play_at(get_tree().current_scene, ShamanSfx.SHIELD_PULSE, global_position, -19.0, 0.04)
+		if target.get("is_dead") == true or target.get("is_downed") == true:
+			continue
+		var dist: float = global_position.distance_to((target as Node2D).global_position)
+		if dist > totem_radius or dist < WAVE_MIN_DISTANCE:
+			continue
+		out.append(target)
+	return out
+
+
+func _update_links(delta: float) -> void:
+	var src: Vector2 = global_position + ORB_ORIGIN_OFFSET + _stone_hover() ## süzülen taşla birlikte (madde 569)
+	var alive: Dictionary = {}
+	for target in _link_targets():
+		var key: int = (target as Node).get_instance_id()
+		alive[key] = true
+		var ribbon: Variant = _links.get(key)
+		if ribbon == null or not is_instance_valid(ribbon) or ribbon.call("is_releasing"):
+			ribbon = LinkRibbonScript.new()
+			add_child(ribbon)
+			_links[key] = ribbon
+		ribbon.call("update_link", src, target, delta)
+		## Bağlıyken hedefin kalkan baloncuğu açık (yalnız yerel Player'da var; kuklanınki sahibinden ağla gelir).
+		if target.has_method("set_shaman_link"):
+			target.call("set_shaman_link")
+	for key in _links.keys():
+		if alive.has(key):
+			continue
+		var r: Variant = _links[key]
+		if is_instance_valid(r):
+			r.call("release")
+		_links.erase(key)
+
+
+## Test / ayıklama: şu an çizilen (sönmeyen) şerit sayısı.
+func link_count() -> int:
+	var n: int = 0
+	for r in _links.values():
+		if is_instance_valid(r) and not r.call("is_releasing"):
+			n += 1
+	return n
 
 
 func _tick() -> void:

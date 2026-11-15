@@ -66,18 +66,28 @@ ALPHA_LEVELS = np.array([0.0, 0.3, 0.55, 0.8, 1.0])
 PAL = [(36, 96, 160), (60, 132, 200), (100, 180, 240), (160, 220, 255), (220, 245, 255), (255, 255, 255)]
 
 
+# Saydamlik/renk gecisi. "bayer" = eski 4x4 dama dither'i: kullanici (2026-11-15) "parazit efekti var, hoslanmiyorum" -
+# 3 ekran pikseli/sanat pikselinde kubbe boyunca kumlanma, akan cizgilerle her karede yanip sonen noktalar (TV karlanmasi).
+# "bands" = dithersiz duz bantlar (temiz piksel sanati), "smooth" = renk bantli, saydamlik kesintisiz.
+DITHER_MODE = "smooth"
+
+
 def dither_alpha(a):
     a = np.clip(a, 0.0, 1.0)
+    if DITHER_MODE == "smooth":
+        return a
     i = np.clip(np.searchsorted(ALPHA_LEVELS, a, side="right") - 1, 0, len(ALPHA_LEVELS) - 2)
     lo, hi = ALPHA_LEVELS[i], ALPHA_LEVELS[i + 1]
-    return np.where((a - lo) / (hi - lo) > THR, hi, lo)
+    thr = THR if DITHER_MODE == "bayer" else 0.5
+    return np.where((a - lo) / (hi - lo) > thr, hi, lo)
 
 
 def shade(b):
     n = len(PAL)
     x = np.clip(b, 0.0, 1.0) * (n - 1)
     lo = np.floor(x).astype(int)
-    idx = np.clip(np.where(x - lo > THR2, lo + 1, lo), 0, n - 1)
+    thr = THR2 if DITHER_MODE == "bayer" else 0.5
+    idx = np.clip(np.where(x - lo > thr, lo + 1, lo), 0, n - 1)
     return np.array(PAL, dtype=np.float32)[idx]
 
 

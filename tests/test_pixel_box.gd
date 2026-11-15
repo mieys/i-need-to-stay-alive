@@ -78,3 +78,47 @@ func test_draws_in_panel() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 	p.queue_free()
+
+
+## madde 662: ahşap damar dokusu yalnız pencere dolgusuna ve büyük kutuya düşer; düğme/kuyu/altın düğme/küçük kutu düz kalır.
+func test_grain_only_on_window_fills() -> void:
+	var big := Vector2(400, 300)
+	assert(PixelBox.grain_applies(Color(HT.WIN_PANEL, 0.88), big), "pencere zemini (%88) dokulu olmalı")
+	assert(PixelBox.grain_applies(HT.WIN_PANEL2, big) and PixelBox.grain_applies(HT.WIN_PANEL3, big), "iç kart / seçili kart dokulu olmalı")
+	assert(not PixelBox.grain_applies(HT.WIN_INSET, big), "kuyu (yazı kutusu) düz kalmalı")
+	assert(not PixelBox.grain_applies(HT.ACCENT, big), "altın düğme düz kalmalı")
+	assert(not PixelBox.grain_applies(HT.DEEP, big), "karartma düz kalmalı")
+	assert(not PixelBox.grain_applies(HT.WIN_PANEL, Vector2(300, 60)), "ince kutu (düğme / satır) düz kalmalı")
+	assert(not PixelBox.grain_applies(Color(HT.WIN_PANEL, 0.0), big), "görünmez dolgu dokusuz")
+	var s = MenuDarkKit.sb(Color(HT.WIN_PANEL, 0.88), HT.WIN_LINE)
+	assert(s.grain, "kit kutusunda doku izni varsayılan açık")
+	var o: Vector2 = PixelBox.grain_offset(Vector2(1400, 908))
+	assert(o == PixelBox.grain_offset(Vector2(1400, 908)), "kayma boya bağlı ve kararlı olmalı (üstüne gelince kaymasın)")
+	assert(int(o.x) % 3 == 0 and int(o.y) % 3 == 0, "kayma sanat pikseline (3 px) oturmalı")
+
+
+## Karo: 3 px ızgarada, kenarlarda tekrar sınırını belli eden düz çizgi yok (kullanıcının gördüğü "ortadaki ince keskin çizgi").
+func test_grain_tile_is_seamless_pixel_art() -> void:
+	var img := Image.load_from_file(ProjectSettings.globalize_path("res://assets/ui/panel_doku/ahsap_damar.png"))
+	assert(img != null and not img.is_empty(), "doku dosyası okunamadı")
+	var W: int = img.get_width()
+	var H: int = img.get_height()
+	assert(W % 3 == 0 and H % 3 == 0, "karo 3'ün katı olmalı")
+	for y in range(0, H, 3):
+		for x in range(0, W, 3):
+			var c: Color = img.get_pixel(x, y)
+			assert(img.get_pixel(x + 2, y + 2) == c and img.get_pixel(x + 1, y) == c, "3x3 blok tek renk olmalı (%d, %d)" % [x, y])
+	## her sanat satırının koyu kaplaması; tekrar sınırındaki satırlar iç satırlardan belirgin yüksek olmamalı
+	var cov: Array = []
+	for ay in H / 3:
+		var n := 0
+		for ax in W / 3:
+			var c: Color = img.get_pixel(ax * 3, ay * 3)
+			if c.a > 0.0 and c.r < 0.25:
+				n += 1
+		cov.append(float(n) / float(W / 3))
+	var inner_max: float = 0.0
+	for i in range(1, cov.size() - 1):
+		inner_max = maxf(inner_max, cov[i])
+	assert(cov[cov.size() - 1] <= inner_max and cov[0] <= inner_max, "karo sınırında düz koyu çizgi var: %s / %s > %s" % [cov[0], cov[cov.size() - 1], inner_max])
+	assert(cov[cov.size() - 1] < 0.9, "son satır baştan sona çizgi olmamalı")

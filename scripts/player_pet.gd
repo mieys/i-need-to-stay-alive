@@ -47,7 +47,7 @@ const BASE_DAMAGE := 12.0 ## sadece sahip yoksa (yedek)
 ## 5-8 yaratığa birden iniyordu (toplam ~2000-3000 hasar/sn). Yeni değerlerle aynı örnekte ~94 hasar/sn yaratık başına, en çok 5 yaratık: köpek hâlâ güçlü bir pasif ama tek başına silah sayısını geçmez.
 ## Daha fazla/az güç: bu oran + FOX_MAX_TARGETS (iki satır); test_matthew_dog "köpek ısırığı" testleri sayıları sabitler.
 const FOX_STAT_RATIO := 1.0
-const FOX_MAX_TARGETS := 5
+const FOX_MAX_TARGETS := 3 ## 2026-11-14 denge turu: 5 -> 3 (aşağıdaki 5'li örnek eski değerdir)
 ## NERF 2 (2026-10-10, kullanıcı "en dengeli öneriyi yapalım"): ısırık ANA hedefe (odaklanılan yaratık; yoksa en yakın) tam, alandaki diğerlerine bu oranda vurur -
 ## yakın dövüş silahlarının alan kuralıyla aynı (%50). Kalabalıkta toplam hasar 5x -> 3x (~%40 az), tek hedefte değişmez.
 const FOX_SPLASH_RATIO := 0.5

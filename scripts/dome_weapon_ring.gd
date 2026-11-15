@@ -124,10 +124,10 @@ func _physics_process(delta: float) -> void:
 				spinning_ids[oid] = true
 				if not spinner.is_in_group("remote_players"):
 					local_spinner = spinner
-				var spin_mult: float = TalonFormationMath.DOME_SPIN_SPEED_MULT 						* (TalonFormationMath.EVO_SALVO_SPIN_MULT if bool(spinner.call("has_evo", "talon_e2")) else 1.0)
+				var spin_mult: float = TalonFormationMath.DOME_SPIN_SPEED_MULT 						* (TalonFormationMath.EVO_SALVO_SPIN_MULT if bool(spinner.call("has_evo", "talon_q2")) else 1.0)
 				_spin_angle[oid] = TalonFormationMath.advance_salvo_angle(float(_spin_angle.get(oid, 0.0)), delta, spin_mult)
 				spin = {"angle": _spin_angle[oid], "penalty": TalonFormationMath.SALVO_DAMAGE_PENALTY,
-					"fire_mult": TalonFormationMath.salvo_fire_mult(bool(spinner.call("has_evo", "talon_e1")), TalonFormationMath.DOME_SPIN_ADVANTAGE)}
+					"fire_mult": TalonFormationMath.salvo_fire_mult(bool(spinner.call("has_evo", "talon_q1")), TalonFormationMath.DOME_SPIN_ADVANTAGE)}
 			var offset: float = float(spin.get("angle", 0.0))
 			var idx: int = 0
 			for m: Dictionary in list:

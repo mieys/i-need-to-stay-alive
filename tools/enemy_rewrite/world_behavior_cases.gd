@@ -49,6 +49,7 @@ func run_all() -> int:
 	_test_frozen_and_rooted()
 	_test_taunt()
 	_test_zone_focus_and_barrier()
+	_test_hidden_owner_dome_still_attacked()
 	_test_ally_bias_and_tree()
 	_test_wander()
 	_test_knockback_formulas()
@@ -256,6 +257,28 @@ func _test_zone_focus_and_barrier() -> void:
 	var d: float = _pos(w, s).distance_to(Vector2(500, 500))
 	_check("baloncuk_odagi", t == 0 and d >= 119.5 and _ev(E_BARRIER) >= 2 and _ev(E_MELEE) == 0,
 			"hedef %d, A'ya mesafe %.1f (>=120), kalkan %d, yakın %d" % [t, d, _ev(E_BARRIER), _ev(E_MELEE)])
+
+
+## Çalıda GİZLİ Şovalye'nin kubbesi (2026-11-14): sahip yaratıktan saklı olsa da kubbenin içindeki görünür oyuncuya giden yaratık
+## kubbeye vurmalı (eskiden hedefsiz kalıp dolaşıyor / kimse kubbeye saldırmıyordu); kubbede kimse yokken sahibi hâlâ hedef olmaz.
+func _test_hidden_owner_dome_still_attacked() -> void:
+	_events = {}
+	var w := _world()
+	w.call("set_stealth", PackedInt64Array([1]), [PackedInt64Array()]) # A (id 1) kimseden görünmez
+	_targets(w, [{"pos": Vector2(500, 500), "zone": 120.0, "id": 1}, {"pos": Vector2(560, 500), "id": 2}])
+	var s := _add(w, Vector2(800, 500))
+	_steps(w, 60 * 8)
+	var d: float = _pos(w, s).distance_to(Vector2(500, 500))
+	_check("gizli_sahipli_kubbe_saldirilir", d >= 119.5 and _ev(E_BARRIER) >= 2 and _ev(E_MELEE) == 0,
+			"A'ya mesafe %.1f (>=120), kalkan %d, yakın %d" % [d, _ev(E_BARRIER), _ev(E_MELEE)])
+	_events = {}
+	var w2 := _world()
+	w2.call("set_stealth", PackedInt64Array([1]), [PackedInt64Array()])
+	_targets(w2, [{"pos": Vector2(500, 500), "zone": 120.0, "id": 1}])
+	var s2 := _add(w2, Vector2(800, 500))
+	_steps(w2, 60 * 4)
+	_check("gizli_sahip_tek_basina_hedef_degil", int(w2.call("get_target", s2)) == -1 and _ev(E_BARRIER) == 0,
+			"hedef %d (beklenen -1), kalkan %d" % [int(w2.call("get_target", s2)), _ev(E_BARRIER)])
 
 
 func _test_ally_bias_and_tree() -> void:

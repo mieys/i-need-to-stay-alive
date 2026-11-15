@@ -26,6 +26,8 @@ const WeaponCatalog := preload("res://scripts/weapon_catalog.gd")
 const PetCatalog := preload("res://scripts/pet_catalog.gd")
 const LobbyUI := preload("res://scripts/menu_lobby_ui.gd")
 const MetaUpgradesScript: GDScript = preload("res://scripts/meta_upgrades.gd")
+const KeyIcon := preload("res://scripts/key_icon.gd") ## harita anahtarları: doku + ad (madde 605)
+const KeyIconBox := preload("res://scripts/key_icon_box.gd")
 const MobileUIScript := preload("res://scripts/mobile_ui.gd")
 const PK := preload("res://scripts/phone_menu_kit.gd")
 const DK := preload("res://scripts/menu_dark_kit.gd")
@@ -38,6 +40,7 @@ const BG_TEXTURE := "res://assets/ui/ruh_magaza/bg_ruh_magaza.png" ## telefonun 
 const PAGE_UPGRADES := "upgrades"
 const TAB_UNLOCKS := "unlocks" ## eski API (testler/çağıranlar): eskiden ana sayfa, şimdi Karakterler
 const TAB_UPGRADES := "upgrades"
+const PAGE_KEYS := "keys" ## ANAHTARLAR bölümü (madde 605): 5 harita anahtarı - kaç tane var, nereden düşer, neyi açar
 
 ## "Ateş Işığı" paleti (fire_menu_kit.gd masaüstü değerleriyle aynı tonlar).
 const C_PANEL := Color(0.06, 0.04, 0.03, 0.82) ## ayrıntı zemini (sahne arkadan sezilir)
@@ -55,7 +58,6 @@ const C_ACCENT_TEXT := HT.ACCENT_TEXT
 const C_GOOD := HT.GOOD
 const C_BAD := HT.BAD
 const C_PRICE := HT.PRICE
-const C_SPOT := HT.SPOT
 const SHADE_COLOR := Color(0.05, 0.035, 0.025, 0.88) ## sol karartma (liste sütunlarının okunurluğu)
 const SHADE_X0 := 1220.0
 
@@ -70,12 +72,12 @@ const KIND_NAMES := {"char": "KARAKTERLER", "weapon": "SİLAHLAR", "pet": "EVCİ
 const KIND_TILE := {"char": "Karakterler", "weapon": "Silahlar", "pet": "Evcil Hayvanlar", "spirit": "Ruhani Yetenekler"}
 const KIND_ONE := {"char": "KARAKTER", "weapon": "BAŞLANGIÇ SİLAHI", "pet": "EVCİL HAYVAN", "spirit": "RUHANİ YETENEK"}
 const KIND_LOWER := {"char": "Karakter", "weapon": "Başlangıç silahı", "pet": "Evcil hayvan", "spirit": "Ruhani yetenek"}
-const SECTIONS := ["char", "weapon", "pet", "spirit", "upgrades"] ## soldaki bölüm sütunu (geliştirmeler dahil)
+const SECTIONS := ["char", "weapon", "pet", "spirit", "upgrades", "keys"] ## soldaki bölüm sütunu (geliştirmeler + anahtarlar dahil)
 
 const COL_LIST_W := 600.0 ## orta sütun (yazı listesi)
 const DETAIL_TEXT_W := 470.0 ## ayrıntıdaki açıklama genişliği
 const STAGE_H := 280.0 ## ayrıntının spot sahnesi
-const STAGE_FLOOR := 50.0 ## sahne zemin halkasının alttan uzaklığı (figürün ayağı buraya basar)
+const STAGE_FLOOR := 50.0 ## karakter figürünün ayağının sahne altından uzaklığı (zemin halkası 2026-11-13 kalktı)
 
 var _close_btn: Button = null
 var _balance_label: Label = null
@@ -86,6 +88,7 @@ var _confirm_id: String = "" ## "<tür>:<anahtar>" - onay bekleyen alım ("reset
 var _page: String = "char" ## ana sayfa yok: "char" / "weapon" / "pet" / "spirit" / "upgrades"
 var _sel: Dictionary = {} ## tür -> seçili anahtar
 var _sel_upg: String = "" ## seçili geliştirme (boşsa alınabilir en ucuzu)
+var _sel_key: String = "" ## seçili anahtar (harita kimliği; boşsa ilki)
 var _body_cache: Dictionary = {}
 var _crop_cache: Dictionary = {} ## silah ikonu -> boş kenarı kırpılmış doku
 
@@ -173,41 +176,6 @@ class Pips extends Control:
 			x += seg + gap
 
 
-## Sahne zemini: tepeden inen spot ışığı konisi + halkalı zemin elipsi (arkadan ışık YOK - kullanıcı isteği 2026-10-16).
-class StageBg extends Control:
-	var col: Color = Color.WHITE
-	var ring: Color = Color.WHITE
-	var floor_off: float = 92.0
-
-	func _init(c: Color, r: Color, fo: float = 92.0) -> void:
-		col = c
-		ring = r
-		floor_off = fo
-		mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	func _draw() -> void:
-		var w: float = size.x
-		var h: float = size.y
-		var cx: float = floorf(w * 0.5)
-		var fy: float = floorf(h - floor_off)
-		var tw: float = w * 0.05
-		var bw: float = w * 0.24
-		draw_colored_polygon(PackedVector2Array([Vector2(cx - tw, 0), Vector2(cx + tw, 0), Vector2(cx + bw, fy), Vector2(cx - bw, fy)]), Color(col, 0.06))
-		draw_colored_polygon(PackedVector2Array([Vector2(cx - tw * 0.5, 0), Vector2(cx + tw * 0.5, 0), Vector2(cx + bw * 0.6, fy), Vector2(cx - bw * 0.6, fy)]), Color(col, 0.05))
-		for k: Array in [[1.25, 0.16], [0.95, 0.16], [0.65, 0.14]]:
-			var rx: float = bw * float(k[0])
-			var pts := PackedVector2Array()
-			for a in 49:
-				var t: float = TAU * float(a) / 48.0
-				pts.append(Vector2(cx + cos(t) * rx, fy + sin(t) * rx * 0.2))
-			draw_colored_polygon(pts, Color(col, float(k[1])))
-		var ring_pts := PackedVector2Array()
-		for a in 65:
-			var t: float = TAU * float(a) / 64.0
-			ring_pts.append(Vector2(cx + cos(t) * bw * 1.25, fy + sin(t) * bw * 1.25 * 0.2).floor())
-		draw_polyline(ring_pts, Color(ring, 0.55), 3.0)
-
-
 ## ---------------------------------------------------------------- yaşam döngüsü
 func _ready() -> void:
 	add_to_group(&"gamepad_modal")
@@ -272,6 +240,10 @@ func _rebuild_list(reset_scroll: bool = false) -> void:
 func _restore_view(scroll_v: int, focus_sid: String) -> void:
 	if is_instance_valid(_scroll):
 		_scroll.scroll_vertical = scroll_v
+	if focus_sid.begins_with("sk:"):
+		## Yetenek sekmesinde odak HER ZAMAN seçili sekmeye gider: eski sekmeye geri verilirse focus_entered onu yeniden seçer, fare
+		## altındaki sekme mouse_entered ile geri alır -> kare başı sonsuz yeniden kurulum (donma/lag).
+		focus_sid = "sk:%d" % _sk_sel
 	if focus_sid != "":
 		for b: Node in find_children("*", "Button", true, false):
 			if b.has_meta("sid") and str(b.get_meta("sid")) == focus_sid and not (b as Button).disabled:
@@ -319,7 +291,7 @@ func _info(kind: String, key: Variant) -> Dictionary:
 		MetaProgressScript.WEAPON:
 			var wk: String = str(key)
 			return {"name": WeaponCatalog.display_name(wk), "desc": "%s - %s" % [WeaponCatalog.category_label(wk), WeaponCatalog.trait_text(wk)],
-					"icon": WeaponCatalog.icon(wk)}
+					"icon": WeaponCatalog.menu_icon(wk)}
 		MetaProgressScript.PET:
 			var pk: String = str(key)
 			return {"name": PetCatalog.display_name(pk), "desc": PetCatalog.description(pk), "icon": PetCatalog.icon(pk)}
@@ -336,8 +308,11 @@ func _items() -> Array:
 	var out: Array = []
 	for it: Dictionary in MetaProgressScript.locked_items():
 		var info: Dictionary = _info(it["kind"], it["key"])
+		var key_map: String = str(it.get("key_map", ""))
 		out.append({"kind": it["kind"], "key": it["key"], "cost": int(it["cost"]), "name": str(info.get("name", it["key"])),
 				"desc": str(info.get("desc", "")), "icon": info.get("icon", null),
+				"key_map": key_map, "key_count": int(it.get("key_count", 0)), ## anahtar da isteyen içerik (madde 605); key_map "" = yalnız kıymık
+				"key_have": MetaProgressScript.keys(key_map) if key_map != "" else 0,
 				"open": MetaProgressScript.is_unlocked(it["kind"], it["key"]), "can": MetaProgressScript.can_buy(it["kind"], it["key"])})
 	return out
 
@@ -368,6 +343,46 @@ func _state(it: Dictionary) -> String:
 
 func _need(it: Dictionary) -> int:
 	return maxi(0, int(it["cost"]) - MetaProgressScript.shards())
+
+
+## Telefon düğmesi alt yazısı: eksik olan ne (kıymık mı anahtar mı).
+func _need_text(it: Dictionary) -> String:
+	if _need(it) > 0:
+		return Loc.t("%d kıymık eksik") % _need(it)
+	return Loc.t("%d anahtar eksik") % _key_short(it)
+
+
+## Anahtar da isteyen öğe mi? (madde 605)
+func _needs_key(it: Dictionary) -> bool:
+	return str(it.get("key_map", "")) != ""
+
+
+## Eksik anahtar adedi (anahtar istemeyen öğede 0).
+func _key_short(it: Dictionary) -> int:
+	return maxi(0, int(it.get("key_count", 0)) - int(it.get("key_have", 0))) if _needs_key(it) else 0
+
+
+## Fiyat satırına anahtar parçası: [anahtar simgesi] x3 (yetmiyorsa soluk simge + kırmızı sayı).
+func _add_key_price(h: Container, it: Dictionary, fs: int) -> void:
+	if not _needs_key(it) or _state(it) == "open":
+		return
+	var ok: bool = _key_short(it) == 0
+	h.add_child(_sp(6))
+	h.add_child(KeyIconBox.new(float(fs), str(it["key_map"]), not ok))
+	h.add_child(_lbl("x%d" % int(it["key_count"]), fs, C_PRICE if ok else C_BAD))
+
+
+## Ayrıntıda anahtar notu (açık olmayan, anahtar isteyen öğede), TEK satır: "[simge] 1 / 3 Bataklık Anahtarı". Dikey yer dar (karakter ayrıntısı
+## ekranı doldurur, test_soul_shop_passive); "nereden düşer" ANAHTARLAR bölümünde (ve fiyat düğmesinde kırmızı eksik parça).
+func _key_note(it: Dictionary, fs: int = 24) -> Control:
+	if not _needs_key(it) or it["open"]:
+		return null
+	var map_id: String = str(it["key_map"])
+	var ok: bool = _key_short(it) == 0
+	var h := _h(12)
+	h.add_child(KeyIconBox.new(32.0, map_id, not ok))
+	h.add_child(_lbl("%d / %d %s" % [int(it["key_have"]), int(it["key_count"]), KeyIcon.display_name(map_id)], fs, C_GOOD if ok else C_BAD))
+	return h
 
 
 func _open_count(items: Array) -> int:
@@ -508,7 +523,7 @@ func _anim_selection(n: Dictionary, prev_sel: String, dir: int) -> void:
 		if is_instance_valid(_ph.get("det")):
 			UiAnim.reveal(_ph["det"], 0.3, 0.16)
 		return
-	var fig := n.get("figure") as TextureRect
+	var fig := n.get("figure") as Control
 	if fig:
 		_anim_slide_in(fig, float(dir) * ANIM_SLIDE_PX)
 	if n.get("info") is CanvasItem:
@@ -533,7 +548,7 @@ func _anim_purchase(n: Dictionary, bought: String, from: int) -> void:
 	for k: String in ["row:" + bought, "figure"]:
 		if n.get(k) is CanvasItem:
 			_anim_flash(n[k])
-	var fig := n.get("figure") as TextureRect
+	var fig := n.get("figure") as Control
 	if fig:
 		_anim_bounce(fig)
 
@@ -749,7 +764,7 @@ func _upg_icon(d: Dictionary, box: float) -> Control:
 	var tex: Texture2D = _stat_tex(str(d.get("icon", "")))
 	if tex != null:
 		return _icon(tex, box)
-	## ikonu olmayan geliştirmeler (fiyat indirimi / ücretsiz karıştırma / dirilme hakkı): kodla çizilen simge
+	## Yedek: ikonu olmayan geliştirme (2026-11-13'ten beri hepsinin stat_icons'ta ikonu var, madde 661): kodla çizilen simge
 	var pat: Array = {"discount": G_PCT, "free_reroll": G_REROLL, "revive": G_HEART}.get(str(d.get("id", "")), G_PCT)
 	var cc := CenterContainer.new()
 	cc.custom_minimum_size = Vector2(box, box)
@@ -767,12 +782,12 @@ func _price(it: Dictionary, fs: int = 32, center: bool = true) -> HBoxContainer:
 		"open":
 			h.add_child(Glyph.new(G_CHECK, C_GOOD, 3 if fs < 32 else 4))
 			h.add_child(_lbl("SENDE", fs, C_GOOD))
-		"can":
-			h.add_child(DK.ShardIcon.new(fs * 0.75))
-			h.add_child(_lbl(str(it["cost"]), fs, C_PRICE))
 		_:
-			h.add_child(DK.ShardIcon.new(fs * 0.75, true))
-			h.add_child(_lbl(str(it["cost"]), fs, C_BAD))
+			## "no" artık yalnız kıymıktan değil ANAHTARdan da olabilir (madde 605): kırmızı olan eksik olan parça
+			var shard_ok: bool = MetaProgressScript.shards() >= int(it["cost"])
+			h.add_child(DK.ShardIcon.new(fs * 0.75, not shard_ok))
+			h.add_child(_lbl(str(it["cost"]), fs, C_PRICE if shard_ok else C_BAD))
+			_add_key_price(h, it, fs)
 	return h
 
 
@@ -817,7 +832,9 @@ func _btn(t: String, kind: String = "primary", fs: int = 32, h: float = 60.0, w:
 
 
 ## İçinde [ÖNEK] <kristal> 250 yazan düğme.
-func _price_btn(prefix: String, cost: int, kind: String = "primary", fs: int = 32, h: float = 64.0, w: float = 0.0) -> Button:
+## Anahtar da isteniyorsa (key_map != "") kıymığın yanında [anahtar] x3; kind "off" iken kırmızı olan EKSİK olan parça (shard_ok / key_ok), tamam olan parça sönük.
+func _price_btn(prefix: String, cost: int, kind: String = "primary", fs: int = 32, h: float = 64.0, w: float = 0.0,
+		key_map: String = "", key_count: int = 0, key_ok: bool = true, shard_ok: bool = true) -> Button:
 	var b := _btn("", kind, fs, h, w)
 	var cc := CenterContainer.new()
 	cc.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -829,10 +846,16 @@ func _price_btn(prefix: String, cost: int, kind: String = "primary", fs: int = 3
 		var pl := _lbl(prefix, fs, C_DIM if kind == "off" else C_ACCENT_TEXT)
 		pl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, shadow))
 		row.add_child(pl)
-	row.add_child(DK.ShardIcon.new(fs * 0.75, kind == "off"))
-	var cl := _lbl(str(cost), fs, tc)
+	row.add_child(DK.ShardIcon.new(fs * 0.75, kind == "off" and not shard_ok))
+	var cl := _lbl(str(cost), fs, tc if (kind != "off" or not shard_ok) else C_DIM) ## "off" + kıymık yetiyor: eksik olan anahtar, kıymık sönük nötr
 	cl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, shadow))
 	row.add_child(cl)
+	if key_map != "":
+		row.add_child(_sp(4))
+		row.add_child(KeyIconBox.new(float(fs), key_map, kind == "off" and not key_ok))
+		var kl := _lbl("x%d" % key_count, fs, (C_BAD if not key_ok else C_DIM) if kind == "off" else tc)
+		kl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, shadow))
+		row.add_child(kl)
 	cc.add_child(row)
 	b.add_child(cc)
 	return b
@@ -849,10 +872,11 @@ func _buy_btn(it: Dictionary, fs: int = 32, h: float = 72.0, sid: String = "buy"
 			if _confirm_id == _id(it):
 				b = _btn("ONAYLA?", "confirm", fs, h)
 			else:
-				b = _price_btn("AÇ", int(it["cost"]), "primary", fs, h)
+				b = _price_btn("AÇ", int(it["cost"]), "primary", fs, h, 0.0, str(it["key_map"]), int(it["key_count"]))
 			b.pressed.connect(_on_buy_pressed.bind(str(it["kind"]), it["key"]))
 		_:
-			b = _price_btn("AÇ", int(it["cost"]), "off", fs, h)
+			b = _price_btn("AÇ", int(it["cost"]), "off", fs, h, 0.0, str(it["key_map"]), int(it["key_count"]), _key_short(it) == 0,
+					MetaProgressScript.shards() >= int(it["cost"]))
 			b.disabled = true
 	_tag_sid(b, sid)
 	return b
@@ -880,59 +904,8 @@ func _clickable(p: Control, cb: Callable, sid: String) -> Button:
 	return b
 
 
-## Yetenek satırları: kendi ikonu + köşesinde tuş harfi (ikonu olmayan yetenekte sadece büyük harf), desc_w > 0 ise altında açıklama.
-func _skill_rows(it: Dictionary, fs: int = 32, desc_w: float = 0.0, box: float = 48.0, desc_lines: int = 2) -> VBoxContainer:
-	var d: Dictionary = _char_def(it)
-	var v := _v(10)
-	for trio: Array in [["Q", "skill_name", "skill_icon", "skill_desc"], ["E", "skill2_name", "skill2_icon", "skill2_desc"],
-			["R", "skill3_name", "skill3_icon", "skill3_desc"]]:
-		var h := _h(14)
-		var ip: String = str(d.get(trio[2], ""))
-		var slot := _box(C_INSET, C_LINE_HI, 0, 3, 4)
-		slot.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-		if ip != "" and ResourceLoader.exists(ip):
-			slot.add_child(_icon(load(ip) as Texture2D, box))
-			var key := _lbl(trio[0], 24, C_ACCENT, HORIZONTAL_ALIGNMENT_CENTER)
-			key.size_flags_horizontal = Control.SIZE_SHRINK_END
-			key.size_flags_vertical = Control.SIZE_SHRINK_END
-			key.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
-			slot.add_child(key)
-		else:
-			var key2 := _lbl(trio[0], 32, C_ACCENT, HORIZONTAL_ALIGNMENT_CENTER)
-			key2.custom_minimum_size = Vector2(box, box)
-			slot.add_child(key2)
-		h.add_child(slot)
-		var tv := _v(0)
-		tv.alignment = BoxContainer.ALIGNMENT_CENTER
-		tv.add_child(_lbl(str(d.get(trio[1], "")), fs))
-		if desc_w > 0.0:
-			var ds: String = str(d.get(trio[3], ""))
-			for pre: String in ["YETENEK: ", "TEMEL: ", "ULTİ: ", "ULTI: "]:
-				ds = ds.trim_prefix(pre)
-			tv.add_child(_wrap(ds, 24, C_DIM, desc_w, desc_lines))
-		h.add_child(tv)
-		v.add_child(h)
-	return v
-
-
-func _stat_rows(it: Dictionary, fs: int = 24, cols: int = 2) -> GridContainer:
-	var bs: Dictionary = Characters.get_base_stats(int(it["key"]))
-	var g := GridContainer.new()
-	g.columns = cols
-	g.add_theme_constant_override("h_separation", 26)
-	g.add_theme_constant_override("v_separation", 6)
-	var atk: int = int(bs.get("atk", 0))
-	for row: Array in [["max_health", "Can", str(int(bs.get("hp", 100)))], ["speed", "Hız", str(int(bs.get("speed", 252)))],
-			["damage", "Saldırı Gücü", str(int(bs.get("ap", 10)))], ["fire_rate", "Saldırı Hızı", ("%+d%%" % atk) if atk != 0 else "0"]]:
-		var h := _h(8)
-		h.add_child(_icon(_stat_tex(row[0]), 32))
-		h.add_child(_lbl(row[1], fs, C_DIM))
-		h.add_child(_lbl(row[2], fs))
-		g.add_child(h)
-	return g
-
-
-## Sahne/vitrin içine figür: karakterde tam boy kare (ayağı zemin halkasına basar), diğerlerinde ikon (halkanın biraz üstünde süzülür).
+## Sahne/vitrin içine figür: karakterde tam boy kare (ayağı sahnenin altına yakın durur), diğerlerinde ortada çıplak ikon (eski spot ışığı +
+## zemin halkası kalktı, çerçeve de istenmedi - kullanıcı 2026-11-13, madde 656).
 func _stage_figure(hold: Control, it: Dictionary, max_h: float, floor_off: float) -> TextureRect:
 	var is_char: bool = it["kind"] == MetaProgressScript.CHAR
 	var tex: Texture2D = _char_body(it) if is_char else it["icon"]
@@ -950,7 +923,11 @@ func _stage_figure(hold: Control, it: Dictionary, max_h: float, floor_off: float
 		spr.modulate = Color(0.62, 0.6, 0.64, 1.0)
 	var sw: float = ts.x * k
 	var shh: float = ts.y * k
-	var lift: float = (floor_off - 8.0) if is_char else (floor_off + 24.0)
+	if not is_char:
+		spr.custom_minimum_size = Vector2(sw, shh)
+		_center_in(hold, spr)
+		return spr
+	var lift: float = floor_off - 8.0
 	spr.anchor_left = 0.5
 	spr.anchor_right = 0.5
 	spr.anchor_top = 1.0
@@ -976,7 +953,12 @@ func _build_page() -> void:
 	var det := _box(C_PANEL, Color(0, 0, 0, 0), 32, 0, 10)
 	det.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_anim_nodes["info"] = det
-	det.add_child(_upg_detail(_upg_selected()) if _page == PAGE_UPGRADES else _detail(_selected(items, _page)))
+	if _page == PAGE_UPGRADES:
+		det.add_child(_upg_detail(_upg_selected()))
+	elif _page == PAGE_KEYS:
+		det.add_child(_key_detail(_key_selected()))
+	else:
+		det.add_child(_detail(_selected(items, _page)))
 	body.add_child(det)
 
 
@@ -1010,6 +992,8 @@ func _section_column(items: Array) -> Control:
 		var n: Vector2i = _counts(items, k)
 		var can: int = _can_n(items, k)
 		var sub: String = ("%d/%d seviye" if k == PAGE_UPGRADES else "%d/%d açık") % [n.x, n.y]
+		if k == PAGE_KEYS:
+			sub = Loc.t("%d anahtar") % _keys_total() ## madde 605: kaç anahtar elde (açık/toplam sayılmaz)
 		if can > 0:
 			sub += ", %d %s" % [can, "yükseltilebilir" if k == PAGE_UPGRADES else "alınabilir"]
 		var b: Button = FM.item(_sec_name(k), sub, _section_icon(items, k, 48), false, false)
@@ -1042,7 +1026,10 @@ func _list_column(items: Array) -> Control:
 	th.add_child(FM.lbl(_sec_title(_page), 40, C_TEXT))
 	th.add_child(_sp(0, 0, true))
 	var n: Vector2i = _counts(items, _page)
-	th.add_child(_lbl(("%d / %d seviye" if _page == PAGE_UPGRADES else "%d / %d açık") % [n.x, n.y], 24, C_DIM))
+	var count_text: String = ("%d / %d seviye" if _page == PAGE_UPGRADES else "%d / %d açık") % [n.x, n.y]
+	if _page == PAGE_KEYS:
+		count_text = Loc.t("%d anahtar") % _keys_total()
+	th.add_child(_lbl(count_text, 24, C_DIM))
 	c.add_child(th)
 	var ln := ColorRect.new()
 	ln.color = C_LINE_HI
@@ -1057,6 +1044,10 @@ func _list_column(items: Array) -> Control:
 		var sel: String = str(_upg_selected()["id"])
 		for d: Dictionary in MetaUpgradesScript.LIST:
 			rows.add_child(_upg_row(d, str(d["id"]) == sel))
+	elif _page == PAGE_KEYS:
+		var sel_key: String = _key_selected()
+		for id: String in KeyIcon.IDS:
+			rows.add_child(_key_row(id, id == sel_key))
 	else:
 		var sel_it: Dictionary = _selected(items, _page)
 		var list: Array = _by_cost(items, _page)
@@ -1133,22 +1124,245 @@ func _upg_row(d: Dictionary, on: bool) -> Control:
 	return p
 
 
-## Sağ: seçilenin ayrıntısı (spot sahne + altın ad + yetenekler/açıklama + büyük AÇ).
+## Sağ: seçilenin ayrıntısı (spot sahne + altın ad + açıklama + büyük AÇ). Karakterin kendi düzeni var: _char_detail (madde 604).
 func _detail(it: Dictionary) -> Control:
+	if not it.is_empty() and it["kind"] == MetaProgressScript.CHAR:
+		return _char_detail(it)
 	var v := _v(14)
 	if it.is_empty():
 		return v
 	v.add_child(_detail_stage(it))
 	v.add_child(_gold_title(str(it["name"])))
 	v.add_child(_lbl(str(KIND_LOWER.get(it["kind"], "")), 24, C_DIM))
-	if it["kind"] == MetaProgressScript.CHAR:
-		v.add_child(_skill_rows(it, 32, DETAIL_TEXT_W))
-		v.add_child(_stat_rows(it, 24, 2))
-	else:
-		v.add_child(_wrap(str(it["desc"]), 32, C_DIM, DETAIL_TEXT_W, 5))
+	v.add_child(_wrap(str(it["desc"]), 32, C_DIM, DETAIL_TEXT_W, 5))
 	v.add_child(_sp(0, 0, false, true))
+	var key_note: Control = _key_note(it) ## anahtar isteyen kilitli içerik: kaç tane var / nereden düşer (madde 605)
+	if key_note != null:
+		v.add_child(key_note)
 	v.add_child(_buy_btn(it, 40, 76))
 	return v
+
+
+## ---------------------------------------------------------------- KARAKTER AYRINTISI (madde 604, tasarım "A - Yetenek Sekmeleri")
+## Kullanıcı (2026-11-12): "dükkanda karakter açıklamaları uzun olduğu için hepsi okunamıyor" - eski düzende yetenek açıklamaları 2-3 satırda
+## "..." ile kesiliyordu (en uzunları 400-550 harf). Şimdi: küçük sahne + ad + statlar; altında P Q E R ikon sekmeleri (fare üstü / tık /
+## gamepad odağı seçer); seçilenin TAM açıklaması tek koyu kuyuda (m5x7 32). Tür etiketi oyundaki yetenek ipucunun `HudTooltip.make_tag`'i,
+## metnin sonundaki "(22sn bekleme)" saat simgesi + süreye, "TEMEL (not):" notu ayrı soluk satıra ayrılır; boyama ve bekleme notu ayıklama
+## oyundaki ipucunun kendi fonksiyonları (skill_icon.gd, kopya değil). Sığmazsa kuyu kayar. Prototipler: tools/proto_20261112/ruh_karakter/.
+const HudTooltip := preload("res://scripts/hud_tooltip.gd")
+const SkillIconScript := preload("res://scripts/skill_icon.gd")
+const SK_CD_ICON := preload("res://assets/ui/stat_icons/cooldown_reduction.png") ## 48x48, 24 px çizilir (ipucundaki bekleme ikonu)
+const SK_FS := 32
+const SK_STAGE := Vector2(210.0, 214.0) ## küçük sahne
+const SK_FIGURE_H := 172.0
+const SK_FLOOR := 24.0
+const SK_ROWS := [["Q", "skill_name", "skill_icon", "skill_desc", "YETENEK"], ["E", "skill2_name", "skill2_icon", "skill2_desc", "TEMEL"],
+		["R", "skill3_name", "skill3_icon", "skill3_desc", "ULTİ"]]
+
+var _sk_sel: int = 0 ## seçili sekme (0 = pasif, sonra Q/E/R; pasifsiz karakterde 0 = Q)
+var _sk_for: String = "" ## sekmenin ait olduğu karakter (başka karakter seçilince pasife döner)
+
+
+func _char_detail(it: Dictionary) -> Control:
+	var ents: Array = _sk_entries(it)
+	if _sk_for != _id(it):
+		_sk_for = _id(it)
+		_sk_sel = 0
+	_sk_sel = clampi(_sk_sel, 0, maxi(0, ents.size() - 1))
+	var v := _v(14)
+	v.add_child(_sk_head(it))
+	var tabs := _h(10)
+	for i in ents.size():
+		tabs.add_child(_sk_tab(ents[i], i))
+	v.add_child(tabs)
+	if ents.is_empty():
+		v.add_child(_sp(0, 0, false, true))
+	else:
+		v.add_child(_sk_well(ents[_sk_sel]))
+	var key_note: Control = _key_note(it) ## anahtar isteyen kilitli karakter (madde 605)
+	if key_note != null:
+		v.add_child(key_note)
+	v.add_child(_buy_btn(it, 40, 76))
+	return v
+
+
+## Sekme girdileri {key, name, icon, kind, note, cd, body}: pasif (varsa) + Q/E/R.
+func _sk_entries(it: Dictionary) -> Array:
+	var d: Dictionary = _char_def(it)
+	var out: Array = []
+	var p: String = str(d.get("passive", ""))
+	if p != "":
+		var pn: Array = SkillIconScript._split_passive_name(p)
+		out.append({"key": "P", "name": str(pn[0]) if str(pn[0]) != "" else Loc.t("Pasif"), "icon": str(d.get("passive_icon", "")),
+				"kind": Loc.t("PASİF"), "note": "", "cd": "", "body": _sk_cap_first(str(pn[1]))})
+	var si: Control = SkillIconScript.new() ## ipucunun bekleme notu ayıklayıcısı (çok dilli) - ağaca girmez
+	for q: Array in SK_ROWS:
+		var ks: Array = _sk_kind_split(str(d.get(q[3], "")))
+		var body: String = str(ks[2])
+		out.append({"key": q[0], "name": str(d.get(q[1], "")), "icon": str(d.get(q[2], "")),
+				"kind": str(ks[0]) if str(ks[0]) != "" else Loc.t(str(q[4])), "note": _sk_soft_case(str(ks[1])),
+				"cd": _sk_cooldown(si, body), "body": str(si.call("_strip_cooldown_note", body))})
+	si.free()
+	return out
+
+
+## "TEMEL (maksimum canının %4'ünü harcar): ..." -> ["TEMEL", "maksimum canının %4'ünü harcar", "..."]. skill_icon._split_kind'den farkı:
+## not gövdeye katılmaz, boşluklu tür ("GOLEM FORMU (...)") de tanınır.
+static func _sk_kind_split(desc: String) -> Array:
+	var re := RegEx.new()
+	re.compile("^\\s*((?:\\d+\\.\\s*)?(?:\\p{Lu}+(?: \\p{Lu}+)*|技能|基础|终极|被动|伤害|附魔|进化|特性|成就))\\s*(?:\\(([^)]*)\\))?\\s*:\\s*")
+	var m: RegExMatch = re.search(desc)
+	if m == null or m.get_string(1).length() <= 1:
+		return ["", "", desc]
+	return [m.get_string(1), m.get_string(2), desc.substr(m.get_end())]
+
+
+## Gömülü bekleme notunun süresi ("(22sn bekleme)" -> "22 sn"): sayıyla başlayan parantezlerden ipucunun ayıklayıcısının TAMAMEN sildiği ilki.
+func _sk_cooldown(si: Control, body: String) -> String:
+	var re := RegEx.new()
+	re.compile("\\(\\s*(\\d+(?:[.,]\\d+)?)[^)]*\\)")
+	for m: RegExMatch in re.search_all(body):
+		if str(si.call("_strip_cooldown_note", m.get_string())) == "":
+			return Loc.t("%s sn") % m.get_string(1)
+	return ""
+
+
+## "BASILIP KAPATILABİLİR" -> "Basılıp kapatılabilir" (Türkçe İ/I); zaten küçük harfli not aynen.
+static func _sk_soft_case(s: String) -> String:
+	if s == "" or s != s.to_upper():
+		return s
+	var low: String = s.replace("İ", "i").replace("I", "ı").to_lower()
+	return low.substr(0, 1).to_upper() + low.substr(1)
+
+
+## Adı ayrılan pasifin gövdesi küçük harfle başlıyor ("Bıçak Uzmanlığı: yetenek kullanımından...") -> ilk harf büyük (Türkçe i -> İ).
+static func _sk_cap_first(s: String) -> String:
+	if s == "":
+		return s
+	var c: String = s.substr(0, 1)
+	var up: String = "İ" if c == "i" else ("I" if c == "ı" else c.to_upper())
+	return up + s.substr(1)
+
+
+## Küçük sahne (figür) + sağında ad, tür, statlar.
+func _sk_head(it: Dictionary) -> HBoxContainer:
+	var h := _h(18)
+	var st := _box(Color(0, 0, 0, 0), Color(0, 0, 0, 0), 0, 0, 8)
+	st.custom_minimum_size = SK_STAGE
+	st.clip_contents = true
+	var hold := Control.new()
+	hold.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	st.add_child(hold)
+	_anim_nodes["stage"] = st
+	var spr: TextureRect = _stage_figure(hold, _with_tex(it), SK_FIGURE_H, SK_FLOOR)
+	if spr != null:
+		_anim_nodes["figure"] = spr
+	h.add_child(st)
+	var col := _v(4)
+	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	col.alignment = BoxContainer.ALIGNMENT_CENTER
+	col.add_child(_gold_title(str(it["name"])))
+	col.add_child(_lbl(str(KIND_LOWER.get(it["kind"], "")), 32, C_DIM))
+	col.add_child(_sp(0, 6))
+	col.add_child(_sk_stats(it))
+	h.add_child(col)
+	return h
+
+
+## 2x2 stat: simge + değer (32) + altında adı (16).
+func _sk_stats(it: Dictionary) -> GridContainer:
+	var bs: Dictionary = Characters.get_base_stats(int(it["key"]))
+	var g := GridContainer.new()
+	g.columns = 2
+	g.add_theme_constant_override("h_separation", 22)
+	g.add_theme_constant_override("v_separation", 6)
+	g.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var rows: Array = [["max_health", "Can", str(int(bs.get("hp", 100)))], ["speed", "Hız", str(int(bs.get("speed", 252)))],
+			["damage", "Saldırı Gücü", str(int(bs.get("ap", 10)))]]
+	var sig: Dictionary = MenuKit.signature_info(int(it["key"])) ## karaktere özel stat (madde 677) 4. hücre
+	if not sig.is_empty():
+		rows.append([str(sig["icon"]), str(sig["name"]), str(sig["value"])])
+	for row: Array in rows:
+		var h := _h(8)
+		h.add_child(_icon(_stat_tex(row[0]), 32))
+		var v := _v(-6)
+		v.add_child(_lbl(row[2], 32, C_TEXT))
+		v.add_child(_lbl(row[1], 16, C_DIM))
+		h.add_child(v)
+		g.add_child(h)
+	return g
+
+
+## Sekme: ikon + tuş kapağı; seçili = altın kenar. Fare üstü / tık / gamepad odağı seçer.
+func _sk_tab(e: Dictionary, i: int) -> PanelContainer:
+	var on: bool = i == _sk_sel
+	var card := _box(Color(C_ACCENT, 0.12) if on else Color(C_INSET, 0.55), C_ACCENT if on else C_LINE, 8, 3, 6)
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var ch := _h(10)
+	ch.alignment = BoxContainer.ALIGNMENT_CENTER
+	var ip: String = str(e["icon"])
+	ch.add_child(_icon(load(ip) as Texture2D if ip != "" and ResourceLoader.exists(ip) else null, 48))
+	var kc: PanelContainer = HudTooltip.make_keycap(str(e["key"]))
+	kc.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	ch.add_child(kc)
+	card.add_child(ch)
+	var b: Button = _clickable(card, _on_sk_tab.bind(i), "sk:%d" % i)
+	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new()) ## seçili sekmenin altın kenarı zaten göstergedir; beyaz odak çerçevesi gereksiz
+	b.mouse_entered.connect(_on_sk_tab.bind(i))
+	b.focus_entered.connect(_on_sk_tab.bind(i))
+	return card
+
+
+func _on_sk_tab(i: int) -> void:
+	if i == _sk_sel:
+		return
+	_sk_sel = i
+	_rebuild_list()
+
+
+## Seçili yeteneğin tam açıklaması: ad + tür + bekleme, ayraç, not (soluk), metin. Sığmazsa kuyu kayar.
+func _sk_well(e: Dictionary) -> PanelContainer:
+	var well := _box(C_INSET, C_ACCENT_DK, 18, 3, 6)
+	well.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var wv := _v(10)
+	wv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var hd := _h(12)
+	var nm := FM.lbl(str(e["name"]), SK_FS, C_ACCENT)
+	nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hd.add_child(nm)
+	hd.add_child(HudTooltip.make_tag(str(e["kind"])))
+	if str(e["cd"]) != "":
+		var ic := TextureRect.new()
+		ic.texture = SK_CD_ICON
+		ic.custom_minimum_size = Vector2(24, 24)
+		ic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		ic.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
+		ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		hd.add_child(ic)
+		hd.add_child(_lbl(str(e["cd"]), SK_FS, Color(str(HT.INK["cooldown"]))))
+	wv.add_child(hd)
+	wv.add_child(HudTooltip.make_divider())
+	var si: Control = SkillIconScript.new() ## ipucunun boyaması (sayı / hasar / can / kalkan renkleri)
+	if str(e["note"]) != "":
+		wv.add_child(_sk_rich(str(si.call("_format_lol_style", str(e["note"]))), C_DIM))
+	wv.add_child(_sk_rich(str(si.call("_format_lol_style", str(e["body"]))), C_TEXT))
+	si.free()
+	var sc := ScrollContainer.new()
+	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	sc.add_child(wv)
+	_tag_sid(sc, "sk_scroll")
+	well.add_child(sc)
+	return well
+
+
+func _sk_rich(bb: String, c: Color) -> RichTextLabel:
+	var r: RichTextLabel = HudTooltip.make_rich(SK_FS, c)
+	r.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED ## metin zaten seçili dilde (Characters.get_def), boyalı hâli msgid değil
+	r.text = bb
+	r.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	return r
 
 
 func _upg_detail(d: Dictionary) -> Control:
@@ -1227,7 +1441,6 @@ func _detail_stage(it: Dictionary) -> Control:
 	var st := _box(Color(0, 0, 0, 0), Color(0, 0, 0, 0), 0, 0, 8)
 	st.custom_minimum_size.y = STAGE_H
 	st.clip_contents = true
-	st.add_child(StageBg.new(C_SPOT, C_ACCENT, STAGE_FLOOR))
 	var hold := Control.new()
 	hold.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	st.add_child(hold)
@@ -1242,24 +1455,33 @@ func _detail_stage(it: Dictionary) -> Control:
 
 
 func _stage_upgrade(hold: Control, d: Dictionary, box: float) -> void:
-	var ic: Control = _upg_icon(d, box)
-	ic.anchor_left = 0.5
-	ic.anchor_right = 0.5
-	ic.anchor_top = 1.0
-	ic.anchor_bottom = 1.0
-	ic.offset_left = -floorf(box * 0.5)
-	ic.offset_right = floorf(box * 0.5)
-	ic.offset_top = -STAGE_FLOOR - 24.0 - box
-	ic.offset_bottom = -STAGE_FLOOR - 24.0
-	hold.add_child(ic)
+	_center_in(hold, _upg_icon(d, box))
+
+
+## İkonu sahnenin ortasına koyar (stüdyo ışığı / zemin halkası yok; çerçeve denendi, kullanıcı sevmedi - 2026-11-13, madde 656).
+func _center_in(hold: Control, c: Control) -> void:
+	var half: Vector2 = (c.custom_minimum_size * 0.5).floor()
+	c.anchor_left = 0.5
+	c.anchor_right = 0.5
+	c.anchor_top = 0.5
+	c.anchor_bottom = 0.5
+	c.offset_left = -half.x
+	c.offset_right = half.x
+	c.offset_top = -half.y
+	c.offset_bottom = half.y
+	hold.add_child(c)
 
 
 ## ---------------------------------------------------------------- sayfa verisi
 func _sec_name(kind: String) -> String:
+	if kind == PAGE_KEYS:
+		return "Anahtarlar"
 	return "Geliştirmeler" if kind == PAGE_UPGRADES else str(KIND_TILE.get(kind, kind))
 
 
 func _sec_title(kind: String) -> String:
+	if kind == PAGE_KEYS:
+		return "ANAHTARLAR"
 	return "GELİŞTİRMELER" if kind == PAGE_UPGRADES else str(KIND_NAMES.get(kind, kind))
 
 
@@ -1274,6 +1496,8 @@ func _by_cost(items: Array, kind: String) -> Array:
 func _counts(items: Array, kind: String) -> Vector2i:
 	if kind == PAGE_UPGRADES:
 		return _upg_levels()
+	if kind == PAGE_KEYS:
+		return Vector2i(_keys_total(), KeyIcon.IDS.size())
 	var list: Array = _of_kind(items, kind)
 	return Vector2i(_open_count(list), list.size())
 
@@ -1311,6 +1535,95 @@ func _upg_selected() -> Dictionary:
 		if MetaUpgradesScript.can_buy(id) and (best.is_empty() or MetaUpgradesScript.next_cost(id) < MetaUpgradesScript.next_cost(str(best["id"]))):
 			best = d
 	return best if not best.is_empty() else MetaUpgradesScript.LIST[0]
+
+
+## ---------------------------------------------------------------- ANAHTARLAR (madde 605)
+## Elde toplam kaç anahtar (bölüm alt yazısı).
+func _keys_total() -> int:
+	var n: int = 0
+	for id: String in KeyIcon.IDS:
+		n += MetaProgressScript.keys(id)
+	return n
+
+
+func _key_selected() -> String:
+	return _sel_key if KeyIcon.has_id(_sel_key) else str(KeyIcon.IDS[0])
+
+
+func _select_key(id: String) -> void:
+	var prev: String = _key_selected()
+	if prev != id:
+		_anim_prev_sel = "key:" + prev
+		_anim_dir = 0
+	_sel_key = id
+	_confirm_id = ""
+	_rebuild_list()
+
+
+## Bu anahtarı isteyen içerik: [{"name", "icon", "count", "open"}] (karakter, sonra evcil; MetaProgress.KEY_COSTS'tan).
+func _key_unlocks(id: String) -> Array:
+	var out: Array = []
+	for kind: String in MetaProgressScript.KINDS:
+		for key in (MetaProgressScript.KEY_COSTS.get(kind, {}) as Dictionary).keys():
+			var kc: Dictionary = MetaProgressScript.key_cost(kind, key)
+			if str(kc.get("map", "")) != id:
+				continue
+			var info: Dictionary = _info(kind, key)
+			out.append({"name": str(info.get("name", key)), "icon": info.get("icon", null), "count": int(kc["count"]),
+					"open": MetaProgressScript.is_unlocked(kind, key)})
+	return out
+
+
+func _key_row(id: String, on: bool) -> Control:
+	var have: int = MetaProgressScript.keys(id)
+	var p := _row_box(on, 64)
+	var h := _h(14)
+	h.add_child(_marker(on))
+	h.add_child(_icon(KeyIcon.texture(id), 48.0, have <= 0))
+	var nl := FM.lbl(KeyIcon.display_name(id), 32, C_ACCENT if on else (C_TEXT if have > 0 else C_DIM))
+	nl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	h.add_child(nl)
+	h.add_child(_lbl("x%d" % have, 32, C_PRICE if have > 0 else C_DIM))
+	h.add_child(_sp(10))
+	p.add_child(h)
+	_clickable(p, _select_key.bind(id), "row:key:" + id)
+	_anim_list("rows").append(p)
+	_anim_nodes["row:key:" + id] = p
+	return p
+
+
+## Sağ: anahtarın ayrıntısı (spot sahne + ad + harita + elde kaç tane + nereden düşer + neyi açar). Düğme yok (harcama = içeriğin kendi AÇ düğmesi).
+func _key_detail(id: String) -> Control:
+	var v := _v(14)
+	var have: int = MetaProgressScript.keys(id)
+	v.add_child(_detail_stage({"kind": PAGE_KEYS, "icon": KeyIcon.texture(id), "open": true, "can": true}))
+	v.add_child(_gold_title(KeyIcon.display_name(id)))
+	v.add_child(_lbl(Loc.t("Harita: %s") % KeyIcon.map_name(id), 24, C_DIM))
+	var sh := _h(12)
+	sh.add_child(_lbl("SENDE", 24, C_DIM))
+	sh.add_child(_sp(0, 0, true))
+	sh.add_child(_lbl("x%d" % have, 40, C_PRICE if have > 0 else C_DIM))
+	v.add_child(sh)
+	v.add_child(_lbl("NEREDEN DÜŞER", 24, C_DIM))
+	var tiers: Array = GameManager.KEYS_PER_BOSS.keys()
+	tiers.sort()
+	for tier in tiers:
+		v.add_child(_lbl(Loc.t("Kademe %d bossu: %d anahtar") % [int(tier), int(GameManager.KEYS_PER_BOSS[tier])], 32, C_TEXT))
+	v.add_child(_lbl("NEYİ AÇAR", 24, C_DIM))
+	for e: Dictionary in _key_unlocks(id):
+		var r := _h(12)
+		r.add_child(_icon(e["icon"] as Texture2D, 32.0))
+		var nm := _lbl(str(e["name"]), 32, C_GOOD if e["open"] else C_TEXT)
+		nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		r.add_child(nm)
+		if e["open"]:
+			r.add_child(Glyph.new(G_CHECK, C_GOOD, 3))
+			r.add_child(_lbl("SENDE", 24, C_GOOD))
+		else:
+			r.add_child(_lbl("x%d" % int(e["count"]), 32, C_PRICE))
+		v.add_child(r)
+	v.add_child(_sp(0, 0, false, true))
+	return v
 
 
 func _select_upg(id: String) -> void:
@@ -1359,6 +1672,8 @@ func _with_tex(it: Dictionary) -> Dictionary:
 func _section_icon(items: Array, kind: String, box: float) -> Control:
 	if kind == PAGE_UPGRADES:
 		return _icon(_stat_tex("damage"), box)
+	if kind == PAGE_KEYS:
+		return _icon(KeyIcon.texture(KeyIcon.IDS[0]), box)
 	var list: Array = _by_cost(items, kind)
 	return _icon(_small_tex(list[0]) if not list.is_empty() else null, box)
 
@@ -1487,8 +1802,12 @@ func _ph_tile(it: Dictionary, on: bool) -> Button:
 	if st == "open":
 		corner.add_child(PK.glyph(PK.G_CHECK, DK.C_GOOD, 4))
 	else:
-		corner.add_child(DK.ShardIcon.new(22.0, st == "no"))
-		corner.add_child(PK.lbl(str(int(it["cost"])), 24, PK.C_SOUL if st == "can" else DK.C_BAD))
+		var shard_ok: bool = MetaProgressScript.shards() >= int(it["cost"]) ## "no" artık anahtardan da olabilir (madde 605)
+		corner.add_child(DK.ShardIcon.new(22.0, not shard_ok))
+		corner.add_child(PK.lbl(str(int(it["cost"])), 24, PK.C_SOUL if shard_ok else DK.C_BAD))
+		if _needs_key(it):
+			corner.add_child(KeyIconBox.new(22.0, str(it["key_map"]), _key_short(it) > 0))
+			corner.add_child(PK.lbl("x%d" % int(it["key_count"]), 24, PK.C_SOUL if _key_short(it) == 0 else DK.C_BAD))
 	b.add_child(corner)
 	b.pressed.connect(func() -> void:
 		UISound.play_click()
@@ -1504,7 +1823,6 @@ func _ph_kind_detail(det: VBoxContainer, it: Dictionary) -> void:
 	var kind: String = str(it["kind"])
 	var stage := PK.inset(0.8, 0.0, DK.C_LINE)
 	stage.custom_minimum_size = Vector2(0, 340)
-	stage.add_child(DK.Spot.new(DK.C_SPOT, 0.86))
 	var cc := CenterContainer.new()
 	if kind == MetaProgressScript.CHAR: ## karakter BOYDAN (kullanıcı 2026-10-19), tam katlı büyütme
 		var body: Texture2D = _char_body(it)
@@ -1544,6 +1862,9 @@ func _ph_kind_detail(det: VBoxContainer, it: Dictionary) -> void:
 	det.add_child(DK.sp(0, 8))
 	det.add_child(desc)
 	det.add_child(DK.sp(0, 0, false, true))
+	var key_note: Control = _key_note(it, 24) ## anahtar isteyen kilitli içerik: kaç tane var / nereden düşer (madde 605)
+	if key_note != null:
+		det.add_child(key_note)
 	var st: String = _state(it)
 	var cost: int = int(it["cost"])
 	var b: Button
@@ -1557,7 +1878,7 @@ func _ph_kind_detail(det: VBoxContainer, it: Dictionary) -> void:
 					"danger" if asking else "primary", [], 0.0, 144.0)
 			b.pressed.connect(_on_buy_pressed.bind(kind, it["key"]))
 		_:
-			b = PK.big_button(Loc.t("KİLİDİ AÇ  %d") % cost, Loc.t("%d kıymık eksik") % _need(it), "disabled", PK.G_LOCK, 0.0, 144.0)
+			b = PK.big_button(Loc.t("KİLİDİ AÇ  %d") % cost, _need_text(it), "disabled", PK.G_LOCK, 0.0, 144.0)
 			b.disabled = true
 	b.name = "BuyButton"
 	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL

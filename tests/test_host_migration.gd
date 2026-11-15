@@ -114,7 +114,6 @@ func test_spawner_handover_roundtrip_restores_hidden_counters() -> void:
 	var a: Node = _spawner()
 	a._boss_tiers_spawned = {3: true, 6: true}
 	a._elite_spawned_tiers = {1: true, 2: true}
-	a._final_gate_opened = true
 	a._held_total = 42.5
 	a._spawn_tier = 7
 	a._announced_tier = 7
@@ -126,7 +125,7 @@ func test_spawner_handover_roundtrip_restores_hidden_counters() -> void:
 	b.import_handover(packed)
 	assert(b._boss_tiers_spawned.has(3) and b._boss_tiers_spawned.has(6), "boss kademeleri aktarıldı")
 	assert(b._elite_spawned_tiers.has(1) and b._elite_spawned_tiers.has(2), "elit kademeleri aktarıldı")
-	assert(b._final_gate_opened and is_equal_approx(b._held_total, 42.5) and b._spawn_tier == 7 and b._announced_tier == 7, "kapı/tutulan süre/kademe")
+	assert(is_equal_approx(b._held_total, 42.5) and b._spawn_tier == 7 and b._announced_tier == 7, "tutulan süre/kademe")
 	assert(b._endless_bosses_spawned.has(2) and b._endless_elite_spawned.has(1), "sonsuz mod sayaçları")
 	for n in [a, b]:
 		n.free()

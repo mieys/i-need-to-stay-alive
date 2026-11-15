@@ -290,7 +290,7 @@ def taunt_status():
     save("taunt_status", frames, "loop", True, 8)
 
 
-# ====================================================================== E - guard_bubble (dost)
+# ====================================================================== E - guard_bubble (dost) - ESKI, cagrilmiyor (madde 581)
 def guard_bubble():
     W = H = 80
     cx, cy = 40, 40
@@ -407,5 +407,6 @@ if __name__ == "__main__":
     taunt_burst()
     taunt_aura()
     taunt_status()
-    guard_bubble()
+    ## guard_bubble() ARTIK CAGRILMAZ (madde 581): dostun bariyeri tools/gen_sovalye_bariyer_fx.py ("A5 - Isik Kuyrugu") ayni
+    ## guard_bubble_* dosyalarina yazar; burada cagirmak yeni sayfanin ustune eskisini yazardi.
     guard_absorb()

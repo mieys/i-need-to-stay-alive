@@ -95,7 +95,7 @@ func test_sheets_scene_tables_stats_and_size() -> void:
 		var tex: Texture2D = load("res://assets/enemies/banshee/banshee_%s.png" % k) as Texture2D
 		assert(tex != null and tex.get_height() == 320 and tex.get_width() == 80 * int(sheets[k]), "sayfa %s" % k)
 	assert(SpawnerScript.SCENES.has("banshee1") and SpawnerScript.ID_FAMILY["banshee1"] == "banshee" and AbilitiesScript.family_has_ability("banshee"), "tablolar")
-	assert(SpawnerScript.NEW_BOSS_TIERS.get(15) == ["banshee1"] and SpawnerScript.NIGHT_BOSS_TIERS == [15], "Kademe 15 gece bossu")
+	assert(SpawnerScript.NIGHT_BOSS_IDS == ["banshee1"] and SpawnerScript.needs_night(["banshee1"]), "gece bossu kimliğe bağlı (madde 597: Banshee Bataklık haritası K10 bossu olacak, Aşama 3)")
 	assert(BossBarArtScript.display_name("banshee1") == "BANSHEE", "boss barı adı")
 	var sp: Node = _spawner()
 	var b: Node = _boss(sp, Vector2(500, 500))

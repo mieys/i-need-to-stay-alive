@@ -67,19 +67,19 @@ func test_passive_is_off_until_a_skill_is_used_then_lasts_three_seconds() -> voi
 	_cleanup()
 
 
-## Her yetenek kullanımı (Q hamle, E, R) sayacı kurar; yeni kullanım süreyi yeniler.
+## Her yetenek kullanımı (E hamle, Q, R) sayacı kurar; yeni kullanım süreyi yeniler.
 func test_every_skill_use_arms_the_passive_and_refreshes_it() -> void:
 	var p := _make_player()
 	assert(p.assasin_dash2_charges == 2)
 	p._try_assasin_dash2()
-	assert(p.assasin_guaranteed_crit_active(), "Q (Şahin Hamlesi) pasifi tetiklemeli")
+	assert(p.assasin_guaranteed_crit_active(), "E (Şahin Hamlesi) pasifi tetiklemeli")
 	p._process_assasin_dash2_charges(2.5)
 	p._try_assasin_dash2()
 	p._process_assasin_dash2_charges(0.6)
 	assert(p.assasin_guaranteed_crit_active(), "ikinci kullanım süreyi yenilemeli (2,5 + 0,6 > 3 olsa da aktif)")
 	p._assasin_crit_timer = 0.0
-	p._activate_skill2()
-	assert(p.skill2_state == "active" and p.assasin_guaranteed_crit_active(), "E (Gölge Adımı) pasifi tetiklemeli")
+	p._activate_skill()
+	assert(p.skill_state == "active" and p.assasin_guaranteed_crit_active(), "Q (Gölge Adımı) pasifi tetiklemeli")
 	p._assasin_crit_timer = 0.0
 	var target := FakeEnemy.new()
 	target.add_to_group("enemies")
@@ -144,12 +144,13 @@ func test_real_beam_tick_crits_only_while_the_passive_is_active() -> void:
 func test_non_assasin_never_gets_guaranteed_crits() -> void:
 	var p := _make_player()
 	GameManager.selected_character = 1 ## Oakley'nin yeteneği
+	GameManager.selected_char_id = 2 ## pasif kimliği roster'dan okunur (2026-11-12: yetenek id'sinden değil) - Oakley
 	p._assasin_passive_on_skill_used()
 	assert(not p.assasin_guaranteed_crit_active(), "Assasin olmayan oyuncuda pasif yok")
 	_cleanup()
 
 
-func test_q_hamle_recharge_is_eight_seconds_per_charge() -> void:
+func test_e_hamle_recharge_is_eight_seconds_per_charge() -> void:
 	var p := _make_player()
 	assert(is_equal_approx(p.ASSASIN_DASH2_RECHARGE_TIME, 8.0), "yük başı 8 sn")
 	p._try_assasin_dash2()
@@ -158,7 +159,7 @@ func test_q_hamle_recharge_is_eight_seconds_per_charge() -> void:
 	assert(p.assasin_dash2_charges == 1, "7,9 sn'de yük gelmez")
 	p._process_assasin_dash2_charges(0.2)
 	assert(p.assasin_dash2_charges == 2, "8 sn'de yük geri gelir")
-	assert(String(Characters.DEFS[ASSASIN]["skill_desc"]).contains("8sn"), "açıklama 8sn demeli")
+	assert(String(Characters.DEFS[ASSASIN]["skill2_desc"]).contains("8sn"), "açıklama 8sn demeli (Şahin Hamlesi E'de)")
 	_cleanup()
 
 
@@ -194,6 +195,7 @@ func test_passive_visual_follows_the_crit_window() -> void:
 	_cleanup()
 	var other := _make_player()
 	GameManager.selected_character = 1
+	GameManager.selected_char_id = 2 ## Assasin değil (pasif kimliği roster'dan okunur)
 	other._assasin_passive_on_skill_used()
 	assert(other.get_node_or_null("AssasinPassiveFx") == null, "Assasin olmayan oyuncuda pasif görseli yok")
 	_cleanup()

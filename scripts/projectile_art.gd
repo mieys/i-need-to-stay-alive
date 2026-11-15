@@ -26,6 +26,7 @@ const ART := {
 	"tufek_projectile": {"name": "tufek", "bf": 1, "bfps": 1.0, "tf": 2, "tfps": 25.0, "tox": -30.5},
 	## Pompalı saçması (madde 448): 4x4 yuvarlak, iz YOK (salvo başına 6+ mermi: iz şeritleri karmaşa yapardı).
 	"pompali_projectile": {"name": "pompali", "bf": 1, "bfps": 1.0, "tf": 0, "tfps": 1.0, "tox": 0.0},
+	"makineli_projectile": {"name": "tabanca", "bf": 1, "bfps": 1.0, "tf": 2, "tfps": 25.0, "tox": -16.5}, ## madde 652: Tabanca mermisi
 	"arcane_projectile": {"name": "arcane", "bf": 4, "bfps": 14.0, "tf": 4, "tfps": 14.0, "tox": -23.5},
 	"ice_bolt_projectile": {"name": "buz", "bf": 4, "bfps": 12.0, "tf": 2, "tfps": 12.0, "tox": -23.5},
 }

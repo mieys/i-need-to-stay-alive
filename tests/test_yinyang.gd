@@ -66,6 +66,7 @@ func _enemy(pos: Vector2) -> FakeEnemy:
 func _ally(hp: float, mx: float = 100.0) -> FakeAlly:
 	var a := FakeAlly.new()
 	a.add_to_group("remote_players")
+	a.add_to_group("remote_allies") ## destek yetenekleri müttefik grubunu tarar (madde 617)
 	_track(a)
 	a.item_shield_hp = hp
 	a.item_shield_max = mx
@@ -179,12 +180,12 @@ func test_hit_gives_shield_to_owner_and_yang_boosts_low_shield() -> void:
 	assert(proj.yy_rcp_peer > 0, "alıcı seçildi (tek kişilikte kendisi)")
 	proj._on_body_entered(e)
 	assert(e.hits.size() == 1 and is_equal_approx(float(e.hits[0][0]), 50.0), "tek hedef, ana hasar: %s" % str(e.hits))
-	assert(absf(p.item_shield_hp - (50.0 + AP * 0.1 * hp_mult)) < 0.01, "isabet başına %%10 SG kalkan: %s" % str(p.item_shield_hp))
+	assert(absf(p.item_shield_hp - (50.0 + AP * 0.15 * hp_mult)) < 0.01, "isabet başına %%15 SG kalkan: %s" % str(p.item_shield_hp))
 	## Yang: %30 altına 1,5 kat
 	p.item_shield_hp = 20.0
 	var e2 := _enemy(Vector2(1120.0, 1010.0))
 	_shot(w, e2)._on_body_entered(e2)
-	assert(absf(p.item_shield_hp - (20.0 + AP * 0.15 * hp_mult)) < 0.01, "Yang x1,5: %s" % str(p.item_shield_hp))
+	assert(absf(p.item_shield_hp - (20.0 + AP * 0.225 * hp_mult)) < 0.01, "Yang x1,5: %s" % str(p.item_shield_hp))
 	_cleanup()
 
 
@@ -198,14 +199,14 @@ func test_shield_goes_to_ally_and_full_shields_turn_into_yin_damage() -> void:
 	assert(proj.yy_rcp_peer == 7, "ağa giden alıcı kimliği = dostun peer_id'si")
 	proj._on_body_entered(e)
 	assert(ally.got > 0.0 and is_equal_approx(p.item_shield_hp, 100.0), "kalkan dosta gitti")
-	## herkes dolu -> Yin: kalkan yerine +%20 SG alan hasarı
+	## herkes dolu -> Yin: kalkan yerine +%40 SG alan hasarı
 	ally.item_shield_hp = 100.0
 	var e2 := _enemy(Vector2(1120.0, 1010.0))
 	var proj2: Node = _shot(w, e2)
 	assert(proj2.yy_rcp_peer == 0, "kimse alamıyor -> Yin")
 	var got_before: float = ally.got
 	proj2._on_body_entered(e2)
-	assert(e2.hits.size() == 2 and bool(e2.hits[1][1]) and is_equal_approx(float(e2.hits[1][0]), AP * 0.2), "Yin hasarı: %s" % str(e2.hits))
+	assert(e2.hits.size() == 2 and bool(e2.hits[1][1]) and is_equal_approx(float(e2.hits[1][0]), AP * 0.4), "Yin hasarı: %s" % str(e2.hits))
 	assert(is_equal_approx(ally.got, got_before), "Yin'de kalkan yok")
 	_cleanup()
 
@@ -218,17 +219,17 @@ func test_denge_upgrades() -> void:
 	p.item_shield_hp = 70.0 ## %70: Yang eşiğinin (%40) üstü
 	var e := _enemy(Vector2(1120.0, 1000.0))
 	_shot(w, e)._on_body_entered(e)
-	assert(absf(p.item_shield_hp - (70.0 + AP * 0.13 * hp_mult)) < 0.01, "Kalın Sayfa %%13: %s" % str(p.item_shield_hp))
+	assert(absf(p.item_shield_hp - (70.0 + AP * 0.18 * hp_mult)) < 0.01, "Kalın Sayfa %%18: %s" % str(p.item_shield_hp))
 	var kinds: Array = e.elements.map(func(x): return x[0])
 	assert(kinds.has("weaken"), "Kara Mühür zayıflatır: %s" % str(kinds))
 	p.item_shield_hp = 35.0 ## Sıcak Yang: eşik %40, x2
 	var e2 := _enemy(Vector2(1120.0, 1010.0))
 	_shot(w, e2)._on_body_entered(e2)
-	assert(absf(p.item_shield_hp - (35.0 + AP * 0.13 * 2.0 * hp_mult)) < 0.01, "Sıcak Yang x2: %s" % str(p.item_shield_hp))
+	assert(absf(p.item_shield_hp - (35.0 + AP * 0.18 * 2.0 * hp_mult)) < 0.01, "Sıcak Yang x2: %s" % str(p.item_shield_hp))
 	p.item_shield_hp = 100.0 ## Ağır Yin %35
 	var e3 := _enemy(Vector2(1120.0, 1020.0))
 	_shot(w, e3)._on_body_entered(e3)
-	assert(e3.hits.size() == 2 and is_equal_approx(float(e3.hits[1][0]), AP * 0.35), "Ağır Yin: %s" % str(e3.hits))
+	assert(e3.hits.size() == 2 and is_equal_approx(float(e3.hits[1][0]), AP * 0.55), "Ağır Yin: %s" % str(e3.hits))
 	_cleanup()
 
 
@@ -321,7 +322,7 @@ func test_no_target_still_carries_shield_with_light_orb_only() -> void:
 	var hp_mult: float = p.heal_power_mult()
 	p.item_shield_hp = 50.0
 	w._on_fire_timer_timeout() ## görüşte/menzilde düşman yok
-	assert(absf(p.item_shield_hp - (50.0 + AP * 0.1 * hp_mult)) < 0.01, "hedef yokken de kalkan: %s" % str(p.item_shield_hp))
+	assert(absf(p.item_shield_hp - (50.0 + AP * 0.15 * hp_mult)) < 0.01, "hedef yokken de kalkan: %s" % str(p.item_shield_hp))
 	var lights: Array = get_children().filter(func(c): return c.get_script() == LightScript)
 	assert(lights.size() == 1 and lights[0].rcp == p and lights[0].enemy == null, "yalnız ak küre, alıcıya")
 	var projs: Array = get_children().filter(func(c): return c.get_script() == preload("res://scripts/yinyang_projectile.gd"))

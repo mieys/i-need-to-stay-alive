@@ -62,6 +62,8 @@ var _target: Node2D = null
 ## Ağ (remote) modu: uzak oyuncularda gerçek bir Enemy node referansı yok, broadcast_player_vfx ile sadece hedefin ve
 ## namlunun konumu gelir (bkz. remote_player.gd _start_beam_vfx/_update_beam_vfx, network_manager.gd "beam_start"/
 ## "beam_update").
+const BeamNetSmooth := preload("res://scripts/beam_net_smooth.gd")
+var _net_smooth = BeamNetSmooth.new() ## uzak ışın: ağ konumlarını yumuşatır (Talon E'de ışın dönerken sıçramasın)
 var _use_network_target: bool = false
 var _network_target_pos: Vector2 = Vector2.ZERO
 var _network_origin_pos: Vector2 = Vector2.ZERO
@@ -122,6 +124,21 @@ func setup_network(target_pos: Vector2, extra_data: Dictionary) -> void:
 	_network_target_pos = target_pos
 	var fallback_origin: Vector2 = get_parent().global_position if get_parent() is Node2D else target_pos
 	_network_origin_pos = Vector2(extra_data.get("from_pos", fallback_origin))
+	_net_smooth.push(_network_origin_pos, _network_target_pos)
+
+
+## Uzak oyuncu: ışın ağdaki namlu konumundan değil, kuklanın kendi asa ucundan (ikonun çocuğu işaret düğümü) çıkar - bkz.
+## fx_rainbow_beam.gd set_net_origin (ağ konumu geriden gelir, kukla ikonu onunla örtüşmezdi). Uç (hedef) ağdan.
+var _net_origin_node: Node2D = null
+
+
+func set_net_origin(node: Node2D) -> void:
+	_net_origin_node = node
+
+
+## Işının (yumuşatılmış) bitiş noktası - kukla asasını ışının yönüne çevirmek için.
+func beam_to() -> Vector2:
+	return _net_smooth.to_pos()
 
 
 ## Uzak oyuncularda hedef ve silah namlusu pozisyonunu tazeler.
@@ -129,17 +146,21 @@ func update_target(target_pos: Vector2, origin_pos: Vector2 = Vector2.ZERO) -> v
 	_network_target_pos = target_pos
 	if origin_pos != Vector2.ZERO:
 		_network_origin_pos = origin_pos
+	_net_smooth.push(_network_origin_pos, _network_target_pos)
 
 
 func _process(delta: float) -> void:
+	_net_smooth.step(delta)
 	var from: Vector2 = global_position
 	if _use_network_target:
-		from = _network_origin_pos
+		from = _net_smooth.from_pos()
+		if _net_origin_node != null and is_instance_valid(_net_origin_node) and _net_origin_node.is_inside_tree():
+			from = _net_origin_node.global_position
 	elif _origin and is_instance_valid(_origin):
 		from = _origin.global_position
 	var to: Vector2 = global_position
 	if _use_network_target:
-		to = _network_target_pos
+		to = _net_smooth.to_pos()
 	elif _target and is_instance_valid(_target):
 		to = _target.global_position
 	## Kök hedefte (isabet ucu) durur; ışın yerel olarak namludan köke çizilir.

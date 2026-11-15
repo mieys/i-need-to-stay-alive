@@ -20,6 +20,7 @@ const LobbyUI := preload("res://scripts/menu_lobby_ui.gd")
 const RunRecordsScript: GDScript = preload("res://scripts/run_records.gd")
 const AchievementsScript: GDScript = preload("res://scripts/achievements.gd")
 const TierDisplayScript: GDScript = preload("res://scripts/tier_display.gd")
+const SkullIcon := preload("res://scripts/skull_icon.gd")
 const MobileUIScript := preload("res://scripts/mobile_ui.gd")
 const PK := preload("res://scripts/phone_menu_kit.gd")
 
@@ -38,8 +39,10 @@ const G_FOLDER := ["###......", "#########", "#.......#", "#.......#", "#.......
 const G_CHECK := ["......#", ".....##", "#...##.", "##.##..", ".###...", "..#...."]
 
 ## Piksel desenler: # ana, h parlak, k koyu (madalyada oyuk).
-const P_SKULL := ["..#####..", ".#######.", "#########", "#kk###kk#", "#kk###kk#", ".###k###.", "..#####..", "..#k#k#.."]
-const P_HORNS := ["#.......#", "##.....##", ".#######.", "#########", "#kk###kk#", "#kk###kk#", ".###k###.", "..#k#k#.."]
+## Kafatası simgeleri desen DEĞİL, kullanıcının kafatası çizimidir (skull_icon.gd, 2026-11-11): bu iki sabit yalnız "kafatası" /
+## "Final kafatası (kırmızı)" işaretidir; Medal (_draw) ve _rec_icon dokuyu kendisi çizer.
+const P_SKULL := ["skull"]
+const P_HORNS := ["skull_red"]
 const P_CROWN := ["#...#...#", "##.###.##", "#########", "#h##h##h#", "#########", ".#######."]
 const P_MOON := ["..####...", ".###.....", "###....h.", "###...hhh", "###....h.", "###......", ".###.....", "..####..."]
 const P_SWORD := [".......hh", "......h#h", ".....h#h.", "....h#h..", "k..h#h...", ".k##h....", "..kk.....", ".k..k....", "k........"]
@@ -139,10 +142,13 @@ class Medal extends Control:
 		if locked:
 			var g: Color = DARK_RIM.lightened(0.14)
 			cols = {"#": g, "h": g, "k": DARK_FILL.darkened(0.35)}
-		var px: float = pat_px if pat_px > 0.0 else CELL
-		var gw: float = str(rows[0]).length() * px
-		var gh: float = rows.size() * px
-		_pat(rows, (c - Vector2(gw, gh) * 0.5).round(), px, cols)
+		if rows == P_SKULL or rows == P_HORNS: ## kafatası çizimi: iç diske en uygun tam katlı boy, kilitliyken koyu silüet
+			SkullIcon.draw_fit(self, c, 2.0 * (rad - 9.0), 2, rows == P_HORNS, Color(0.33, 0.31, 0.36) if locked else Color.WHITE)
+		else:
+			var px: float = pat_px if pat_px > 0.0 else CELL
+			var gw: float = str(rows[0]).length() * px
+			var gh: float = rows.size() * px
+			_pat(rows, (c - Vector2(gw, gh) * 0.5).round(), px, cols)
 		if locked:
 			var lp := (c + Vector2(rad, rad) * 0.66).floor()
 			_disk(lp, 11.0, OUTLINE)
@@ -501,6 +507,15 @@ func _progress(d: Dictionary, bar_w: float) -> HBoxContainer:
 	return h
 
 
+## Rekor satırı simgesi: desen ya da (kafatası işareti) kullanıcının kafatası çizimi (30 px yüksekliğe tam katlı).
+func _rec_icon(pat: Array, gl: Dictionary) -> Control:
+	if pat == P_SKULL:
+		var ic: Control = DK.icon(SkullIcon.tex(), 30.0)
+		ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		return ic
+	return Pic.new(pat, gl, 3)
+
+
 func _build_records() -> void:
 	var gl := {"#": FM.C_TAG, "h": FM.C_TAG}
 	var fresh: Array = RunRecordsScript.last_run_records(_data)
@@ -522,7 +537,7 @@ func _build_records() -> void:
 			if first_fresh < 0:
 				first_fresh = _rows.size()
 		right.add_child(_value(r[2], is_new))
-		_add_row(key, Pic.new(r[1], gl, 3), str(RunRecordsScript.RECORD_LABELS[key]), "", right)
+		_add_row(key, _rec_icon(r[1], gl), str(RunRecordsScript.RECORD_LABELS[key]), "", right)
 	_section("TOPLAM")
 	_add_row("runs", Pic.new(P_FLAG, gl, 3), "Toplam koşu", "", _value(str(int(_data["runs"]))))
 	var chars: Array = _data["victory_chars"]

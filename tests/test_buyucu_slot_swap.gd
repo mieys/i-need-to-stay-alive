@@ -86,6 +86,9 @@ func test_don_nova_now_casts_from_r_with_ulti_cost() -> void:
 	var shield0: float = p.item_shield_hp
 	await get_tree().physics_frame ## yaratık ızgarası (Enemy.get_enemies_near) bir sonraki fizik karesinde kurulur
 	p._buyucu_try_activate_variation_r()
+	## Madde 533: önce odak, sonra yayılan dalga - ikisi de bitirilir (test_buyucu_evolutions.gd _finish_nova ile aynı).
+	p._process_buyucu_nova(float(p.BUYUCU_NOVA_FOCUS_TIME) + 0.01)
+	p._process_buyucu_nova(float(p.BUYUCU_NOVA_WAVE_TIME))
 	assert(e.frost_slows == [[p.BUYUCU_NOVA_SLOW_PERCENT, p.BUYUCU_NOVA_SLOW_DURATION]] and e.freezes.is_empty() and e.hits.size() == 1,
 		"R'de Don Nova %%80 yavaşlatır (dondurmaz) + vurur: %s %s %s" % [str(e.frost_slows), str(e.freezes), str(e.hits)])
 	assert(p.item_shield_hp < shield0, "ULTİ kalkan bedeli ödendi")

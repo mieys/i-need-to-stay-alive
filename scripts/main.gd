@@ -8,6 +8,7 @@ const DungeonDefsScript := preload("res://scripts/dungeon/dungeon_defs.gd") ## Z
 const MissionCompleteWindowScript := preload("res://scripts/mission_complete_window.gd")
 const GameNoticeScript := preload("res://scripts/game_notice.gd") ## bildirim levhaları (madde 264)
 const WaitOverlayScript := preload("res://scripts/wait_overlay.gd") ## oyuncular bekleniyor ekranı (madde 264)
+const UiHideScript := preload("res://scripts/ui_hide.gd") ## F3 arayüzü gizle (madde 612): kalıcı HUD katmanları + bildirimler kayıtlı
 const EVO_CHOICE_PREFIX := SkillEvolutionsScript.CHOICE_PREFIX
 const PauseMenuScene = preload("res://scenes/pause_menu.tscn")
 const SurrenderVotePanelScript := preload("res://scripts/surrender_vote_panel.gd") ## teslim oylaması paneli (madde 540)
@@ -90,6 +91,12 @@ const CreatureDepthScript := preload("res://scripts/creature_depth.gd")
 const HideBrushManagerScript := preload("res://scripts/hide_brush_manager.gd")
 const MineWorldScript := preload("res://scripts/mine_world.gd")
 const GuardCampsScript := preload("res://scripts/guard_camps.gd")
+const GameModeScript := preload("res://scripts/pvp/game_mode.gd")
+const TeamBasesScript := preload("res://scripts/pvp/team_bases.gd")
+const PvpRulesScript := preload("res://scripts/pvp/pvp_rules.gd") ## 2v2 PvP kuralları: savaşta menü ertelenir, oyun sonu başlığı (madde 617)
+const PvpNetScript := preload("res://scripts/pvp/pvp_net.gd")
+const TeamsScript := preload("res://scripts/pvp/teams.gd")
+const PvpTargetsScript := preload("res://scripts/pvp/pvp_targets.gd")
 const MapShadowsScript := preload("res://scripts/map_shadows.gd")
 const ShopsFlag := preload("res://scripts/shops_flag.gd")
 const GroundTexelPassScript := preload("res://scripts/ground_texel_pass.gd")
@@ -166,6 +173,7 @@ const RunSummaryUIScript: GDScript = preload("res://scripts/run_summary_ui.gd")
 const VictoryOverlayScript: GDScript = preload("res://scripts/victory_overlay.gd")
 const AchievementsScript: GDScript = preload("res://scripts/achievements.gd")
 const MetaProgressScript: GDScript = preload("res://scripts/meta_progress.gd")
+const KeyIconScript := preload("res://scripts/key_icon.gd") ## harita anahtarı simgesi + adı (madde 605)
 const EndlessMathScript: GDScript = preload("res://scripts/endless_math.gd")
 const BossBarTopScript: GDScript = preload("res://scripts/boss_bar_top.gd")
 const CameraShakeScript: GDScript = preload("res://scripts/camera_shake.gd")
@@ -270,6 +278,7 @@ func _ready() -> void:
 	var merchant_arrow_layer := CanvasLayer.new()
 	merchant_arrow_layer.name = "MerchantArrowLayer"
 	merchant_arrow_layer.layer = 40
+	UiHideScript.mark_layer(merchant_arrow_layer)
 	add_child(merchant_arrow_layer)
 	merchant_arrow_layer.add_child(_merchant_arrow)
 	## Görev sistemi (bkz. world_event_manager.gd) - satıcı okuyla AYNI CanvasLayer deseni,
@@ -311,6 +320,7 @@ func _ready() -> void:
 	world_event_banner_layer.name = "WorldEventBannerLayer"
 	world_event_banner_layer.layer = 40
 	world_event_banner_layer.add_to_group(&"world_event_banner_layer") ## level pazarı açıkken gizlenir (level_market_view.gd)
+	UiHideScript.mark_layer(world_event_banner_layer)
 	add_child(world_event_banner_layer)
 	world_event_banner_layer.add_child(_world_event_banner)
 	## Arayüz opaklığı ayarı (kullanıcı isteği 2026-09-25, bkz. UISound.ui_opacity_percent) - görev penceresi ve satıcı
@@ -329,6 +339,7 @@ func _ready() -> void:
 	var boss_bar_layer := CanvasLayer.new()
 	boss_bar_layer.name = "BossBarLayer"
 	boss_bar_layer.layer = 38
+	UiHideScript.mark_layer(boss_bar_layer)
 	add_child(boss_bar_layer)
 	_boss_bar_top = Control.new()
 	_boss_bar_top.name = "BossBarTop"
@@ -397,6 +408,7 @@ func _ready() -> void:
 	NetworkManager.chat_message_received.connect(_on_chat_message_received)
 	NetworkManager.debug_action_announced.connect(_on_debug_action_announced)
 	NetworkManager.gold_gift_announced.connect(_on_gold_gift_announced)
+	GameManager.keys_granted.connect(_on_keys_granted)
 	_update_stats_display()
 	hud.update_level(GameManager.team_level)
 	hud.update_xp(GameManager.team_xp, GameManager.team_xp_needed)
@@ -409,6 +421,16 @@ func _ready() -> void:
 
 	if NetworkManager.is_multiplayer_active:
 		_setup_multiplayer_players()
+
+	## PvPvE modu (madde 607, docs/pvp/PLAN.md): takım üsleri / kampları (yerleşim host'ta, oyuncu kendi kampına taşınır). Co-op'ta kurulmaz.
+	if GameModeScript.is_pvp():
+		var team_bases: Node = TeamBasesScript.new()
+		team_bases.name = "TeamBases"
+		add_child(team_bases)
+		## Rakip oyuncuların vurulabilir vekilleri + hazırlık süresi (Aşama 2, madde 615).
+		var pvp_targets: Node = PvpTargetsScript.new()
+		pvp_targets.name = "PvpTargets"
+		add_child(pvp_targets)
 
 	## Kamera haritanın dışını göstermesin (bkz. camera_map_limits.gd).
 	var camera_limits: Node = CameraMapLimitsScript.new()
@@ -497,6 +519,11 @@ func _ready() -> void:
 			var desert_fx: Node2D = preload("res://scripts/col_fx.gd").new()
 			desert_fx.name = "ColFx"
 			harita_node.add_child(desert_fx)
+		## Ayaz Dağı: ateş / kristal gece ışıkları, duman, kaynak buharı, ısınma noktaları ("isi_kaynagi" grubu) (bkz. kis_fx.gd).
+		if MapProfilesScript.feature("kis_fx"):
+			var winter_fx: Node2D = preload("res://scripts/kis_fx.gd").new()
+			winter_fx.name = "KisFx"
+			harita_node.add_child(winter_fx)
 		## Kara Bataklık suyu yürünür (madde 525): suya giren yürüyen karakter / yaratık / evcilin ayağı suyun altında (bkz. wade_fx.gd).
 		if MapProfilesScript.water_walkable():
 			var wade: Node = preload("res://scripts/wade_fx.gd").new()
@@ -766,7 +793,18 @@ func _update_character_draw_order() -> void:
 			chars.append(rp)
 	if chars.size() < 2:
 		return
-	chars.sort_custom(func(a: Node2D, b: Node2D) -> bool: return a.global_position.y < b.global_position.y)
+	## 2026-11-14 (kullanıcı: "karakterler arasında Y ekseni sorunu, birbirimizin üstüne çıkabiliyoruz"): anahtar kök noktası DEĞİL
+	## AYAK hizası (yaratıklarla aynı, _creature_foot_y) - karakter boyları/sprite ofsetleri farklı, kökle sıralayınca ayağı daha
+	## aşağıdaki karakter bazen arkada çiziliyordu. Eşitlikte kök y'si, sonra düğüm sırası (titremesin).
+	var foot_of: Dictionary = {}
+	for c in chars:
+		foot_of[c] = _creature_foot_y(c)
+	chars.sort_custom(func(a: Node2D, b: Node2D) -> bool:
+		var fa: float = foot_of[a]
+		var fb: float = foot_of[b]
+		if absf(fa - fb) > 0.5:
+			return fa < fb
+		return a.global_position.y < b.global_position.y if a.global_position.y != b.global_position.y else a.get_index() < b.get_index())
 	## Her karakter kendinden bir öncekinin (daha yukarıdakinin) ağaçta ARKASINDA olmalı. Öndeyse hemen
 	## arkasına taşınır: daha büyük bir indekse move_child, öncekini bir geri kaydırıp bunu onun hemen
 	## arkasına koyar; önceki çiftlerin göreli sırası bozulmaz.
@@ -785,7 +823,16 @@ func _update_character_draw_order() -> void:
 ## merkeze göre sıralanınca büyük bir yaratığın ayağının hemen üstündeki küçük yaratık yine onun üstüne çiziliyordu.
 ## Ayak = sprite karesindeki en alt dolu piksel satırı (gölgeli sayfalarda gölgenin altı), doku başına bir kez ölçülür.
 ## "ysort_props": yerde duran küçük nesneler (Oakley çiçeği, 2026-10-19) yaratıklarla aynı ayak sırasına girer (oakley_flower.gd DERİNLİK notu).
-const CREATURE_SORT_GROUPS: Array[String] = ["enemies", "player_ally", "player_allies", "ysort_props"]
+const CREATURE_SORT_GROUPS: Array[String] = ["enemies", "player_ally", "pvp_rivals", "player_allies", "ysort_props"]
+
+
+## 2026-11-14 (kullanıcı: "diğer oyuncu üstteyken onun üstünde görünüyor"; ayak hizası düzeltmesi yetmedi): uzak oyuncu kuklası remote_player.tscn'de
+## "player_ally" (PvP'de ayrıca "pvp_rivals") grubunda -> yukarıdaki yaratık geçişine giriyordu. C++ draw_order (ve eski yolda move_child) kuklanın çizim indeksini
+## YARATIKLARIN işgal ettiği indekslere atıyor; yerel Player bu gruplarda olmadığı için ağaçta başta kalıyor -> kukla Y'den bağımsız HEP yerel oyuncunun üstüne
+## çiziliyor, _update_character_draw_order'ın sırasını da her geçişte eziyordu. Oyuncular (yerel + kuklalar) yalnız _update_character_draw_order ile sıralanır
+## (hepsi z 1 katmanında; yaratıklar z 0'da, onlarla göreli sıra zaten z ile belli).
+func _is_player_puppet(n: Node) -> bool:
+	return n is RemotePlayer or n.is_in_group("remote_players")
 static var _foot_row_cache: Dictionary = {} ## "doku yolu|hframes|vframes" -> kare üstünden ayak satırına px (kare boyu ile)
 
 
@@ -805,7 +852,7 @@ func _update_creature_draw_order() -> void:
 	for group_name in CREATURE_SORT_GROUPS:
 		for n in get_tree().get_nodes_in_group(group_name):
 			var n2 := n as Node2D
-			if n2 == null or n2.get_parent() != self or seen.has(n2):
+			if n2 == null or n2.get_parent() != self or seen.has(n2) or _is_player_puppet(n2):
 				continue
 			## PERF (yaratık yeniden yazımı Aşama 3, 1000 yaratıkta bu fonksiyon ~3,4 ms): görünmeyen (görüş sisinin gizlediği)
 			## yaratık çizilmez, sırası önemsiz - sisin dışına çıktığı karede zaten bir sonraki geçişte (<= 2 kare) sıralanır.
@@ -883,7 +930,7 @@ func _update_creature_draw_order_ew(ew: Object) -> void:
 			cand.append_array(get_tree().get_nodes_in_group(group_name))
 	for n in cand:
 		var n2 := n as Node2D
-		if n2 == null or not is_instance_valid(n2) or n2.get_parent() != self or seen.has(n2) or not n2.visible:
+		if n2 == null or not is_instance_valid(n2) or n2.get_parent() != self or seen.has(n2) or not n2.visible or _is_player_puppet(n2):
 			continue
 		seen[n2] = true
 		extras.append(n2)
@@ -1155,6 +1202,11 @@ func _process_multiplayer_sync(delta: float) -> void:
 		## Efsun kademesi parıltısı (2026-10-04, enchant_weapon_glow.gd) - weapon_keys ile aynı sıra; efsunsuzken hiç eklenmez.
 		if any_ench:
 			extra["ench_tiers"] = ench_tiers
+		## Kalkan siper duruşu hasar azaltması (madde 705, Sağlam Siper): host'taki yetkili mermi kuklanın kalkanına bakar - temel %30'dan
+		## yalnız Kalkan taşınırken eklenir (remote_player.gd _kalkan_guard_red; yoksa temel).
+		for weapon: Node in player.owned_weapon_nodes:
+			if is_instance_valid(weapon) and weapon.has_method("kalkan_guard_reduction") and bool(weapon.get("_is_kalkan")):
+				extra["kguard"] = maxf(float(weapon.call("kalkan_guard_reduction")), float(extra.get("kguard", 0.0)))
 		# Character modulate color for status effects
 		## DÜZELTME (derin multiplayer görsel denetimi): bazı yetenekler
 		## (ör. Büyücü Kız Don Nova/Meteor, Assasin Görünmezlik/Gölge Hücumu)
@@ -1652,6 +1704,10 @@ func _open_level_up_screen_after_xp_settles() -> void:
 		if remaining <= 0.0:
 			break
 		await get_tree().create_timer(remaining).timeout
+	## 2v2 PvP (plan K10): oyuncu savaşındayken (son 6 sn'de oyuncuya vurdum / vuruldum) kart ekranı açılmaz - ruh hâli savaştan kaçış olmasın;
+	## savaş bitince açılır (yaratıkla savaş etkilenmez). _level_up_screen_launch_pending bu sürede yeni seviyelerin çift açmasını engeller.
+	while is_inside_tree() and GameModeScript.is_pvp() and PvpRulesScript.in_combat():
+		await get_tree().create_timer(0.5).timeout
 	_level_up_screen_launch_pending = false
 	if not is_inside_tree():
 		return
@@ -1773,7 +1829,7 @@ func _refresh_mini_shop_revive_prompt() -> void:
 		_mini_shop_revive_button = null
 		return
 	if _mini_shop_revive_prompt and is_instance_valid(_mini_shop_revive_prompt):
-		_mini_shop_revive_button.disabled = GameManager.gold < MINI_SHOP_REVIVE_COST
+		_mini_shop_revive_button.disabled = GameManager.gold < _mini_shop_revive_cost()
 		return
 	_mini_shop_revive_prompt = CanvasLayer.new()
 	_mini_shop_revive_prompt.process_mode = Node.PROCESS_MODE_ALWAYS
@@ -1790,8 +1846,8 @@ func _refresh_mini_shop_revive_prompt() -> void:
 	panel.add_theme_stylebox_override("panel", UIKit.panel_style("window_tight"))
 	_mini_shop_revive_button = Button.new()
 	_mini_shop_revive_button.add_theme_font_size_override("font_size", UIKit.FS_BODY)
-	_mini_shop_revive_button.text = Loc.t("Diriltmeyi Satın Al (%d Altın)") % MINI_SHOP_REVIVE_COST
-	_mini_shop_revive_button.disabled = GameManager.gold < MINI_SHOP_REVIVE_COST
+	_mini_shop_revive_button.text = Loc.t("Diriltmeyi Satın Al (%d Altın)") % _mini_shop_revive_cost()
+	_mini_shop_revive_button.disabled = GameManager.gold < _mini_shop_revive_cost()
 	_mini_shop_revive_button.pressed.connect(_on_mini_shop_revive_pressed)
 	panel.add_child(_mini_shop_revive_button)
 	_mini_shop_revive_prompt.add_child(panel)
@@ -1800,12 +1856,18 @@ func _refresh_mini_shop_revive_prompt() -> void:
 	UISound.apply_wood_buttons(_mini_shop_revive_prompt)
 
 
+## Diriltme satın alma bedeli: Para ruhanisi / kalıcı fiyat indirimi dahil (2026-11-09: altın harcayan her şey indirimli).
+func _mini_shop_revive_cost() -> int:
+	return GameManager.apply_shop_discount(MINI_SHOP_REVIVE_COST)
+
+
 func _on_mini_shop_revive_pressed() -> void:
 	if not is_instance_valid(player) or not bool(player.get("is_dead")):
 		return
-	if GameManager.gold < MINI_SHOP_REVIVE_COST:
+	var revive_cost: int = _mini_shop_revive_cost()
+	if GameManager.gold < revive_cost:
 		return
-	GameManager.gold -= MINI_SHOP_REVIVE_COST
+	GameManager.spend_shop_gold(revive_cost)
 	_revive_local_player()
 	if _mini_shop_revive_prompt and is_instance_valid(_mini_shop_revive_prompt):
 		_mini_shop_revive_prompt.queue_free()
@@ -2713,6 +2775,7 @@ const NOTICE_MAX_VISIBLE := 2
 func _present_notice(panel: Control, hold_seconds: float, top_center: bool, layer_index: int = 100) -> void:
 	var layer := CanvasLayer.new()
 	layer.layer = layer_index
+	UiHideScript.mark_layer(layer) ## F3: bildirim levhaları da gizlenir (gizliyken doğanlar bir sonraki karede kapanır)
 	add_child(layer)
 	var phone: bool = MobileUI.enabled
 	var centered: bool = top_center or phone
@@ -2802,10 +2865,10 @@ func _on_merchant_spawned(pos: Vector2, _stock: Array) -> void:
 
 
 ## Yaratık Kademesi arttı (kullanıcı isteği 2026-10-04) - HER peer'de çalışır (bkz. NetworkManager.broadcast_creature_tier_reached).
-## tier == 16 = Final Kademe (enemy_spawner.gd FINAL_TIER).
+## tier == 10 = son kademe (enemy_spawner.gd LAST_TIER; son boss orada, ölümü zafer).
 func _on_creature_tier_reached(tier: int) -> void:
-	if tier >= 16:
-		CameraShakeScript.add(0.5) ## Final: tüm bosslar geliyor
+	if tier >= TierDisplayScript.FINAL_TIER:
+		CameraShakeScript.add(0.5) ## son kademe: son boss yolda
 	## 2026-10-05: sadece "KADEME <ROMEN>" + altında zorluğu gösteren 6 kuru kafa (bkz. tier_display.gd); eski "BAŞLADI - güçlendi" yazısı yok.
 	_show_banner_notice("tier", TierDisplayScript.title(tier), "", 4.0, tier)
 	GameManager.run_max_tier = maxi(GameManager.run_max_tier, tier)
@@ -2839,6 +2902,12 @@ func _record_run(kind: String) -> Dictionary:
 	var skip: String = _record_skip_reason()
 	if skip != "":
 		_record_log_once("%s ATLANDI: %s" % [kind, skip])
+		## Kilit açık modda rekor/Ruh Kıymığı yazılmaz AMA balans telemetrisi yazılır (madde 633).
+		if GameManager.content_unlock_mode and not GameManager.debug_mode_unlocked and DisplayServer.get_name() != "headless":
+			if kind == "end":
+				_write_balance_record(_run_summary(false))
+			elif kind != "victory":
+				BalanceLogScript.note_tier(GameManager.run_max_tier)
 		return {}
 	var s: Dictionary = _run_summary(kind == "victory")
 	var result: Dictionary
@@ -2869,6 +2938,8 @@ var _meta_tick_count: int = 0
 func _record_skip_reason() -> String:
 	if GameManager.debug_mode_unlocked:
 		return "debug modu açık (GameManager.debug_mode_unlocked)"
+	if GameManager.content_unlock_mode:
+		return "kilit açık modu (GameManager.content_unlock_mode, ana menü 'Debug Modu')"
 	if DisplayServer.get_name() == "headless":
 		return "headless"
 	return ""
@@ -2939,7 +3010,7 @@ func _write_balance_record(summary: Dictionary) -> void:
 			sent = true
 	if not rec.is_empty():
 		_record_log("balans kaydı yazıldı: run_id=%s, host'a gönderildi=%s" % [str(rec.get("run_id", "")), str(sent)])
-	BalanceLogScript.reset()
+	BalanceLogScript.end_run_reset() ## sıfırlar AMA oyun sonu ekranı silah/yetenek hasarını gösterebilsin diye kopyasını saklar
 
 
 ## Bağlantıyı kesmeden ÖNCE çağrılır (NetworkManager.flush_balance_before_leave). Koşu kaydını şimdi yazar/yollar; true = host'a RPC gitti
@@ -2982,6 +3053,14 @@ func _record_run_end_once() -> void:
 		return
 	_run_end_recorded = true
 	_record_run("end")
+
+
+## Harita anahtarı kazanıldı (HER peer'de kendi kaydına yazıldıktan sonra, bkz. GameManager.grant_boss_keys): küçük levha, anahtarın kendi
+## simgesiyle "+1 Bataklık Anahtarı" (madde 605). Oyun bitti / zafer ekranı koşunun toplamını GameManager.run_keys'ten gösterir.
+func _on_keys_granted(map_id: String, count: int) -> void:
+	var n: Control = _show_notice("key", "+%d %s" % [count, KeyIconScript.display_name(map_id)], "", 4.0)
+	n.set("icon_tex", KeyIconScript.texture(map_id))
+	EventSfx.play(get_tree(), &"crystal_collect")
 
 
 ## Final bosslarının hepsi öldü (HER peer'de, bkz. NetworkManager.victory_reached): zafer penceresi + zafer kaydı.
@@ -3601,15 +3680,20 @@ func _on_death_overlay_restart_pressed() -> void:
 			_death_overlay_restart_btn.disabled = true
 			_death_overlay_restart_btn.text = "Onay bekleniyor..."
 		return
+	## Tek oyunculu (teslim sonrası dahil): karakter seçim ekranına döner (pause_menu.gd _on_restart ile aynı).
 	get_tree().paused = false
 	GameManager.reset()
-	get_tree().change_scene_to_file("res://scenes/main.tscn")
+	get_tree().change_scene_to_file("res://scenes/character_select.tscn")
 
 
 ## bkz. network_manager.gd sync_game_over/game_over_synced sinyali - takımın
 ## GERİ KALANI (bizden önce ölüp hâlâ "izleyicisin" yazısını görenler) son
 ## kişi de öldüğünde bu şekilde "OYUN BİTTİ"ye geçer.
 func _on_game_over_synced() -> void:
+	if GameModeScript.is_pvp() and is_instance_valid(player): ## 2v2: maç bitti, canlı oyuncu da kilitlenir (teslimdeki gibi)
+		if player.has_method("clear_input_state"):
+			player.call("clear_input_state")
+		player.set_menu_input_locked(true)
 	## Oyun sonu istatistik ekranı: bizden ÖNCE ölmüş olanlar _on_player_died()
 	## içindeki all_dead dalını hiç görmedi (o dal sadece SON ölen kişide
 	## tetiklenir), yani kendi istatistiklerini burada yayınlamaları gerekiyor
@@ -3771,6 +3855,17 @@ func _show_death_overlay(is_final: bool) -> void:
 		next_btn.pressed.connect(_on_spectate_next_pressed)
 		spectate_row.add_child(next_btn)
 
+		## Hata defteri önerisi (2026-11-12): izlerken pencere + karartma gizlenebilsin; yerine alttaki küçük izleme şeridi (CompactBar).
+		var hide_btn := Button.new()
+		hide_btn.name = "HideWindowButton"
+		hide_btn.text = "Pencereyi Gizle"
+		hide_btn.custom_minimum_size = Vector2(0, 44)
+		hide_btn.add_theme_font_size_override("font_size", 24)
+		hide_btn.pressed.connect(_set_death_window_compact.bind(true))
+		spectate_row.add_child(hide_btn)
+		if MobileUI.enabled:
+			hide_btn.visible = false ## telefonda masaüstü penceresi zaten gizli (phone_game_over.gd)
+
 		## DÜZELTME (kullanıcı bildirimi: "oyun bitince hiçbir butona
 		## basılmıyor alt-f4 atmamız gerekiyor") - overlay'in eskiden HİÇBİR
 		## butonu yoktu (is_final olunca spectate_row de gizleniyordu, bkz.
@@ -3831,6 +3926,8 @@ func _show_death_overlay(is_final: bool) -> void:
 		kit.btn_style(menu_btn, "ghost")
 		kit.btn_style(prev_btn, "ghost")
 		kit.btn_style(next_btn, "ghost")
+		kit.btn_style(hide_btn, "ghost")
+		_build_death_compact_bar()
 		_death_overlay_restart_btn.add_theme_font_size_override("font_size", UIKit.FS_BODY)
 		menu_btn.add_theme_font_size_override("font_size", UIKit.FS_BODY)
 
@@ -3851,8 +3948,12 @@ func _show_death_overlay(is_final: bool) -> void:
 		_refresh_match_stats_ui()
 		if title_lbl:
 			title_lbl.text = "TESLİM OLUNDU" if GameManager.run_surrendered else "OYUN BİTTİ"
+			if GameModeScript.is_pvp() and PvpNetScript.winner_team != -1: ## 2v2: KAZANDINIZ / KAYBETTİNİZ (madde 617)
+				title_lbl.text = _pvp_result_title()
 		if sub_lbl:
 			sub_lbl.text = "Tüm takım elendi." if NetworkManager.is_multiplayer_active else "Öldün."
+			if GameModeScript.is_pvp() and PvpNetScript.winner_team != -1:
+				sub_lbl.text = _pvp_result_subtitle()
 			if GameManager.run_surrendered: ## madde 540
 				sub_lbl.text = "Takım oybirliğiyle teslim oldu." if NetworkManager.is_multiplayer_active else "Teslim oldun."
 			if GameManager.endless_active:
@@ -3860,6 +3961,7 @@ func _show_death_overlay(is_final: bool) -> void:
 						else Loc.t(" Sonsuz Kat %d'e kadar dayandın.") % GameManager.endless_layer
 		if spectate_row_node:
 			spectate_row_node.visible = false
+		_set_death_window_compact(false) ## oyun bitti: gizlenmiş pencere geri gelir (sonuç tablosu)
 		_end_spectate_mode()
 		## madde 224: kenarlara koyulaşan vinyet + oyun içi göstergeler kalkar (sohbet kalır - "iyi oyundu" yazılabilsin)
 		var dim_node: ColorRect = _death_overlay_layer.get_node_or_null("Dim")
@@ -3878,6 +3980,29 @@ func _show_death_overlay(is_final: bool) -> void:
 	## tam ekran telefon görünümü (phone_game_over.gd).
 	if MobileUI.enabled:
 		_show_phone_death_view(is_final)
+
+
+## 2v2 oyun sonu başlığı / alt yazısı (madde 617): bu makinenin takımı kazandı mı.
+func _pvp_result_title() -> String:
+	var w: int = PvpNetScript.winner_team
+	if w < 0:
+		return "BERABERE"
+	return "KAZANDINIZ" if w == TeamsScript.local_team() else "KAYBETTİNİZ"
+
+
+func _pvp_result_subtitle() -> String:
+	var w: int = PvpNetScript.winner_team
+	if w < 0:
+		return "İki takım aynı anda elendi."
+	var own: bool = w == TeamsScript.local_team()
+	match PvpNetScript.end_reason:
+		"boss":
+			return "Haritanın son bossunu takımınız yıktı." if own else "Rakip takım haritanın son bossunu yıktı."
+		"surrender":
+			return "Rakip takım teslim oldu." if own else "Takımınız teslim oldu."
+		"left":
+			return "Rakip takım oyundan ayrıldı." if own else "Takımınız oyundan ayrıldı."
+	return "Rakip takım elendi." if own else "Takımınız elendi."
 
 
 func _show_phone_death_view(is_final: bool) -> void:
@@ -3949,7 +4074,7 @@ func _end_spectate_mode() -> void:
 ## bu listeye asla girmez.
 func _get_living_allies_for_spectate() -> Array:
 	var result: Array = []
-	for rp: Node in get_tree().get_nodes_in_group("remote_players"):
+	for rp: Node in get_tree().get_nodes_in_group("remote_allies"):
 		if is_instance_valid(rp) and rp.get("is_dead") != true:
 			result.append(rp)
 	return result
@@ -3965,12 +4090,120 @@ func _advance_spectate_target(direction: int) -> void:
 		_spectate_index = -1
 		if label:
 			label.text = "Hayatta müttefik yok"
+		_sync_death_compact_label()
 		return
 	_spectate_index = wrapi(_spectate_index + direction, 0, targets.size())
 	_spectate_target = targets[_spectate_index]
 	if label:
 		var display_name: String = str(_spectate_target.get("player_name")) if "player_name" in _spectate_target else "Müttefik"
 		label.text = Loc.t("İzleniyor: %s") % display_name
+	_sync_death_compact_label()
+
+
+## İzleyici küçük şeridi (hata defteri önerisi 2026-11-12): pencere gizliyken alt ortada < ad > + "Pencereyi Aç". Konum/stil yere düşen
+## oyuncunun şeridiyle aynı (downed_spectate.gd: hud_plaque, yetenek panelinin üstü). Ok tuşları (_process) iki kipte de çalışır.
+func _build_death_compact_bar() -> void:
+	var bar := PanelContainer.new()
+	bar.name = "CompactBar"
+	bar.theme = UIKit.theme()
+	bar.mouse_filter = Control.MOUSE_FILTER_STOP
+	bar.add_theme_stylebox_override("panel", UIKit.panel_style("hud_plaque"))
+	bar.anchor_left = 0.5
+	bar.anchor_right = 0.5
+	bar.anchor_top = 1.0
+	bar.anchor_bottom = 1.0
+	bar.offset_bottom = -DownedSpectateScript.BOTTOM_OFFSET
+	bar.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	bar.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	bar.visible = false
+	_death_overlay_layer.add_child(bar)
+	var row := HBoxContainer.new()
+	row.name = "Row"
+	row.add_theme_constant_override("separation", 14)
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	bar.add_child(row)
+	var prev := _death_compact_button("<", Vector2(56, 56))
+	prev.name = "PrevButton"
+	prev.pressed.connect(_on_spectate_prev_pressed)
+	row.add_child(prev)
+	var mid := VBoxContainer.new()
+	mid.name = "Mid"
+	mid.custom_minimum_size = Vector2(340, 0)
+	mid.alignment = BoxContainer.ALIGNMENT_CENTER
+	mid.add_theme_constant_override("separation", 0)
+	row.add_child(mid)
+	var hint := Label.new()
+	hint.text = "OK TUŞLARIYLA ARKADAŞINI İZLE"
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	UIKit.style_label(hint, DownedSpectateScript.FS_HINT, ChatHudTheme.DIM, 0)
+	mid.add_child(hint)
+	var nm := Label.new()
+	nm.name = "NameLabel"
+	nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	nm.clip_text = true
+	nm.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED ## oyuncu adı (SpectateLabel'dan çevrilmiş haliyle kopyalanır)
+	nm.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	UIKit.style_label(nm, DownedSpectateScript.FS, ChatHudTheme.ACCENT, 0)
+	mid.add_child(nm)
+	var next := _death_compact_button(">", Vector2(56, 56))
+	next.name = "NextButton"
+	next.pressed.connect(_on_spectate_next_pressed)
+	row.add_child(next)
+	var show_btn := _death_compact_button("Pencereyi Aç", Vector2(0, 56))
+	show_btn.name = "ShowWindowButton"
+	show_btn.add_theme_font_size_override("font_size", 16)
+	show_btn.pressed.connect(_set_death_window_compact.bind(false))
+	row.add_child(show_btn)
+	UISound.connect_all_buttons(bar)
+
+
+func _death_compact_button(text: String, min_size: Vector2) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.focus_mode = Control.FOCUS_NONE
+	b.custom_minimum_size = min_size
+	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	UIKit.style_button(b, "hud", false, DownedSpectateScript.FS)
+	return b
+
+
+## true: ölüm penceresi + karartma gizlenir, küçük şerit görünür (yalnız izleyiciyken, masaüstünde). false: pencere geri gelir.
+func _set_death_window_compact(compact: bool) -> void:
+	if not _death_overlay_layer or not is_instance_valid(_death_overlay_layer):
+		return
+	if compact and (GameManager.is_game_over or MobileUI.enabled):
+		compact = false
+	var win: Control = _death_overlay_layer.get_node_or_null("Window")
+	var dim: Control = _death_overlay_layer.get_node_or_null("Dim")
+	var bar: Control = _death_overlay_layer.get_node_or_null("CompactBar")
+	if bar == null:
+		return
+	if MobileUI.enabled:
+		bar.visible = false
+		return ## telefonda masaüstü penceresinin görünürlüğü phone_game_over.gd'nin elinde
+	if win:
+		win.visible = not compact
+	if dim:
+		dim.visible = not compact
+	bar.visible = compact
+	_sync_death_compact_label()
+
+
+func is_death_window_compact() -> bool:
+	if not _death_overlay_layer or not is_instance_valid(_death_overlay_layer):
+		return false
+	var bar: Control = _death_overlay_layer.get_node_or_null("CompactBar")
+	return bar != null and bar.visible
+
+
+func _sync_death_compact_label() -> void:
+	if not _death_overlay_layer or not is_instance_valid(_death_overlay_layer):
+		return
+	var src: Label = _death_overlay_layer.get_node_or_null("Window/VBox/SpectateRow/SpectateLabel")
+	var dst: Label = _death_overlay_layer.get_node_or_null("CompactBar/Row/Mid/NameLabel")
+	if src and dst:
+		dst.text = tr(src.text)
 
 
 func _on_spectate_prev_pressed() -> void:

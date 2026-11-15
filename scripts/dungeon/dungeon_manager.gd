@@ -40,6 +40,8 @@ const NODE_RESPAWN_SEC := 210.0
 const TRAP_TIMING := {
 	"diken": {"cycle": 2.0, "rise": [1.0, 1.18, 1.7, 1.9], "player": 0.25, "creature": 0.5},
 	"ejder": {"cycle": 2.6, "rise": [0.85, 1.1, 2.0, 2.3], "player": 0.3, "creature": 0.6},
+	## KAFATASI KABARTMASI (madde 627, Batık Nekropol): yüzdeki mavi gözlü kabartma, tek sütun aşağı ruh ateşi; ejderle aynı döngü
+	"kafatasi": {"cycle": 2.6, "rise": [0.85, 1.1, 2.0, 2.3], "player": 0.3, "creature": 0.6},
 	"giyotin": {"cycle": 2.2, "rise": [1.0, 1.2, 1.75, 2.0], "player": 0.3, "creature": 0.6},
 }
 const TRAP_HIT_LEVEL := 0.9
@@ -724,7 +726,9 @@ func _setup_map() -> void:
 			depth_layers.append(nm)
 		elif c is TileMapLayer and (nm == "Kan" or nm.begins_with("Kan ")):
 			kan_layers.append(c)
-	DepthOccludersScript.new().setup_interior(root, depth_layers, {}, true) ## yaratıklar da nesne arkasında örtülür (madde 492)
+	var occ := DepthOccludersScript.new()
+	occ.join_vertical_repeats = true ## serbest sütunun tekrar eden gövde karosu tek nesne (madde 627)
+	occ.setup_interior(root, depth_layers, {}, true) ## yaratıklar da nesne arkasında örtülür (madde 492)
 	for kan: TileMapLayer in kan_layers:
 		var mat := ShaderMaterial.new()
 		mat.shader = KanShader
@@ -840,11 +844,11 @@ func _tick_traps() -> void:
 			if lv < TRAP_HIT_LEVEL:
 				continue
 			var wr := Rect2(rect.position + (o["rect"] as Rect2).position, (o["rect"] as Rect2).size)
-			if tur == "ejder":
+			if tur == "ejder" or tur == "kafatasi":
 				## alev uzun: hasar alanı görselle aynı (ilk duvar/nesneye kadar, DungeonWorld.flame_rows)
 				var rows: int = int(_flame_rows.get(key, -1))
 				if rows < 0:
-					rows = DungeonWorldScript.flame_rows(wr.position, int(wr.size.y / 16.0))
+					rows = DungeonWorldScript.flame_rows(wr.position, int(wr.size.y / 16.0), maxi(1, int(wr.size.x / 16.0)))
 					_flame_rows[key] = rows
 				wr.size.y = float(rows) * 16.0
 			if local_in and int(_trap_hit.get(key, -1)) != cycle and _player.get("is_dead") != true and wr.has_point(_player.global_position + Vector2(0, DungeonWorldScript.FEET_SHIFT)):

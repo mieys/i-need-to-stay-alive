@@ -16,6 +16,10 @@ extends RefCounted
 ## istediğin yaratığı doğurma / saat hızı) main.gd HİÇ kayıt yazmaz.
 
 const AchievementsScript: GDScript = preload("res://scripts/achievements.gd")
+const ProgressResetScript: GDScript = preload("res://scripts/progress_reset.gd")
+## Hile koruması (2026-11-12): kayıt MÜHÜRLÜ (şifreli + HMAC, secure_cfg.gd); yol ortam değişkeni yalnız editörde (security_guard.gd).
+const SecureCfgScript: GDScript = preload("res://scripts/security/secure_cfg.gd")
+const GuardScript: GDScript = preload("res://scripts/security/security_guard.gd")
 
 const DEFAULT_PATH := "user://records.cfg"
 const ENV_PATH := "LILSLAYERS_RECORDS_PATH"
@@ -40,7 +44,7 @@ const RECORD_LABELS := {
 static func _path() -> String:
 	if path_override != "":
 		return path_override
-	var env: String = OS.get_environment(ENV_PATH)
+	var env: String = GuardScript.dev_env(ENV_PATH) ## exportta "" (kayıt yolu değiştirilemez)
 	return env if env != "" else DEFAULT_PATH
 
 
@@ -55,10 +59,14 @@ static func _defaults() -> Dictionary:
 
 ## Tüm kayıt (dosya yoksa/bozuksa sıfırlar). Rekorlar ekranı da bunu okur.
 static func load_all() -> Dictionary:
+	_reset_once_if_default()
 	var data: Dictionary = _defaults()
-	var cfg := ConfigFile.new()
-	if cfg.load(_path()) != OK:
+	var real_file: bool = _path() == DEFAULT_PATH ## yalnız oyuncunun gerçek dosyası: .bak/.bozuk yan dosyaları + eski düz kaydı mühürlü yeniden yazma
+	var res: Dictionary = SecureCfgScript.load_cfg(_path(), "records", real_file)
+	var status: int = int(res["status"])
+	if status != SecureCfgScript.Status.OK and status != SecureCfgScript.Status.LEGACY:
 		return data
+	var cfg: ConfigFile = res["cfg"]
 	for key: String in ["best_time", "best_victory_time", "total_time"]:
 		data[key] = float(cfg.get_value("records", key, 0.0))
 	for key: String in ["best_tier", "best_kills", "best_layer", "victories", "runs", "total_kills"]:
@@ -80,10 +88,22 @@ static func load_all() -> Dictionary:
 		for id: String in cfg.get_section_keys("achievements"):
 			ach[id] = int(cfg.get_value("achievements", id, 0))
 	data["achievements"] = ach
+	## Eski düz kayıt ya da .bak'tan dönülen kayıt: mühürlü olarak hemen yeniden yaz (taşıma / onarım).
+	if real_file and (status == SecureCfgScript.Status.LEGACY or bool(res.get("restored", false))):
+		_save(data)
 	return data
 
 
+## Tek seferlik ilerleme sıfırlaması (progress_reset.gd): yalnız varsayılan yoldayken (testler / ortam değişkeni yolu etkilenmez).
+static func _reset_once_if_default() -> void:
+	if _path() == DEFAULT_PATH:
+		ProgressResetScript.ensure("records", DEFAULT_PATH)
+
+
 static func _save(data: Dictionary) -> void:
+	_reset_once_if_default()
+	if GuardScript.tampered:
+		return ## hile belirtisi görülen oturum rekor/başarım yazmaz (security_guard.gd)
 	var cfg := ConfigFile.new()
 	for key: String in data.keys():
 		if key == "achievements":
@@ -91,7 +111,7 @@ static func _save(data: Dictionary) -> void:
 		cfg.set_value("records", key, data[key])
 	for id: String in (data["achievements"] as Dictionary).keys():
 		cfg.set_value("achievements", id, data["achievements"][id])
-	cfg.save(_path())
+	SecureCfgScript.save_cfg(cfg, _path(), "records", _path() == DEFAULT_PATH)
 
 
 static func _ctx(s: Dictionary, data: Dictionary) -> Dictionary:

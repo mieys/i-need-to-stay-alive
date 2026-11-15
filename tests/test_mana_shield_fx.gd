@@ -1,6 +1,6 @@
 extends Node
 
-## Mana Kalkanı görseli "B - Mühür" (mana_shield_fx.gd, madde 148): darbe yönünde mühür (kuzey darbesi arka katmanda),
+## Mana Kalkanı görseli (mana_shield_fx.gd, madde 148/569): darbe = baloncuk yüzeyi (yakın: yama, menzilli: + kıvılcım),
 ## kalkanı bitiren darbede her taraftan kırılma, artışta yer mührü + doldu taraması, azalmada (yetenek bedeli/kazma) ve
 ## Savaş kalkanında yenilenme görseli YOK, Kale mor / Enerji sarı.
 
@@ -103,22 +103,47 @@ func test_bubble_sprite_follows_effect_mapping() -> void:
 	_cleanup()
 
 
-func test_hit_disc_side_and_back() -> void:
+## Madde 569: darbe baloncuğa DIŞARIDAN vurur - dönen mühür / arka katman yok; yakın dövüş = yama, menzilli = yama + kıvılcım.
+func test_hit_bubble_surface_and_ranged() -> void:
 	var p: Node = _make_player()
 	var fx: Node2D = p.get_node("ManaShieldFx")
 	var back: Node2D = p.get_node("ManaShieldBack")
-	fx.hit(PI, false) ## soldan
-	assert(fx.disc_count() == 1)
-	var side: Sprite2D = fx._discs[0]["spr"]
-	assert(side.get_parent() == fx, "yandan gelen darbenin mührü önde")
-	assert(int(fx._discs[0]["row"]) == 0, "yan darbe = en dar oval")
+	var back_children: int = back.get_child_count()
+	var fx_children: int = fx.get_child_count()
+	fx.hit(PI, false) ## soldan, yakın dövüş
+	assert(fx.hit_count() == 1 and fx.hit_count(true) == 0, "yakın dövüş darbesi: yama, kıvılcım yok")
 	fx.hit(-PI / 2.0, false) ## kuzeyden
-	var north: Sprite2D = fx._discs[1]["spr"]
-	assert(north.get_parent() == back, "kuzeyden gelen darbenin mührü karakterin ardında")
-	assert(int(fx._discs[1]["row"]) == FxScript.DISC_ROWS - 1, "kuzey darbesi = tam daire")
-	assert(north.position.y < side.position.y, "kuzey mührü daha yukarıda")
-	_step(fx, FxScript.DISC_LIFE + 0.05)
-	assert(fx.disc_count() == 0, "mühürler söner")
+	assert(back.get_child_count() == back_children and fx.get_child_count() == fx_children, "darbe arka/ön katmana mühür doğurmaz (izometrik disk yok)")
+	fx.ranged_hit(0.3)
+	assert(fx.hit_count() == 3 and fx.hit_count(true) == 1, "menzilli darbe kıvılcımlı")
+	assert((fx._hits[2]["spark"] as Array).size() == FxScript.SPARK_OFFS.size(), "menzilli darbede seken kıvılcımlar")
+	fx.ranged_hit_if_missing(0.3)
+	assert(fx.hit_count(true) == 1, "mermi kopyası zaten gösterdiyse hasar yolu ikinci kez oynatmaz")
+	assert(fx._surf != null and fx._surf_mat.shader == FxScript.HIT_SHADER, "baloncuk yüzeyi katmanı kurulu")
+	_step(fx, FxScript.HIT_LIFE + 0.05)
+	assert(fx.hit_count() == 0 and not fx.is_anything_visible(), "darbeler söner")
+	_cleanup()
+
+
+func test_bubble_rule_radius_and_touch() -> void:
+	var Rule: GDScript = load("res://scripts/shield_bubble_hit.gd")
+	var p: Node2D = _make_player()
+	_shield(p, 0.0, 150.0)
+	assert(Rule.radius_of(p) == 0.0, "kalkan yokken kural yok (gövde isabeti)")
+	_shield(p, 40.0, 150.0)
+	var bub: Node2D = p.get_node("ShieldVisual/BubbleSprite")
+	var r: float = Rule.radius_of(p)
+	assert(absf(r - Rule.BUBBLE_R * absf(bub.global_scale.x)) < 0.01, "yarıçap baloncuğun gerçek ölçeğinden (%f)" % r)
+	var c: Vector2 = Rule.center_of(p)
+	assert(Rule.touches(p, c + Vector2(r + 5.0, 0.0), 6.0), "kenara değen mermi baloncuğa çarpar")
+	assert(not Rule.touches(p, c + Vector2(r + 8.0, 0.0), 6.0), "uzaktaki mermi değmez")
+	assert(Rule.is_ranged_kind("projectile") and Rule.is_ranged_kind("bone") and not Rule.is_ranged_kind("thorns"))
+	var fx: Node2D = p.get_node("ManaShieldFx")
+	Rule.impact(p, c + Vector2(0.0, -r))
+	assert(fx.hit_count(true) == 1, "değme anı kalkanda menzilli darbe efekti oynatır")
+	assert(absf(angle_difference(float(fx._hits[0]["angle"]), -PI / 2.0)) < 0.01, "efekt değdiği noktada (kuzey)")
+	p.is_dead = true
+	assert(Rule.radius_of(p) == 0.0, "ölüyken kural yok")
 	_cleanup()
 
 
@@ -128,7 +153,7 @@ func test_break_from_all_sides() -> void:
 	fx.hit_only = false ## oyuncuda kapalı (madde 151); kırılma/yenilenme görseli hâlâ kodda, burada doğrudan sınanır
 	fx.hit(0.4, false)
 	fx.hit(0.0, true)
-	assert(fx.disc_count() == 0, "kırılma darbe mühürlerini kaldırır")
+	assert(fx.hit_count() == 0, "kırılma darbe efektlerini kaldırır")
 	assert(fx._break_back.visible and fx._break_front.visible, "kırılma: ön + arka katman birlikte")
 	_step(fx, FxScript.BREAK_DURATION * 0.5)
 	assert(fx._break_front.frame > 0, "kırılma ilerler")
@@ -191,7 +216,7 @@ func test_no_visual_on_spend_max_change_or_savas() -> void:
 	_step(fx, 0.05)
 	assert(not fx.is_regen_shown(), "Savaş kalkanı yenilenmede yer mührü göstermez")
 	fx.hit(PI, false)
-	assert(fx.disc_count() == 1, "Savaş kalkanı darbede mühür gösterir")
+	assert(fx.hit_count() == 1, "Savaş kalkanı darbede efekt gösterir")
 	_cleanup()
 
 
@@ -215,13 +240,13 @@ func test_suppressed_hides_and_ignores() -> void:
 func test_take_damage_uses_mana_seal_not_old_crack() -> void:
 	var p: Node = _make_player()
 	var fx: Node2D = p.get_node("ManaShieldFx")
-	assert(fx.hit_only, "oyuncuda sadece darbe mührü açık (madde 151: gerisi eski kalkan)")
+	assert(fx.hit_only, "oyuncuda sadece darbe efekti açık (madde 151: gerisi eski kalkan)")
 	_shield(p, 150.0, 150.0)
 	p.shield_protection = 0.65
 	p._last_damage_taken_at_msec = -100000
 	p.take_damage(40.0, null)
 	assert(p.item_shield_hp < 150.0, "kalkan hasarın bir kısmını soğurdu")
-	assert(fx.disc_count() == 1, "darbe mührü doğdu")
+	assert(fx.hit_count() == 1 and fx.hit_count(true) == 0, "darbe efekti doğdu (temas = yakın dövüş, kıvılcımsız)")
 	for c: Node in p.get_children():
 		assert(c.get_script() != load("res://scripts/fx_shield_hit.gd"), "eski çatlak efekti artık doğmamalı")
 	assert(p._damage_flash_timer <= 0.0, "eski baloncuk hasar flaşı da yok")
@@ -230,11 +255,20 @@ func test_take_damage_uses_mana_seal_not_old_crack() -> void:
 	p.take_damage(40.0, null)
 	assert(p.item_shield_hp <= 0.0)
 	assert(not fx._break_front.visible, "hit_only: kırılma görseli oynamaz (eski baloncuğun kırılması gösterilir)")
-	assert(fx.disc_count() == 1, "kalkanı bitiren darbe mühür bırakmaz (sadece önceki darbenin mührü kalır)")
+	assert(fx.hit_count() == 1, "kalkanı bitiren darbe efekt bırakmaz (sadece önceki darbeninki kalır)")
 	## Yenilenme (artış) görseli de kapalı: eski baloncuk yenilenmeyi gösterir.
 	_shield(p, 0.0, 150.0)
 	_step(fx, 0.05)
 	_shield(p, 30.0, 150.0)
 	_step(fx, 0.2)
 	assert(not fx.is_regen_shown(), "hit_only: yenilenme yer mührü yok")
+	## Menzilli hasar (madde 572): efekti mermi kopyası baloncuğa değerken oynattı -> hasar yolu ikinci kez oynatmaz.
+	fx.hide_all()
+	_shield(p, 150.0, 150.0)
+	fx.ranged_hit(0.0)
+	p._last_damage_taken_at_msec = -100000
+	p.take_special_damage(30.0, null, "projectile")
+	assert(p.item_shield_hp < 150.0, "menzilli hasar kalkandan düştü")
+	assert(fx.hit_count() == 1 and fx.hit_count(true) == 1, "menzilli darbe efekti çift oynamaz")
+	assert(p._special_dmg_kind == "", "tür hasardan sonra sıfırlanır")
 	_cleanup()

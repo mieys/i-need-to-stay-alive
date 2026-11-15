@@ -50,7 +50,7 @@ const CHEST_TITLES := {
 }
 
 ## Kullanıcı isteği (2026-09-25): "sandık açarken daha iyi ve ödüllendirici heyecan uyandırıcı sandık açma animasyonu" -
-## eski 4 karelik kapak açılışı (chest_tier_*.png) yerine yeni piksel sayfa + ışık/ses/flaş (bkz. chest_open_anim.gd).
+## eski 4 karelik kapak açılışı yerine kullanıcının yeni sandık çizimi (kapalı/açık, madde 557) + sallanma/ses/flaş (bkz. chest_open_anim.gd).
 const ChestOpenAnim := preload("res://scripts/chest_open_anim.gd")
 const GoldRewardFx := preload("res://scripts/gold_reward_fx.gd")
 const RewardReveal := preload("res://scripts/reward_reveal.gd")
@@ -106,39 +106,40 @@ func _mobile() -> bool:
 ## bir class_name TANIMLAMADIĞI için oradaki const'lara güvenli/açık bir
 ## şekilde erişmenin en basit yolu bu (diğer script'lerdeki paralel
 ## const kopyalama deseniyle tutarlı).
-const WEAPON_KEYS := ["dagger", "fire_staff", "lightning_staff", "tabanca", "tuftuf", "tufek", "arcane", "yay", "crossbow", "boomerang", "buz_asasi", "fisek", "pence", "topuz", "uzunkilic", "gokkusagi", "mizrak", "kalkan", "yinyang", "pompali"]
+const WEAPON_KEYS := ["dagger", "fire_staff", "lightning_staff", "tabanca", "tuftuf", "tufek", "arcane", "yay", "crossbow", "boomerang", "buz_asasi", "fisek", "pence", "topuz", "uzunkilic", "gokkusagi", "mizrak", "kalkan", "yinyang", "pompali", "makineli"]
 const WEAPON_NAMES := {
 	"dagger": "Bıçak", "fire_staff": "Ateş Asası", "lightning_staff": "Yıldırım Asası", "tabanca": "Tabanca",
 	"tuftuf": "Zehir Asası", "tufek": "Tüfek", "arcane": "Arcane Asası", "yay": "Yay",
-	"crossbow": "Arbalet", "boomerang": "Bumerang", "buz_asasi": "Buz Asası", "fisek": "Fişek",
-	"pence": "Tırpan", "topuz": "Topuz", "uzunkilic": "Uzunkılıç", "gokkusagi": "Gökkuşağı Asası", "mizrak": "Mızrak", "kalkan": "Kalkan", "yinyang": "Yin Yang Kitabı", "pompali": "Pompalı Tüfek",
+	"crossbow": "Arbalet", "boomerang": "Çakram", "buz_asasi": "Buz Asası", "fisek": "Dinamit",
+	"pence": "Tırpan", "topuz": "Balyoz", "uzunkilic": "Uzunkılıç", "gokkusagi": "Gökkuşağı Asası", "mizrak": "Mızrak", "kalkan": "Kalkan", "yinyang": "Yin Yang Kitabı", "pompali": "Pompalı Tüfek", "makineli": "Hafif Makineli Tüfek", ## madde 652: kullanıcı "adını hafif makineli tüfek yap, thompson kafa karıştırıcı" (anahtar makineli aynı: kayıt/ağ uyumu)
 }
 const WEAPON_ICON_TEXTURES := {
 	"dagger": "res://assets/weapons/yeni/bicak.png",
 	"fire_staff": "res://assets/weapons/yeni/fire_staff.png",
-	"lightning_staff": "res://assets/weapons/lightning/icon_v3.png",
-	"tabanca": "res://assets/weapons/tabanca/icon_v2.png",
+	"lightning_staff": "res://assets/weapons/yeni/yildirim_asasi.png",
+	"tabanca": "res://assets/weapons/yeni/tabanca.png",
 	"tuftuf": "res://assets/weapons/yeni/zehir_asasi.png",
-	"tufek": "res://assets/weapons/tufek/icon.png",
+	"tufek": "res://assets/weapons/yeni/tufek.png",
 	"arcane": "res://assets/weapons/yeni/arcane.png",
 	"yay": "res://assets/weapons/yeni/yay.png",
 	"crossbow": "res://assets/weapons/yeni/arbalet.png",
-	"boomerang": "res://assets/weapons/boomerang/icon.png",
+	"boomerang": "res://assets/weapons/yeni/chakram.png",
 	"buz_asasi": "res://assets/weapons/yeni/buz_asasi.png",
-	"fisek": "res://assets/weapons/fisek/icon.png",
+	"fisek": "res://assets/weapons/yeni/dinamit.png",
 	"pence": "res://assets/weapons/yeni/tirpan.png",
-	"topuz": "res://assets/weapons/topuz/icon.png",
+	"topuz": "res://assets/weapons/yeni/topuz.png",
 	"uzunkilic": "res://assets/weapons/yeni/uzunkilic.png",
 	"gokkusagi": "res://assets/weapons/yeni/gokkusagi.png",
 	"mizrak": "res://assets/weapons/zanaat/mizrak_L1.png",
 	"kalkan": "res://assets/weapons/zanaat/kalkan_L1.png",
 	"yinyang": "res://assets/weapons/zanaat/yinyang_L1.png",
 	"pompali": "res://assets/weapons/pompali/icon.png",
+	"makineli": "res://assets/weapons/makineli/icon.png", ## madde 652
 }
 const WEAPON_COST_BASE := {
 	"dagger": 60, "fire_staff": 80, "lightning_staff": 120, "tabanca": 100, "tuftuf": 90, "tufek": 100, "arcane": 110, "yay": 100,
 	"crossbow": 100, "boomerang": 110, "buz_asasi": 95, "fisek": 120, "pence": 90, "topuz": 105, "uzunkilic": 100, "gokkusagi": 120, "mizrak": 100,
-	"kalkan": 100, "yinyang": 110, "pompali": 105,
+	"kalkan": 100, "yinyang": 110, "pompali": 105, "makineli": 105,
 }
 
 func _get_game_manager() -> Node:

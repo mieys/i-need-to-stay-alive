@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.10" tiledversion="1.12.2" orientation="orthogonal" renderorder="right-down" width="214" height="214" tilewidth="16" tileheight="16" infinite="0" nextlayerid="18" nextobjectid="238">
+<map version="1.10" tiledversion="1.12.2" orientation="orthogonal" renderorder="right-down" width="214" height="214" tilewidth="16" tileheight="16" infinite="0" nextlayerid="18" nextobjectid="286">
  <properties>
   <property name="ad" value="Batık Nekropol"/>
  </properties>
@@ -5135,6 +5135,294 @@
    <properties>
     <property name="rota" value="1720,280;1720,680;1080,552;1080,808;520,552;552,1240;552,1448;552,1656;552,1864;552,2072;296,3192;1736,1736;2664,2056;3080,1928;3080,2184;3128,1544;3112,1256;2696,1272;2712,1608;2360,808;2360,552;2920,552;2920,2904"/>
     <property name="tur" value="kemik_bekcisi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="238" name="Kafatası Kabartması" type="tuzak" x="1360" y="2656" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="239" name="Kafatası Kabartması" type="tuzak" x="1392" y="1200" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="240" name="Kafatası Kabartması" type="tuzak" x="1968" y="1200" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="241" name="Kafatası Kabartması" type="tuzak" x="1616" y="160" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="242" name="Kafatası Kabartması" type="tuzak" x="1376" y="384" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="243" name="Kafatası Kabartması" type="tuzak" x="2112" y="384" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="244" name="Kafatası Kabartması" type="tuzak" x="1024" y="480" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="245" name="Kafatası Kabartması" type="tuzak" x="1088" y="480" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="246" name="Kafatası Kabartması" type="tuzak" x="1024" y="736" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="247" name="Kafatası Kabartması" type="tuzak" x="1088" y="736" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="248" name="Kafatası Kabartması" type="tuzak" x="2304" y="480" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="249" name="Kafatası Kabartması" type="tuzak" x="2368" y="480" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="250" name="Kafatası Kabartması" type="tuzak" x="2304" y="736" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="251" name="Kafatası Kabartması" type="tuzak" x="2368" y="736" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="252" name="Kafatası Kabartması" type="tuzak" x="448" y="128" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="253" name="Kafatası Kabartması" type="tuzak" x="2688" y="128" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="254" name="Kafatası Kabartması" type="tuzak" x="3168" y="128" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="255" name="Kafatası Kabartması" type="tuzak" x="2736" y="1152" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="256" name="Kafatası Kabartması" type="tuzak" x="2992" y="1152" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="257" name="Kafatası Kabartması" type="tuzak" x="3232" y="1152" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="258" name="Kafatası Kabartması" type="tuzak" x="2608" y="1440" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="259" name="Kafatası Kabartması" type="tuzak" x="3024" y="1408" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="260" name="Kafatası Kabartması" type="tuzak" x="3152" y="1408" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="261" name="Kafatası Kabartması" type="tuzak" x="2736" y="1824" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="262" name="Kafatası Kabartması" type="tuzak" x="2864" y="1824" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="263" name="Kafatası Kabartması" type="tuzak" x="2992" y="1824" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="264" name="Kafatası Kabartması" type="tuzak" x="3200" y="1824" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="265" name="Kafatası Kabartması" type="tuzak" x="2928" y="2080" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="266" name="Kafatası Kabartması" type="tuzak" x="3168" y="2080" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="267" name="Kafatası Kabartması" type="tuzak" x="176" y="2528" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="268" name="Kafatası Kabartması" type="tuzak" x="2928" y="2560" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="269" name="Kafatası Kabartması" type="tuzak" x="128" y="128" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="270" name="Kafatası Kabartması" type="tuzak" x="1232" y="1024" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="271" name="Kafatası Kabartması" type="tuzak" x="1600" y="1024" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="272" name="Kafatası Kabartması" type="tuzak" x="1904" y="1024" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="273" name="Kafatası Kabartması" type="tuzak" x="2288" y="1024" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="274" name="Kafatası Kabartması" type="tuzak" x="432" y="1184" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="275" name="Kafatası Kabartması" type="tuzak" x="2464" y="1216" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="276" name="Kafatası Kabartması" type="tuzak" x="288" y="2016" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="277" name="Kafatası Kabartması" type="tuzak" x="672" y="2016" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="278" name="Kafatası Kabartması" type="tuzak" x="2464" y="2048" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="279" name="Kafatası Kabartması" type="tuzak" x="3120" y="2080" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="280" name="Kafatası Kabartması" type="tuzak" x="928" y="2336" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="281" name="Kafatası Kabartması" type="tuzak" x="1264" y="2336" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="282" name="Kafatası Kabartması" type="tuzak" x="2096" y="2336" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="283" name="Kafatası Kabartması" type="tuzak" x="3200" y="2560" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="284" name="Kafatası Kabartması" type="tuzak" x="976" y="2880" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
+    <property name="tema" value="kemik"/>
+   </properties>
+  </object>
+  <object id="285" name="Kafatası Kabartması" type="tuzak" x="2304" y="2896" width="16" height="48">
+   <properties>
+    <property name="tur" value="kafatasi"/>
     <property name="tema" value="kemik"/>
    </properties>
   </object>

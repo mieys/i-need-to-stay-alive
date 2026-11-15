@@ -10,6 +10,7 @@ const RunRecordsScript: GDScript = preload("res://scripts/run_records.gd")
 const AchievementsScript: GDScript = preload("res://scripts/achievements.gd")
 const TierDisplayScript: GDScript = preload("res://scripts/tier_display.gd")
 const MetaProgressScript: GDScript = preload("res://scripts/meta_progress.gd")
+const KeyIconScript := preload("res://scripts/key_icon.gd") ## harita anahtarı adları (madde 605)
 
 const STAT_FS := 24
 
@@ -106,13 +107,18 @@ static func extras_box(results: Dictionary, summary: Dictionary) -> VBoxContaine
 	var records: Array = results.get("records", [])
 	var achievements: Array = results.get("achievements", [])
 	var shards: int = int(results.get("shards", 0))
-	if records.is_empty() and achievements.is_empty() and shards <= 0:
+	var run_keys: Dictionary = GameManager.run_keys ## bu koşuda kazanılan harita anahtarları (madde 605)
+	if records.is_empty() and achievements.is_empty() and shards <= 0 and run_keys.is_empty():
 		return null
 	var box := VBoxContainer.new()
 	box.name = "ExtrasBox"
 	box.add_theme_constant_override("separation", 4)
 	if shards > 0:
 		_add_line(box, Loc.t("+%d %s (Ruh Mağazası'nda kullan)") % [shards, MetaProgressScript.CURRENCY_NAME], UIKit.C_GOLD)
+	for map_id: String in KeyIconScript.IDS:
+		var kn: int = int(run_keys.get(map_id, 0))
+		if kn > 0:
+			_add_line(box, "+%d %s" % [kn, KeyIconScript.display_name(map_id)], UIKit.C_GOLD)
 	for key in records:
 		var text: String = Loc.t("YENİ REKOR: %s") % RunRecordsScript.RECORD_LABELS.get(key, key)
 		var value: String = record_value_text(str(key), summary)

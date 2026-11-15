@@ -2,6 +2,9 @@
   "dogrulandi": "Bildirdiğin sorun doğrulandı: {konu}. Düzeltme hazırlanıyor; geliştirici onayı ve yeni sürümle oyuna girecek. Bildirdiğin için teşekkürler!",
   "bilgi_gerekli": "Bildirdiğin sorunu inceledik ama yeniden üretemedik. Yardımcı olur musun? Şunları yazar mısın: {bilgi}. Teşekkürler!",
   "durum": "Bildirdiğin konu kayıtlı ve inceleniyor; şu an için yayınlanmış bir düzeltme bildiremiyoruz. Ek bilgin varsa yazabilirsin. Teşekkürler!",
+  "oneri": "Önerin için teşekkürler! Kayda alındı ve geliştirici tarafından incelenecek. Her öneri uygulanamayabilir ama hepsi okunuyor.",
+  "denge": "Denge geri bildirimin için teşekkürler! Kayda alındı. Denge değişiklikleri tek bir görüşe göre değil, oyuncu geri bildirimleri ve oyun verisiyle birlikte değerlendirilir.",
+  "genel": "Mesajın için teşekkürler! Bize ulaştı ve kayda alındı.",
   "bilgi_etiketleri": {
     "esya_turu": "eşyanın türü (parça, epik, efsanevi)",
     "slot": "kaç slotun dolu olduğu",

@@ -130,6 +130,24 @@ func test_debug_mode_opens_everything_via_game_manager_flag() -> void:
 	_end()
 
 
+## Madde 614: ana menü "Debug Modu" düğmesi = YALNIZ menü kilitleri açık (karakter/silah/evcil/ruhani); yetenek kilidi + debug bayrağı değişmez.
+func test_content_unlock_mode_opens_only_menu_unlocks() -> void:
+	_begin()
+	var gm: Node = Engine.get_main_loop().root.get_node("GameManager")
+	gm.run_debug_used = false
+	gm.content_unlock_mode = true
+	assert(MetaProgressScript.is_unlocked("char", 15) and MetaProgressScript.is_unlocked("weapon", "fisek"), "kilit açık modunda karakter/silah açık")
+	assert(MetaProgressScript.is_unlocked("pet", "peri") and MetaProgressScript.is_unlocked("spirit", "savas_sevki"), "kilit açık modunda evcil/ruhani açık")
+	assert(Characters.skill_unlock_level(1, "skill2") == 5 and Characters.skill_unlock_level(1, "skill3") == 10, "Q/E/R baştan AÇILMAZ (debug modundan farkı)")
+	assert(not gm.debug_mode_unlocked, "debug bayrağı açılmaz (debug menüsü/ölümsüzlük yok)")
+	assert(gm.run_debug_used, "ilerleme/anahtar yazılmasın: koşu debug gibi işaretli")
+	gm.content_unlock_mode = false
+	assert(not MetaProgressScript.is_unlocked("char", 15), "mod kapanınca kilitler geri gelir")
+	assert(not MetaProgressScript.is_unlocked("pet", "peri"))
+	gm.run_debug_used = false
+	_end()
+
+
 func test_corrupt_file_does_not_crash() -> void:
 	_begin()
 	var cfg := ConfigFile.new()
@@ -147,7 +165,7 @@ func test_locked_items_listing_is_sorted_by_cost() -> void:
 	## silah sayısı katalogla büyür (Gökkuşağı/Mızrak 2026-10-19) - kilitli silah adedi COSTS tablosundan
 	## evcil sayısı da katalogla büyür (Minik Cadı + Hayalet 2026-11-09, madde 509)
 	assert(items.size() == 10 + (MetaProgressScript.COSTS[MetaProgressScript.WEAPON] as Dictionary).size() \
-		+ (MetaProgressScript.COSTS[MetaProgressScript.PET] as Dictionary).size() + 4, "kilitli toplam: %d" % items.size())
+		+ (MetaProgressScript.COSTS[MetaProgressScript.PET] as Dictionary).size() + (MetaProgressScript.COSTS[MetaProgressScript.SPIRIT] as Dictionary).size(), "kilitli toplam: %d" % items.size())
 	var last_by_kind: Dictionary = {}
 	for it: Dictionary in items:
 		var k: String = str(it["kind"])
@@ -184,12 +202,39 @@ func test_locked_weapon_is_coerced_to_default() -> void:
 	_end()
 
 
-func test_starter_gift_is_granted_once() -> void:
+func test_no_starter_gift() -> void:
+	## 2026-11-12: "1000 kıymık hediyesi" kaldırıldı - yeni kayıt da, eski `starter_granted` bayraksız kayıt da 0 ile başlar.
 	_begin()
-	MetaProgressScript.set_starter_shards_override(1000)
-	assert(MetaProgressScript.shards() == 1000, "yeni kayıt 1000 ile başlar")
-	assert(int(MetaProgressScript.load_all()["total_earned"]) == 0, "hediye kazanılmış puana yazılmaz")
+	assert(MetaProgressScript.shards() == 0, "yeni kayıt 0 ile başlar")
 	MetaProgressScript.set_path_override(_tmp) ## önbelleği at, diskten oku
-	assert(MetaProgressScript.shards() == 1000, "ikinci yüklemede tekrar verilmez")
-	MetaProgressScript.set_starter_shards_override(-1)
+	assert(MetaProgressScript.shards() == 0, "yeniden yüklemede de hediye gelmez")
+	assert(int(MetaProgressScript.load_all()["total_earned"]) == 0)
 	_end()
+
+
+func test_progress_reset_runs_once_per_epoch() -> void:
+	var ProgressReset: GDScript = preload("res://scripts/progress_reset.gd")
+	var stamp: int = Time.get_ticks_usec()
+	var file: String = "user://test_reset_%d.cfg" % stamp
+	var marker: String = "user://test_reset_marker_%d.cfg" % stamp
+	var key: String = "test_%d" % stamp
+	var f := FileAccess.open(file, FileAccess.WRITE)
+	f.store_string("[meta]\nshards=777\n")
+	f.close()
+	assert(ProgressReset.ensure(key, file, marker), "eski ilerleme (işaret yok) sıfırlanmalı")
+	assert(not FileAccess.file_exists(file), "kayıt dosyası kalmamalı")
+	assert(FileAccess.file_exists(file + ProgressReset.BACKUP_SUFFIX), "eski kayıt yedeğe taşınmalı")
+	## Aynı süreçte ikinci çağrı da, yeni süreç (işaret diskte) de bir daha dokunmaz.
+	var f2 := FileAccess.open(file, FileAccess.WRITE)
+	f2.store_string("[meta]\nshards=5\n")
+	f2.close()
+	assert(not ProgressReset.ensure(key, file, marker), "aynı süreçte tekrar sıfırlanmaz")
+	ProgressReset._checked.erase(key) ## yeni süreci taklit et: bellek bayrağı gider, disk işareti kalır
+	assert(not ProgressReset.ensure(key, file, marker), "işaret diskte: yeni ilerleme korunmalı")
+	assert(FileAccess.file_exists(file), "ikinci açılışta yeni kayıt silinmemeli")
+	## Yeni kurulum (dosya yok): sıfırlama yok, yalnız işaret.
+	var key2: String = key + "_b"
+	assert(not ProgressReset.ensure(key2, "user://test_reset_yok_%d.cfg" % stamp, marker), "dosya yoksa 'sıfırlandı' denmez")
+	for p: String in [file, file + ProgressReset.BACKUP_SUFFIX, marker]:
+		if FileAccess.file_exists(p):
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(p))

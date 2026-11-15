@@ -11,27 +11,36 @@ class_name MissionVan
 ##
 ## GÜNCELLEME (kullanıcı isteği 2026-09-24): "Konvoy arabasının görüntüsünü sıfırdan pixel art olarak tasarla 4
 ## direction ve hareket edebilen bir konvoy arabası olmalı ayrıca arabayı götüreceğimiz yerler çok daha uzak olmalı"):
-## - Görsel: tools/gen_convoy_wagon_sprite.py'nin pişirdiği brandalı erzak arabası (4 yön x 4 kare; yan görünüşte
-##   tekerlekler döner, önde/arkada tekerlek sırtı kayar, sancak dalgalanır). Rota segmentinin yönüne göre
-##   right/left/down/up klibi seçilir; ileri itilirken ileri, geri kayarken TERS oynar, dururken ilk karede durur.
+## - Görsel: (2026-11-13'te at + seyyar satıcı arabasıyla DEĞİŞTİ, bkz. aşağıdaki GÜNCELLEME; eski çizim arabası silindi).
 ## - Rota: artık düz bir çizgi DEĞİL, host'ta orman duvarlarını dolanan çok parçalı bir yol (world_event_manager.gd
 ##   _escort_route, yaratıkların A* yol bulmasıyla) - başlangıç + dönüş noktaları + bitiş, extra["route"] ile gelir.
 ##   Kalan rota yerde noktalarla, varış noktası damalı bir bayrakla gösterilir (uzun rotada nereye gidildiği belli olsun).
 
-const WagonFrames := preload("res://assets/fx/mission_van/wagon_frames.tres")
-const TEXEL := 1.212 ## PixelDraw.TEXEL - karakterlerle aynı piksel yoğunluğu
-const SHEET_H := 44
-const SHEET_GROUND_Y := 40 ## gen_convoy_wagon_sprite.py GROUND_Y - tekerleklerin yere değdiği satır
+## GÜNCELLEME (kullanıcı isteği 2026-11-13, madde 650): "konvoy şu anda ai. onu oyunumdaki at arabası ve at assetiyle değiştir, çalışma mantığı
+## aynı, seyyar satıcıdakine benzer": görsel artık seyyar satıcının yeşil brandalı arabası + ona koşulu at (tools/gen_convoy_horse_cart_sprite.py,
+## satıcıyla aynı karolar/katman sırası, 1 sanat px = 1 dünya px - satıcı sahnesiyle aynı ölçek). Kaynakta yalnız YAN görünüş araba var: sola bakan
+## sayfa, sağa flip_h; dikey rota parçasında son yatay yön korunur. İtilirken at "walk" (geri kayarken TERS), dururken "idle" oynar.
+const CartFrames := preload("res://assets/fx/mission_van/horse_cart_frames.tres")
+const HorseBlockerScript := preload("res://scripts/mission_van_horse_blocker.gd")
+const TEXEL := 1.212 ## PixelDraw.TEXEL - rota noktaları / bayrak piksel dili
+const SPRITE_SCALE := 1.0 ## seyyar satıcı sahnesiyle aynı (16 px karo = 16 dünya px)
+const SHEET_W := 96
+const SHEET_H := 58
+const SHEET_GROUND_Y := 52 ## gen_convoy_horse_cart_sprite.py - tekerleklerin yere değdiği satır
 const MOVE_ANIM_HOLD := 0.35 ## son ilerleme değişiminden bu kadar sn sonra araba "durdu" sayılır
 const DISPLAY_SMOOTHING := 8.0 ## 1/sn - ağdan 10 Hz gelen ilerlemeyi karede yumuşat
 const ROUTE_DOT_SPACING := 26.0
 const ROUTE_DOT_COLOR := Color(1.0, 0.92, 0.55, 0.55)
 ## Çarpışma + derinlik (2026-10-10, kullanıcı: "konvoy görevi de y eksenine uygun olmalı ve collision shape içermeli"): "move_blockers" grubu (player.gd
-## _block_movement_into_blockers; araba kasası ~58x53 dünya px) + oyuncu arabanın arkasındaysa (ayağı tekerlek satırının yukarısında) araba onun üstüne çizilir.
-const BLOCK_RADIUS := 20.0
-const BLOCK_CENTER_UP := 12.0
-const DEPTH_HALF_WIDTH := 30.0
-const DEPTH_HEIGHT := 50.0
+## _block_movement_into_blockers) - araba gövdesi bu düğüm, at ayrı bir çocuk engel (mission_van_horse_blocker.gd; tek çember uzun at+arabayı kaplayamaz).
+## Sola bakarken araba merkezi düğümün CART_DX sağında, at HORSE_DX solunda (sağa bakarken ayna). Oyuncu arabanın arkasındaysa araba onun üstüne çizilir.
+const BLOCK_RADIUS := 24.0
+const BLOCK_CENTER_UP := 8.0
+const CART_DX := 17.0
+const HORSE_DX := -26.0
+const HORSE_BLOCK_RADIUS := 11.0
+const DEPTH_HALF_WIDTH := 48.0
+const DEPTH_HEIGHT := 52.0
 var block_radius: float = BLOCK_RADIUS
 
 var route: PackedVector2Array = PackedVector2Array()
@@ -46,6 +55,8 @@ var _move_hold: float = 0.0
 var _move_dir: int = 0 ## +1 ileri, -1 geri, 0 duruyor
 var _anim: AnimatedSprite2D = null
 var _route_layer: Node2D = null
+var _horse_blocker: Node2D = null
+var _facing_left: bool = true ## sayfa sola bakar; sağa = flip_h
 
 
 ## Rota üzerindeki `dist` mesafesindeki nokta - host'un itme dairesi hesabı (world_event_manager.gd
@@ -82,6 +93,13 @@ func setup(p_route: PackedVector2Array, p_push_radius: float) -> void:
 	_shown_dist = 0.0
 	if not route.is_empty():
 		global_position = route[0]
+		## İlk yatay yön: ilk belirgin yatay parça, yoksa baştan sona yön (dikey rotada da at bir yana baksın).
+		_facing_left = route[route.size() - 1].x < route[0].x
+		for i in range(route.size() - 1):
+			var d: Vector2 = route[i + 1] - route[i]
+			if absf(d.x) > absf(d.y) * 0.5 and absf(d.x) > 1.0:
+				_facing_left = d.x < 0.0
+				break
 	_update_facing()
 	queue_redraw()
 	if _route_layer:
@@ -92,14 +110,16 @@ func _ready() -> void:
 	z_index = 0 ## itme dairesi zemin gibi; arabanın kendisi _update_depth ile oyuncunun önüne/arkasına geçer
 	add_to_group("move_blockers")
 	_anim = AnimatedSprite2D.new()
-	_anim.sprite_frames = WagonFrames
+	_anim.sprite_frames = CartFrames
 	_anim.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_anim.scale = Vector2.ONE * TEXEL
+	_anim.scale = Vector2.ONE * SPRITE_SCALE
 	## Sayfadaki tekerlek-zemin satırı bu Node'un konumuna (rota noktası) denk gelsin.
-	_anim.position = Vector2(0.0, -(float(SHEET_GROUND_Y) - float(SHEET_H) * 0.5) * TEXEL)
+	_anim.position = Vector2(0.0, -(float(SHEET_GROUND_Y) - float(SHEET_H) * 0.5) * SPRITE_SCALE)
 	add_child(_anim)
-	_anim.play(&"right")
-	_anim.pause()
+	_anim.play(&"idle")
+	_horse_blocker = HorseBlockerScript.new()
+	_horse_blocker.set("block_radius", HORSE_BLOCK_RADIUS)
+	add_child(_horse_blocker)
 	## Kalan rota + varış bayrağı dünya koordinatında (araba hareket ettikçe kaymasın) ayrı bir katmanda.
 	_route_layer = Node2D.new()
 	_route_layer.top_level = true
@@ -133,21 +153,22 @@ func _process(delta: float) -> void:
 	if _move_hold <= 0.0:
 		_move_dir = 0
 	if _move_dir == 0:
-		if _anim.is_playing():
-			_anim.pause()
-	elif not _anim.is_playing() or (_move_dir < 0) != (_anim.get_playing_speed() < 0.0):
+		if _anim.animation != &"idle":
+			_anim.play(&"idle")
+	elif _anim.animation != &"walk" or not _anim.is_playing() or (_move_dir < 0) != (_anim.get_playing_speed() < 0.0):
 		if _move_dir > 0:
-			_anim.play()
+			_anim.play(&"walk")
 		else:
-			_anim.play_backwards()
+			_anim.play_backwards(&"walk")
 	if absf(_shown_dist - _last_drawn_dist) >= 2.0:
 		_last_drawn_dist = _shown_dist
 		queue_redraw()
 		_route_layer.queue_redraw()
 
 
+## Araba gövdesinin çember merkezi (at çocuk engelde, bkz. _update_facing).
 func block_center() -> Vector2:
-	return global_position - Vector2(0.0, BLOCK_CENTER_UP)
+	return global_position + Vector2(-CART_DX if not _facing_left else CART_DX, -BLOCK_CENTER_UP)
 
 
 func _update_depth() -> void:
@@ -162,7 +183,8 @@ func _update_depth() -> void:
 	_anim.z_index = 2 if behind else 0
 
 
-## Şu anki rota segmentinin yönüne göre 4 yönlü klip (araba geri kayarken de yüzü gidiş yönünde kalır).
+## Şu anki rota segmentinin yatay yönüne göre sola/sağa bak (araba geri kayarken de yüzü gidiş yönünde kalır); belirgin yatay bileşeni olmayan
+## (dikey) parçada son yön korunur - kaynakta önden/arkadan araba yok.
 func _update_facing() -> void:
 	if _anim == null or route.size() < 2:
 		return
@@ -170,20 +192,11 @@ func _update_facing() -> void:
 	while i < route.size() - 2 and _cum[i + 1] <= _shown_dist:
 		i += 1
 	var dir: Vector2 = route[i + 1] - route[i]
-	var clip: StringName = &"right"
-	if absf(dir.x) >= absf(dir.y):
-		clip = &"right" if dir.x >= 0.0 else &"left"
-	else:
-		clip = &"down" if dir.y > 0.0 else &"up"
-	if _anim.animation != clip:
-		var playing: bool = _anim.is_playing()
-		var speed: float = _anim.get_playing_speed()
-		_anim.animation = clip
-		if playing:
-			if speed < 0.0:
-				_anim.play_backwards(clip)
-			else:
-				_anim.play(clip)
+	if absf(dir.x) > absf(dir.y) * 0.5 and absf(dir.x) > 1.0:
+		_facing_left = dir.x < 0.0
+	_anim.flip_h = not _facing_left
+	if _horse_blocker:
+		_horse_blocker.position = Vector2(HORSE_DX if _facing_left else -HORSE_DX, -BLOCK_CENTER_UP)
 
 
 func _draw() -> void:
@@ -192,7 +205,7 @@ func _draw() -> void:
 	## İlerleme çubuğu (arabanın üstünde).
 	var ratio: float = _shown_dist / maxf(_total, 0.001)
 	var bar_w := 56.0
-	var bar_y: float = -(float(SHEET_GROUND_Y) + 6.0) * TEXEL
+	var bar_y: float = -(float(SHEET_GROUND_Y) + 6.0) * SPRITE_SCALE
 	draw_rect(Rect2(-bar_w * 0.5 - 1.0, bar_y - 1.0, bar_w + 2.0, 8.0), Color(0.08, 0.06, 0.05, 0.9))
 	draw_rect(Rect2(-bar_w * 0.5, bar_y, bar_w * clampf(ratio, 0.0, 1.0), 6.0), Color(0.95, 0.8, 0.25, 1.0))
 

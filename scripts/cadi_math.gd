@@ -89,7 +89,7 @@ const SMOKE_V_JITTER_ART := 4.0
 ## 2026-10-13 kullanıcı: duman yaratıkların (ve oyuncuların) ÜSTÜNDE, her bulut ayrı %50 saydam (eskiden zeminde, %80).
 ## Oyuncular dumanın ÜSTÜNDE kalır (kendi karakterin ve can barın silikleşmesin - gerçek çizicide denendi, kötü durdu).
 ## Katman: yaratık z 0, oyuncu z 1 (CLAUDE.md madde 25/45) -> bulut z 1 + sahnenin en başına taşınır (cadi_smoke.gd).
-const SMOKE_ALPHA := 0.5
+const SMOKE_ALPHA := 1.0 ## bulut artık minik baloncuk (2026-11-15); eskiden duman %50 saydamdı
 const SMOKE_Z := 1
 ## Sayfa karesinde bulut ORİJİNİ (zemindeki izin merkezi) karenin ortasına göre (sanat pikseli): 104x76, orijin (52, 53).
 const SMOKE_CENTER_ART := Vector2(0, 15)

@@ -26,7 +26,7 @@ const TIER_NAME := ["PARÇA", "EPİK", "EFSANEVİ"]
 ## Efsun kontür renkleri (enchant_weapon_glow.gd TIER_COLORS ile aynı), dizin = kademe (1 kontürsüz).
 const ENCH_COL := [Color(0, 0, 0, 0), Color(0, 0, 0, 0), Color(0.47, 0.91, 0.35), Color(0.31, 0.63, 1.0), Color(0.73, 0.49, 1.0), Color(1.0, 0.33, 0.28)]
 const ROMAN := ["I", "II", "III", "IV", "V"]
-const SHARD_TEXT := HT.SHARD ## silah parçacığı yazısı = simgenin açık zümrüt tonu (tek palet, madde 519)
+const SHARD_TEXT := HT.SHARD ## silah parçacığı yazısı = simgenin kor turuncusu (tek palet, madde 519/560)
 
 const COIN_PATH := "res://assets/ui/newui/icon_gold_coin.png"
 const SHARD_PATH := "res://assets/pickups/weapon_shard/shard_icon.png"
@@ -138,28 +138,6 @@ class TierPips extends Control:
 			draw_rect(Rect2(x, 0, seg, size.y), c)
 			if i < on:
 				draw_rect(Rect2(x, 0, seg, 2), c.lightened(0.35))
-
-
-## Basamaklı ışık havuzu + zemin elipsi (vitrin).
-class Spot extends Control:
-	var col: Color = Color.WHITE
-	var floor_y: float = 0.78
-
-	func _init(c: Color, fy: float = 0.78) -> void:
-		col = c
-		floor_y = fy
-		mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	func _draw() -> void:
-		var c := (size * Vector2(0.5, 0.48)).floor()
-		var r: float = minf(size.x, size.y) * 0.46
-		for i in 4:
-			draw_circle(c, floorf(r * (1.0 - i * 0.2)), Color(col, 0.06 + i * 0.03))
-		var fc := Vector2(c.x, floorf(size.y * floor_y))
-		draw_set_transform(fc, 0.0, Vector2(1.0, 0.24))
-		draw_circle(Vector2.ZERO, floorf(r * 0.62), Color(col, 0.20))
-		draw_circle(Vector2.ZERO, floorf(r * 0.44), Color(col, 0.16))
-		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 ## Bağlantı çizgileri (tarif ağacı): [PackedVector2Array, Color, kalınlık].
@@ -447,6 +425,10 @@ func tile(t: Texture2D, s: float, border: Color, o: Dictionary = {}) -> Control:
 	var bg := Panel.new()
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var fill: Color = o.get("fill", c("inset"))
+	var owned_tile: bool = bool(o.get("owned", false))
+	if owned_tile: ## sendeki parça: fareyle dokunmadan belli olsun (yeşil kenar + yeşil iç + büyük tik)
+		border = c("good")
+		fill = fill.lerp(c("good"), 0.28)
 	bg.add_theme_stylebox_override("panel", sb(fill, border.darkened(0.55) if dim else border, bw, 4))
 	bg.size = host.size
 	host.add_child(bg)
@@ -471,7 +453,7 @@ func tile(t: Texture2D, s: float, border: Color, o: Dictionary = {}) -> Control:
 		sh.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		host.add_child(sh)
 	if bool(o.get("owned", false)):
-		var bs: float = 22.0 if s >= 64.0 else 18.0
+		var bs: float = 30.0 if s >= 64.0 else 24.0
 		var badge := Panel.new()
 		badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		badge.add_theme_stylebox_override("panel", sb(c("good"), c("good").darkened(0.6), 2, 3))

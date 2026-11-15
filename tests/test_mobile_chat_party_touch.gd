@@ -54,6 +54,7 @@ func _setup(allies: int, msgs: int) -> void:
 		a.char_id = 2 + i
 		add_child(a)
 		a.add_to_group("remote_players")
+		a.add_to_group("remote_allies") ## destek yetenekleri müttefik grubunu tarar (madde 617)
 		_extra.append(a)
 	await _frames(70)
 	_hud._layout_mobile_hud()

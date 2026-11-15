@@ -4,7 +4,7 @@ extends Node
 ## yanlış". Kök neden: Destiny her tikte koni sprite'ını silah KÖKÜNDEN (asanın ortası) dünyaya SABİT bırakıyordu - 0,25
 ## sn ömrü boyunca oyuncu/asa hareket edince geride kalıyordu; asa da efsunun değil kendi hedefine bakıyordu.
 ## Bu test GERÇEK oyuncu + gerçek asa (yerel) ve gerçek RemotePlayer kuklası (uzak) ile şunları denetler:
-##  - sprite asanın kök düğümüne bağlı ve asanın ÇİZİLİ UCUNDA (weapon_tip.gd), kökte değil
+##  - sprite asanın ÇİZİLİ UCUNDA (weapon_tip.gd), kökte değil; 2026-11-10: sahne kökünde, oyuncuların altında (follow_world)
 ##  - oyuncu yer değiştirince sprite asanın yeni ucunda
 ##  - asa efsunun hedefine bakıyor, sprite'ın dünya ölçeği tasarımdaki gibi (ebeveyn ölçeği telafi edilmiş)
 ##  - uzak kukla: aynı veri kuklanın asa kopyasına bağlanıyor, yön yayınlanan açı
@@ -92,13 +92,21 @@ func test_local_spray_follows_staff_tip() -> void:
 			get_tree().node_added.connect(_on_node_added)
 			## 2026-10-03 alev sanatı: TEK sürekli döngülü alev flame_fire / flame_ice (eski 6 karelik spray_*[_big] sayfaları kalktı;
 			## final "_big" sayfa yerine menzil x2 + yan yana alt alevler) - 2026-10-03 test güncellemesi.
-			var prefix: String = "flame_ice" if key == "buz_asasi" else "flame_fire"
+			## 2026-11-10 (madde 550): "Alev Sağanağı" sayfaları flame_shower_fire / flame_shower_ice; uzun koni (final) GERİLMEZ,
+			## kendi "_big" sayfasına geçer. Efekt artık asanın çocuğu değil: sahne kökünde, oyuncuların ALTINDA (EnchantLayer.Z),
+			## her karede asanın ucuna + bakışına konur ("under" / follow_world).
+			## 2026-11-13 (madde 639): kullanıcının flamethrower efekti flamethrower_fire / flamethrower_ice; boy SABİT (final büyümez,
+			## ayrı "_big" sayfa yok), start -> loop -> end animasyonları.
+			var prefix: String = "flamethrower_ice" if key == "buz_asasi" else "flamethrower_fire"
 			## Asa nişanına yerleşsin (yumuşak dönüş), sonra taze bir tikin sprite'ını incele.
 			await _wait(0.6)
 			var s: Node2D = _latest_spray(prefix)
 			assert(s != null, "%s: süren püskürtme yok" % key)
-			assert(str(s.get("sheet")) == prefix, "%s final=%s: sayfa %s" % [key, final, s.get("sheet")])
-			assert(s.get_parent() == w, "%s: sprite asanın köküne bağlı olmalı, ebeveyn: %s" % [key, s.get_parent()])
+			var want_sheet: String = prefix
+			assert(str(s.get("sheet")) == want_sheet, "%s final=%s: sayfa %s" % [key, final, s.get("sheet")])
+			assert(SpriteFx.frames(want_sheet) != null, "%s: sayfa kaynağı yok: %s" % [key, want_sheet])
+			assert(bool(s.get("follow_world")) and s.get_parent() == self, "%s: efekt sahne kökünde olmalı (karakterin altı), ebeveyn: %s" % [key, s.get_parent()])
+			assert(s.z_index == 0 and p.z_index >= 0, "%s: efekt efsun katmanında (z 0) olmalı: %d" % [key, s.z_index])
 			var tip: Vector2 = WeaponTip.tip_global(icon, fwd)
 			assert(s.global_position.distance_to(tip) < 1.0, "%s: sprite asanın ucunda olmalı (%s / uç %s)" % [key, s.global_position, tip])
 			assert(tip.distance_to(w.global_position) > 5.0, "%s: uç asanın ortasından (kökten) ayrı olmalı: %.1f" % [key, tip.distance_to(w.global_position)])
@@ -106,6 +114,9 @@ func test_local_spray_follows_staff_tip() -> void:
 			var want: Vector2 = Vector2(s.get("sprite_scale")) * SpriteFx.TEXEL
 			assert(absf(spr.global_scale.x - want.x) < 0.02 and absf(spr.global_scale.y - want.y) < 0.02,
 				"%s: dünya ölçeği %s, beklenen %s (ebeveyn ölçeği telafi)" % [key, spr.global_scale, want])
+			## Piksel kare kalır (tek eksenli germe yok) ve 1 sanat pikseli karakter pikselinden en çok %20 iri (menzil geliştirmesi).
+			assert(absf(spr.global_scale.x - spr.global_scale.y) < 0.001, "%s: ölçek iki eksende aynı olmalı: %s" % [key, spr.global_scale])
+			assert(spr.global_scale.x > 0.85 and spr.global_scale.x < 1.1, "%s final=%s: sanat pikseli %.3f dünya birimi" % [key, final, spr.global_scale.x])
 			## Asa efsunun hedefine döner (tik başında zaten bakıyor olmalı).
 			var aim_dir: Vector2 = icon.global_transform.basis_xform(Vector2.from_angle(deg_to_rad(fwd))).normalized()
 			var to_e: Vector2 = (e.global_position - tip).normalized()

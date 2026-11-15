@@ -1,0 +1,3 @@
+Totemler artık rün taşı oluyor.
+
+Q taşı kırmızı tonlarına doğru parıldayacak (ateş topları bu taştan atılacak) E yeteneği de mavi tonlarında parıldayacak (kalkan orbları bu taştan gönderilecek) Q ve E rün işaretleri sahip oldukları taşın içinde karakterin o yeteneğe verdiği evrim skili başına düzenli aralıklarla sırayla parıldayıp görünecek olacak şekilde çıkacak. Shaman Q veya E yeteneğine her evrim verdiğinde rünün üstünde birden fazla rün solup belirecek ve hafif parıldayacak. Her evime uygun rün görünüşünü kendin karar verebilirsin.  Mantığını anlayamadıysan bana sorabilirsin.

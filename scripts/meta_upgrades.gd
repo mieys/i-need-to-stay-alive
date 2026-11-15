@@ -61,13 +61,15 @@ const LIST: Array = [
 		"max": 10, "per": 0.03, "unit": PCT, "first": 20, "step": 11},
 	{"id": "luck", "name": "Şans", "desc": "Yaratıkların bir şey düşürme ihtimali artar.", "icon": "luck",
 		"max": 10, "per": 0.5, "unit": FLAT, "first": 20, "step": 10},
-	{"id": "discount", "name": "Fiyat İndirimi", "desc": "Dükkan fiyatları düşer (Para ruhaniyle toplanır, en fazla %50).", "icon": "",
+	{"id": "discount", "name": "Fiyat İndirimi", "desc": "Dükkan fiyatları düşer (Para ruhaniyle toplanır, en fazla %50).", "icon": "discount",
 		"max": 5, "per": 0.02, "unit": PCT, "first": 40, "step": 30},
 	{"id": "shield_protection", "name": "Kalkan Soğurma", "desc": "Mana kalkanın hasarın daha büyük kısmını emer.", "icon": "shield_protection",
 		"max": 5, "per": 0.02, "unit": PCT, "first": 45, "step": 35},
-	{"id": "free_reroll", "name": "Ücretsiz Karıştırma", "desc": "Her level atlama kartında karıştırmanın ilki bedava.", "icon": "",
+	{"id": "free_reroll", "name": "Ücretsiz Karıştırma", "desc": "Her level atlama kartında karıştırmanın ilki bedava.", "icon": "free_reroll",
 		"max": 1, "per": 1.0, "unit": COUNT, "first": 300, "step": 0},
-	{"id": "revive", "name": "Dirilme Hakkı", "desc": "Her koşuya +1 dirilme hakkıyla başlarsın.", "icon": "",
+	{"id": "evo_reroll", "name": "Evrim Karıştırma", "desc": "Oyun başına ücretsiz evrim kartı karıştırma hakkın 1'den 2'ye çıkar.", "icon": "evo_reroll",
+		"max": 1, "per": 1.0, "unit": COUNT, "first": 300, "step": 0},
+	{"id": "revive", "name": "Dirilme Hakkı", "desc": "Her koşuya +1 dirilme hakkıyla başlarsın.", "icon": "revive",
 		"max": 1, "per": 1.0, "unit": COUNT, "first": 600, "step": 0},
 	{"id": "cooldown", "name": "Bekleme Süresi Azaltma", "desc": "Yeteneklerin daha çabuk yenilenir (en fazla %60).", "icon": "cooldown_reduction",
 		"max": 8, "per": 0.015, "unit": PCT, "first": 25, "step": 15},
@@ -79,6 +81,7 @@ const LIST: Array = [
 
 const DISCOUNT_CAP := 0.5
 const BASE_REVIVES := 3
+const BASE_FREE_EVO_REROLLS := 1 ## koşu başına ücretsiz EVRİM kartı karıştırması (geliştirme +1 -> en fazla 2)
 
 
 static func ids() -> Array:
@@ -98,7 +101,7 @@ static func def(id: String) -> Dictionary:
 ## Gelişmelerin oyuncuya uygulanıp uygulanmayacağı: başsız (headless) test koşuları geliştiricinin gerçek kaydını okumasın
 ## (stat testleri sayısal beklenti yazar); testler path_override ya da ortam yolu verirse AÇIK.
 static func active() -> bool:
-	if MetaProgress.path_override != "" or OS.get_environment(MetaProgress.ENV_PATH) != "":
+	if MetaProgress.path_override != "" or MetaProgress.GuardScript.dev_env(MetaProgress.ENV_PATH) != "":
 		return true
 	return DisplayServer.get_name() != "headless"
 

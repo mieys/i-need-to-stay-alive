@@ -5,7 +5,9 @@ extends Node2D
 ## 50/sn yanma başlatır). Yetkili örnek hasar verir, istemcideki görsel kopya sadece uçar + patlar. Sanat: paketin "fire shot (red)" şeridi (kare 0 uçuş, 1-3 patlama). data: dir, speed, life, radius, blast.
 
 const PaladinDome := preload("res://scripts/paladin_dome.gd") ## Şovalye kubbesi alanı (elips)
+const KalkanGuard := preload("res://scripts/kalkan_guard.gd") ## Kalkan silahı siper duruşu (madde 685)
 const AbilitiesScript := preload("res://scripts/enemy_abilities.gd")
+const ShieldBubbleHit := preload("res://scripts/shield_bubble_hit.gd") ## mana kalkanı baloncuğu (madde 572)
 const FxUtil := preload("res://scripts/boss_fx_util.gd")
 const SHEET := "res://assets/fx/demon/fire_shot.png"
 const WALL_IGNORE_TIME := 0.06
@@ -26,6 +28,7 @@ var _done: bool = false
 
 
 func _ready() -> void:
+	add_to_group(KalkanGuard.GROUP)
 	z_index = 11
 	_dir = Vector2(data.get("dir", Vector2.RIGHT))
 	if _dir.length() < 0.01:
@@ -66,13 +69,22 @@ func _physics_process(delta: float) -> void:
 	for p in AbilitiesScript.damageable_players(get_tree()):
 		var pn := p as Node2D
 		if PaladinDome.node_contains(pn, global_position):
+			if authoritative:
+				PaladinDome.absorb_ranged_hit(pn, damage, source) ## kubbe atışı emer: kalkana TEK hasar (madde 542); alan hasarı yok
 			_explode(false)
 			return
+		KalkanGuard.guard_shot(pn, self) ## Kalkan silahı siper duruşu: önden gelen atışın hasarı %30 azalır, atış durmaz (madde 705)
 		if pn.has_method("get_talon_ward_radius"):
 			var ward_r: float = float(pn.call("get_talon_ward_radius"))
 			if ward_r > 0.0 and global_position.distance_to(pn.global_position) <= ward_r:
 				_explode(false)
 				return
+		## Mana kalkanı baloncuğu (madde 572): kalkanı olan oyuncuya atış gövdeye değil baloncuğun DIŞ kenarına çarpar;
+		## efekt her makinede kendi kopyasıyla (shield_bubble_hit.gd), hasar yalnız yetkili kopyadan.
+		if ShieldBubbleHit.touches(pn, global_position, _radius):
+			ShieldBubbleHit.impact(pn, global_position)
+			_explode() ## alan hasarı baloncuğun kenarında patlar ("demonfire")
+			return
 		if global_position.distance_to(pn.global_position) <= _radius + AbilitiesScript.TARGET_BODY_RADIUS:
 			_explode()
 			return

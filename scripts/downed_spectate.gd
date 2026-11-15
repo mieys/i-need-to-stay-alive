@@ -35,8 +35,12 @@ var _name_label: Label = null
 var _hint_label: Label = null
 
 
+const UiHideScript := preload("res://scripts/ui_hide.gd") ## F3 arayüzü gizle (madde 612): izleyici şeridi gizlenir, ok tuşları yine çalışır
+
+
 func _ready() -> void:
 	layer = LAYER
+	UiHideScript.mark_layer(self)
 	_build()
 	_bar.visible = false
 
@@ -108,7 +112,7 @@ func cycle(direction: int, allies: Array = []) -> void:
 ## Hayatta VEYA yerde yatan (kalıcı ölmemiş) arkadaşlar: kukla yere düşünce is_dead false gelir (main.gd state_snapshot "dead").
 func _living_allies() -> Array:
 	var result: Array = []
-	for rp: Node in get_tree().get_nodes_in_group("remote_players"):
+	for rp: Node in get_tree().get_nodes_in_group("remote_allies"):
 		if is_instance_valid(rp) and rp is Node2D and rp.get("is_dead") != true:
 			result.append(rp)
 	return result

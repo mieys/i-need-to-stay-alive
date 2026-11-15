@@ -77,16 +77,16 @@ func test_interact_is_space_and_skill4_is_f() -> void:
 
 
 func test_spiritual_definitions_match_the_spec() -> void:
-	## İlk 6 + 2026-09-23'te eklenen Savaş Şevki ve Kalkan Bağı = 8 (2026-10-03 test güncellemesi).
+	## İlk 6 + 2026-09-23'te eklenen Savaş Şevki ve Kalkan Bağı = 8; 2026-11-09 Dükkan silindi (madde 543) = 7; 2026-11-12 Toplayıcı (madde 625) = 8.
 	assert(S.ORDER.size() == 8, "8 ruhani yetenek, bulunan: %d" % S.ORDER.size())
-	for id in [S.PARA, S.CAN, S.ADC, S.TANK, S.TAKTIK, S.DUKKAN, S.SAVAS_SEVKI, S.KALKAN_BAGI]:
+	assert(not S.is_valid("dukkan"), "Dükkan silindi: eski kayıtlı seçim geçersiz sayılmalı")
+	for id in [S.PARA, S.CAN, S.ADC, S.TANK, S.TAKTIK, S.SAVAS_SEVKI, S.KALKAN_BAGI, S.TOPLAYICI]:
 		assert(S.ORDER.has(id), "ruhani yetenek eksik: %s" % id)
 	assert(S.PARA_INTERVAL == 10.0 and S.PARA_GOLD == 5 and is_equal_approx(S.PARA_SHOP_DISCOUNT, 0.10), "Para: 10sn / 5 altın / %10")
 	assert(is_equal_approx(S.CAN_HEAL_PERCENT, 0.08) and is_equal_approx(S.CAN_SHIELD_PERCENT, 0.15) and S.CAN_INVULN_TIME == 3.0 and S.CAN_COOLDOWN == 90.0, "Can")
-	assert(S.ADC_DURATION == 10.0 and is_equal_approx(S.ADC_ATTACK_SPEED, 0.30) and is_equal_approx(S.ADC_SHIELD_PEN, 0.15) and is_equal_approx(S.ADC_LIFESTEAL, 0.02) and S.ADC_COOLDOWN == 120.0, "Adc")
+	assert(S.ADC_DURATION == 10.0 and is_equal_approx(S.ADC_ATTACK_SPEED, 0.30) and is_equal_approx(S.ADC_SHIELD_PEN, 0.15) and is_equal_approx(S.ADC_LIFESTEAL, 0.02) and S.ADC_COOLDOWN == 75.0, "Adc (2026-11-14: bekleme 120 -> 75)")
 	assert(S.TANK_DURATION == 10.0 and is_equal_approx(S.TANK_REFLECT, 2.0) and is_equal_approx(S.TANK_SHIELD_REGEN, 0.03) and S.TANK_COOLDOWN == 100.0, "Tank")
 	assert(is_equal_approx(S.TAKTIK_SPEED_BONUS, 0.30) and S.TAKTIK_SPEED_TIME == 3.0 and S.TAKTIK_COOLDOWN == 30.0, "Taktiksel")
-	assert(S.DUKKAN_CHANNEL == 3.0 and S.DUKKAN_COOLDOWN == 120.0, "Dükkan")
 	for id in S.ORDER:
 		var def: Dictionary = S.get_def(id)
 		assert(ResourceLoader.exists(str(def["icon"])), "ikon yok: %s" % id)
@@ -181,9 +181,35 @@ func test_adc_gives_attack_speed_shield_pen_and_lifesteal_then_removes_them() ->
 	assert(got_heal, "%%1 can emme ile 400 isabette en az bir kez can gelmeli")
 	player._process_spirit(10.1)
 	assert(is_zero_approx(player.spirit_shield_pen) and is_zero_approx(player.spirit_lifesteal) and is_zero_approx(player.spirit_attack_speed), "10sn sonra sökülmeli")
-	assert(player.spirit_state == "cooldown" and absf(player.spirit_timer - 120.0) < 0.3, "120sn bekleme")
+	assert(player.spirit_state == "cooldown" and absf(player.spirit_timer - 75.0) < 0.3, "75sn bekleme")
 	if "fire_rate_mult" in weapon:
 		assert(is_equal_approx(float(weapon.get("fire_rate_mult")), base_fire_rate), "saldırı hızı eski haline dönmeli")
+	_cleanup()
+
+
+# ------------------------------------------------------------------ Savaş Şevki (2026-11-14 denge turu)
+
+func test_savas_sevki_threshold_grows_by_five_per_conversion() -> void:
+	assert(S.savas_sevki_threshold(0) == 50 and S.savas_sevki_threshold(1) == 55 and S.savas_sevki_threshold(2) == 60, "eşik 50, 55, 60 ...")
+	assert(S.SAVAS_SEVKI_STACKS_STEP == 5, "adım 5")
+	var player: Node = _make_player(1, S.SAVAS_SEVKI)
+	var ap0: float = player.damage_bonus
+	for i in range(49):
+		player._savas_sevki_on_kill(false)
+	assert(is_equal_approx(player.damage_bonus, ap0) and player._savas_sevki_stacks == 49, "49 öldürme: henüz dönüşmez")
+	player._savas_sevki_on_kill(false)
+	assert(is_equal_approx(player.damage_bonus, ap0 + 1.0) and player._savas_sevki_stacks == 0 and player._savas_sevki_conversions == 1, "50 yük -> +1 saldırı gücü")
+	for i in range(54):
+		player._savas_sevki_on_kill(false)
+	assert(is_equal_approx(player.damage_bonus, ap0 + 1.0) and player._savas_sevki_stacks == 54, "sonraki eşik 55: 54 yük dönüşmez")
+	player._savas_sevki_on_kill(false)
+	assert(is_equal_approx(player.damage_bonus, ap0 + 2.0) and player._savas_sevki_conversions == 2, "55 yük -> ikinci +1")
+	## 2026-11-15: asist şevki kaldırıldı - altın almak (yerden toplama, takım payı) yük vermez, yalnız öldürme
+	var KG: GDScript = preload("res://scripts/kill_gold.gd")
+	var before: int = player._savas_sevki_stacks
+	KG.credit(get_tree(), 5, Vector2(1000.0, 1000.0))
+	assert(player._savas_sevki_stacks == before, "altın toplamak şevk vermez")
+	assert(not player.has_method("_savas_sevki_on_assist"), "asist kancası silindi")
 	_cleanup()
 
 
@@ -244,28 +270,6 @@ func test_taktik_teleports_forward_and_gives_speed_for_three_seconds() -> void:
 	assert(is_equal_approx(player._current_temp_speed_boost(), 0.30), "%%30 hız")
 	player._process_spirit(3.1)
 	assert(is_zero_approx(player._current_temp_speed_boost()), "3sn sonra hız bonusu bitmeli")
-	_cleanup()
-
-
-# ------------------------------------------------------------------ Dükkan
-
-func test_dukkan_needs_merchant_channels_three_seconds_and_damage_does_not_cancel() -> void:
-	var player: Node = _make_player(1, S.DUKKAN)
-	player._try_spirit_skill()
-	assert(player.spirit_state == "ready", "satıcı yokken kullanılamaz, bekleme başlamamalı")
-	GameManager.merchant_zone_active = true
-	GameManager.merchant_zone_pos = Vector2(2000.0, 2000.0)
-	player._try_spirit_skill()
-	assert(player.spirit_state == "active" and player._spirit_channeling, "odaklanma başladı")
-	## 2026-10-10: hasar artık odaklanmayı BÖLMEZ (kullanıcı isteği)
-	player.health -= 5.0
-	player._process_spirit(0.5)
-	assert(player._spirit_channeling and player.spirit_state == "active", "hasar odaklanmayı bölmemeli")
-	## Tamamlanma (hasar bölmediği için ilk 0,5 sn sayıldı: 0,5 + 2,6 = 3,1 sn)
-	for i in range(26):
-		player._process_spirit(0.1)
-	assert(player.global_position.distance_to(Vector2(2000.0, 2000.0)) < 120.0, "satıcının yanına ışınlanmalı: %s" % str(player.global_position))
-	assert(player.spirit_state == "cooldown" and absf(player.spirit_timer - 120.0) < 0.5, "120sn bekleme")
 	_cleanup()
 
 

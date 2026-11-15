@@ -13,8 +13,8 @@ const EnemyScene: PackedScene = preload("res://scenes/creatures/enemy_agac1.tscn
 const EnchantPool: GDScript = preload("res://scripts/enchant_pool.gd")
 const RUN_TIME := 5.0
 ## 2026-10-08 kalıcı silah özellikleri (bkz. test_weapon_traits.gd): kart döneminin duman testi bunları kapsamaz.
-const NEW_TRAIT_IDS := ["kanayan_kesikler", "kanli_pence", "zincir_yildirim", "seri_parmak", "bulasici_salgi", "delici_mermi", "yankilanan_buyu",
-	"uclu_ok", "zincir_civata", "cifte_donus", "kirik_buz", "kivilcim_yagmuru"]
+const NEW_TRAIT_IDS := ["kanayan_kesikler", "kanli_pence", "zincir_yildirim", "seri_parmak", "sicrayan_zehir", "delici_mermi", "yankilanan_buyu",
+	"uclu_ok", "balista", "seken_celik", "kirik_buz", "kivilcim_yagmuru"]
 const ENEMY_HP := 60000.0
 ## Efsuna özgü iz sayılan script'ler (fx_enchant_sprite = sprite sayfası, enchant_area = alan, evo_area = gölge kopyası).
 const TRACE_SCRIPTS := ["res://scripts/fx_enchant_sprite.gd", "res://scripts/enchant_area.gd", "res://scripts/evo_area.gd"]

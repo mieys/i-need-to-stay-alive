@@ -154,8 +154,8 @@ func test_buying_uses_the_smithy_and_merchant_rules() -> void:
 	var up: Dictionary = {"type": "upgrade", "index": 0, "stype": "shield_kale"}
 	assert(Market.price(up) == Logic.upgrade_price(0) and Market.shards(up) == Logic.SHARD_COST_UPGRADE)
 	GameManager.gold = 50
-	assert(Market.block_reason(p, up) == "%d altın eksik" % (Logic.upgrade_price(0) - 50) and not Market.buy(p, up), "altın yetmezse alınmaz")
-	assert(Items.item_name("isik_parcacigi") == "Işık Küresi", "eşya adı para birimi 'parçacık' ile karışmaz")
+	assert(Market.block_reason(p, up) == Loc.t("%d altın eksik") % (Logic.upgrade_price(0) - 50) and not Market.buy(p, up), "altın yetmezse alınmaz")
+	assert(str((Items.DEFS["isik_parcacigi"] as Dictionary)["name"]) == "Işık Küresi", "eşya adı para birimi 'parçacık' ile karışmaz")
 	p.free()
 	_restore_state()
 
@@ -236,6 +236,25 @@ func test_ban_limit_and_never_offered_again() -> void:
 
 ## Madde 396 (prototip C "Artı / Eksi"): kart sütunu 380 px ve boyu içeriği kadar. Her kart x her kademede başlık (32) +
 ## "▲ kazanç" + "▼ bedel" (24) yazı sütununa, satır kartın boyuna sığar. Madde 432: sütun ekranın ORTASINDA, pazar yok.
+## Kullanıcı 2026-11-13: pazar açıklamasında verilen statın ikonu + statlar alt alta (" · " ile tek satır değil).
+func test_desc_stats_one_per_line_with_icon() -> void:
+	var sd: Dictionary = Market.describe({"type": "shield", "key": "shield_kale"})
+	assert((sd["icons"] as Array).slice(0, 3) == ["shield_amount", "shield_protection", "shield_regen"], "kalkan: 3 stat 3 ikonlu satır: %s" % [sd["icons"]])
+	for ln in (sd["lines"] as Array):
+		assert(not str(ln).contains(" · "), "kalkan statları tek satırda birleşmemeli: %s" % ln)
+	var any_item: bool = false
+	for key: String in Items.DEFS:
+		var d: Dictionary = Market.describe({"type": "item", "key": key})
+		var lines: Array = d["lines"]
+		var icons: Array = d["icons"]
+		assert(icons.size() == lines.size(), "%s: ikon kaydı satır sayısı kadar" % key)
+		for n in lines.size():
+			var is_passive: bool = str(lines[n]).begins_with(Loc.t("Pasif:"))
+			assert((str(icons[n]) == "") == is_passive, "%s: stat satırı ikonlu, pasif ikonsuz: %s / %s" % [key, lines[n], icons[n]])
+			any_item = any_item or not is_passive
+	assert(any_item, "eşya stat satırı denetlendi")
+
+
 func test_card_lines_fit_every_card() -> void:
 	_save_state()
 	var p := FakePlayer.new()
@@ -388,6 +407,8 @@ func test_market_layout_fits_every_offer() -> void:
 	var n: int = 0
 	var upg_checked: int = 0
 	var desc_small: int = 0
+	var stat_lines: int = 0
+	var StatIconS: GDScript = load("res://scripts/stat_icon.gd")
 	var ups_big: int = 0
 	var ups_total: int = 0
 	var items_with_tree: int = 0
@@ -441,7 +462,20 @@ func test_market_layout_fits_every_offer() -> void:
 			if dwell != null:
 				var dls: Control = detail.find_child("DescLines", true, false)
 				var fss: Array = []
-				for dl: Node in dls.get_children():
+				var dd: Dictionary = Market.describe(e, p)
+				var dicons: Array = dd["icons"]
+				assert(dicons.size() == (dd["lines"] as Array).size(), "%s: her açıklama satırının ikon kaydı var" % Market.offer_id(e))
+				for dn in dls.get_child_count():
+					var dl: Node = dls.get_child(dn)
+					## kullanıcı 2026-11-13: verilen statın ikonu satırın başında, statlar alt alta
+					var want_icon: bool = str(dicons[dn]) != ""
+					assert((dl.find_child("StatIcon", false, false) != null) == want_icon, "%s: satır %d stat ikonu: %s" % [Market.offer_id(e), dn, dicons[dn]])
+					if want_icon:
+						assert(StatIconS.ICON_PATHS.has(str(dicons[dn])), "%s: bilinmeyen stat ikonu %s" % [Market.offer_id(e), dicons[dn]])
+						var si: TextureRect = dl.find_child("StatIcon", false, false)
+						assert(si != null and si.texture != null and si.size.x == view.DESC_ICON, "%s: stat ikonu çizilir" % Market.offer_id(e))
+						stat_lines += 1
+						dl = dl.get_child(1)
 					fss.append((dl as Label).get_theme_font_size("font_size"))
 				assert(not fss.is_empty() and fss.all(func(f: int) -> bool: return f == fss[0]) and fss[0] == 32,
 					"%s: açıklama satırları 32 punto: %s" % [Market.offer_id(e), fss])
@@ -451,7 +485,7 @@ func test_market_layout_fits_every_offer() -> void:
 				var head_r: Rect2 = _local_rect(view, dwell.get_parent().get_child(0))
 				var well_r: Rect2 = _local_rect(view, dwell)
 				var line0_r: Rect2 = _local_rect(view, dls.get_child(0))
-				assert(absf(well_r.position.y - head_r.end.y - 14.0) <= 1.0, "%s: açıklama başlığın hemen altında: %s / %s" % [Market.offer_id(e), head_r, well_r])
+				assert(absf(well_r.position.y - head_r.end.y - float(dwell.get_parent().get_theme_constant("separation"))) <= 1.0, "%s: açıklama başlığın hemen altında: %s / %s" % [Market.offer_id(e), head_r, well_r])
 				assert(absf(line0_r.position.y - (well_r.position.y + view.DESC_PAD)) <= 1.0, "%s: açıklama satırları üstten hizalı: %s / %s" % [Market.offer_id(e), line0_r, well_r])
 			Market.set_saved(e, false)
 			n += 1
@@ -462,6 +496,7 @@ func test_market_layout_fits_every_offer() -> void:
 	print("açıklama (32) = %d; şuna dönüşür 104'lük = %d / %d" % [desc_small, ups_big, ups_total])
 	assert(ups_big * 2 >= ups_total and ups_total >= 10, "ŞUNA DÖNÜŞÜR simgelerinin çoğu 104: %d / %d" % [ups_big, ups_total])
 	assert(desc_small >= 20, "açıklamalar denetlendi: %d" % desc_small)
+	assert(stat_lines >= 20, "stat satırları ikonlu: %d" % stat_lines)
 	assert(upg_checked >= 3, "geliştirmeler de denetlendi: %d" % upg_checked)
 	assert(items_with_tree >= 5, "tarifli eşyalar denetlendi: %d" % items_with_tree)
 	## havuzda olmayanlar dahil BÜTÜN silah geliştirme adları önizlemenin ad alanında (48) en çok 2 satır
@@ -811,6 +846,14 @@ func test_builds_into_icon_opens_item_popup() -> void:
 	esc.pressed = true
 	view.call("_input", esc)
 	assert(view.get_node_or_null("ItemPopup") == null, "Esc kapatır")
+	## B (kumanda) kapatır (denetim 547: yalnız ESC kapatıyordu)
+	(chips2[0] as Button).pressed.emit()
+	await get_tree().process_frame
+	var pad_b := InputEventJoypadButton.new()
+	pad_b.button_index = JOY_BUTTON_B
+	pad_b.pressed = true
+	view.call("_input", pad_b)
+	assert(view.get_node_or_null("ItemPopup") == null, "B (kumanda) kapatır")
 	## önizleme yenilenince (seçim / satın alma / kaydet) kapanır
 	(chips2[0] as Button).pressed.emit()
 	await get_tree().process_frame

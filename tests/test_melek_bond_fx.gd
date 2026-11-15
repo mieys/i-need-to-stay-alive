@@ -252,3 +252,77 @@ func test_player_melek_q_spawns_halo_and_bond_on_ally() -> void:
 	if is_instance_valid(bond):
 		bond.free()
 	_cleanup()
+
+
+## Madde 565: E (kalkan) bağı dostun mana kalkanı varsa baloncuğa bağlanır - baloncuk bağ boyunca açık (kukla yerelde de),
+## ip baloncuğun Melek'e bakan kenarına iner, bel halkası gizli, varışta baloncuk parlar, Kutsal Zırh (melek_e1) sarmalı açar.
+func test_shield_bond_holds_ally_bubble() -> void:
+	_ensure_scene()
+	var melek := _remote(90, 10, Vector2(100.0, 100.0))
+	var ally := _remote(91, 7, Vector2(200.0, 110.0))
+	ally.set("item_shield_max", 100.0)
+	ally.set("item_shield_hp", 20.0)
+	ally.start_ally_aura_fx("shield", melek)
+	var bond: Node = ally._ally_aura_fx.get("shield")
+	assert(bond.is_bubble_mode() and bond.holds_bubble(), "kalkanlı dosta E bağı baloncuk kipinde")
+	ally.refresh_bond_bubble()
+	var sv: Node2D = ally.get_node("ShieldVisual")
+	assert(sv.visible, "kukla baloncuğu bağla yerelde açar")
+	var bub: Node2D = ally.get_node("ShieldVisual/BubbleSprite")
+	var end_v: Variant = bond.rope_end_world()
+	assert(end_v != null, "ip ucu baloncukta")
+	var rim_w: float = (bond.bubble_rim_px() - 0.5) * absf(bub.global_scale.x)
+	assert(absf((end_v as Vector2).distance_to(bub.global_position) - rim_w) < 0.5, "ip ucu baloncuğun kenarında")
+	assert(((end_v as Vector2) - bub.global_position).x < 0.0, "değme noktası Melek'e (sola) bakar")
+	var t: float = 0.0
+	while not bond.is_connected_bond() and t < 1.0:
+		_step(bond)
+		t += 1.0 / 60.0
+	assert(not bond._ring_back.visible and not bond._ring_front.visible, "baloncuk kipinde bel halkası yok")
+	var st: Dictionary = bond.joint_state()
+	assert(not st.is_empty() and float(st["conn_t"]) >= 0.0 and not bool(st["wrap"]), "bağ halkası kuruldu, sarmal yok")
+	melek._evolutions["melek_e1"] = true
+	assert(bool(bond.joint_state()["wrap"]), "Kutsal Zırh evrimiyle sarmal bağ")
+	bond.pulse()
+	var arrive_t: float = 0.0
+	while bond.pulse_count() > 0 and arrive_t < 3.0:
+		_step(bond)
+		arrive_t += 1.0 / 60.0
+	assert(float(sv.get("_pour")) > 0.5, "dalga varınca baloncuk parlar")
+	ally.stop_ally_aura_fx("shield")
+	assert(not bond.holds_bubble(), "bağ çözülünce baloncuğu bırakır")
+	ally.refresh_bond_bubble()
+	var tw: Variant = sv.get("_fade_tween")
+	assert(not sv.visible or (tw != null and (tw as Tween).is_running()), "kukla baloncuğu solarak kapanır")
+	var heal_ally := _remote(92, 7, Vector2(300.0, 110.0))
+	heal_ally.set("item_shield_max", 100.0)
+	heal_ally.start_ally_aura_fx("heal", melek)
+	assert(not heal_ally._ally_aura_fx.get("heal").is_bubble_mode(), "Q (can) bağı baloncuğa bağlanmaz")
+	var bare := _remote(93, 7, Vector2(400.0, 110.0))
+	bare.start_ally_aura_fx("shield", melek)
+	assert(not bare._ally_aura_fx.get("shield").is_bubble_mode(), "mana kalkanı olmayan dostta eski bel halkası")
+	if is_instance_valid(bond):
+		bond.free()
+	_cleanup()
+
+
+## Madde 565: hedef yerel oyuncuysa kararı player.gd verir (_bubble_active -> main.gd shield_bubble_visible ile herkese).
+func test_local_player_bubble_stays_open_while_bonded() -> void:
+	_ensure_scene()
+	NetworkManager.is_multiplayer_active = false
+	var player: Node2D = PlayerScene.instantiate()
+	add_child(player)
+	_spawned.append(player)
+	player.global_position = Vector2(200.0, 100.0)
+	player.set("item_shield_max", 100.0)
+	player.set("item_shield_hp", 100.0) ## dolu kalkan: yenilenme yok, baloncuğu yalnız bağ açar
+	var melek := _remote(94, 10, Vector2(100.0, 100.0))
+	player._update_shield_bubble(1.0 / 60.0)
+	assert(not player._bubble_active, "bağsız dolu kalkanda baloncuk kapalı")
+	player.start_ally_aura_fx("shield", melek)
+	player._update_shield_bubble(1.0 / 60.0)
+	assert(player._bubble_active and player.shield_visual.visible, "bağ sürerken baloncuk açık")
+	player.stop_ally_aura_fx("shield")
+	player._update_shield_bubble(1.0 / 60.0)
+	assert(not player._bubble_active, "bağ bitince baloncuk kapanır")
+	_cleanup()

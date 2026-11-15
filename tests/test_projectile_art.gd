@@ -84,14 +84,47 @@ func test_particle_styles_and_mapping() -> void:
 		assert(is_equal_approx(float(cfg["texel"]), ProjectileArt.WORLD_PX), "%s silah pikselinde" % st)
 
 
-## Madde 402: fişek mermisi yine ESKİ roket ikonu + sahnedeki parıltı (Zanaatkâr çapraz roketi + egzoz alevi kalktı); kıvılcım/duman izi duruyor.
-func test_firework_flies_as_the_old_rocket_with_its_sparkle() -> void:
+## Madde 651: Fişek artık DİNAMİT - kafadaki çizimle aynı doku/piksel, fitil ucunda dönmeyen kıvılcım, alçak kavisle fırlatılır
+## (yukarı uçmaz), havada takla atar, hedefe düşüp kısa sekmeden sonra patlar (hasarsız ağ kopyası burada: hasar yolu ayrı).
+func test_dynamite_is_thrown_low_spins_and_explodes_at_target() -> void:
 	if get_tree().current_scene == null:
 		get_tree().current_scene = self
 	var f: Node2D = FireworkScene.instantiate()
+	f.set("impact_sounds", [] as Array[AudioStream])
+	f.set("impact_scene", null)
 	get_tree().current_scene.add_child(f)
+	f.set_meta("network_spawned", true)
+	var start := Vector2(1000.0, 1000.0)
+	var target := Vector2(1200.0, 1000.0)
+	f.global_position = start
+	f.scale = Vector2(0.5, 0.5) ## weapon.gd _fire_at: karakter ölçeği
+	f.set("target_position", target)
 	var icon: Sprite2D = f.get_node("Icon")
-	var sparkle: AnimatedSprite2D = f.get_node("Sparkle")
-	assert(icon.texture.resource_path.ends_with("fisek/icon.png"), "eski roket ikonu")
-	assert(sparkle.sprite_frames != ProjectileArt.fisek_flame_frames() and sparkle.is_playing(), "sahnedeki eski parıltı oynuyor")
-	f.queue_free()
+	var fuse: AnimatedSprite2D = f.get_node("Fuse")
+	assert(icon.texture == WeaponTierArt.texture("fisek") and icon.texture.resource_path.ends_with("yeni/dinamit.png"), "dinamit çizimi")
+	assert(fuse.is_playing() and fuse.sprite_frames.get_frame_count(&"loop") == 12, "fitil kıvılcımı oynuyor")
+	assert(not f.has_node("Sparkle"), "roket parıltısı kalktı")
+	var min_y: float = start.y
+	var rot0: float = icon.rotation
+	var spun: bool = false
+	var exploded_at: float = -1.0
+	var t: float = 0.0
+	while t < 3.0:
+		if not is_instance_valid(f) or f.is_queued_for_deletion():
+			exploded_at = t
+			break
+		f.call("_process", 1.0 / 60.0)
+		t += 1.0 / 60.0
+		if not is_instance_valid(f) or f.is_queued_for_deletion():
+			exploded_at = t
+			break
+		min_y = minf(min_y, f.global_position.y)
+		if absf(angle_difference(icon.rotation, rot0)) > 1.0:
+			spun = true
+		assert(is_equal_approx(icon.global_scale.x, WeaponTierArt.WORLD_PX * WeaponTierArt.size_mult("fisek")), "dinamit pikseli = ikon pikseli")
+		assert(is_zero_approx(fuse.global_rotation), "kıvılcım dönmez (korlar aşağı düşer)")
+	assert(exploded_at > 0.0 and exploded_at < 1.15, "fırlatılıp ~1 sn içinde patlar: %f" % exploded_at)
+	assert(start.y - min_y <= 52.5 and start.y - min_y >= 16.0, "alçak atış kavisi, yukarı uçmaz: %f" % (start.y - min_y))
+	assert(spun, "havada takla atar")
+	if is_instance_valid(f):
+		assert(f.global_position.is_equal_approx(target), "hedef noktada patlar")

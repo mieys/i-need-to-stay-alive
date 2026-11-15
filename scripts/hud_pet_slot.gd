@@ -13,15 +13,17 @@ const UiAnim := preload("res://scripts/ui_anim.gd")
 const FRAME: Texture2D = preload("res://assets/ui/kit/hud_skill_frame_small.png")
 const HudTheme := preload("res://scripts/hud_theme.gd")
 const HudTrayFrame := preload("res://scripts/hud_tray_frame.gd")
+const PetBadge := preload("res://scripts/pet_badge.gd") ## evcile özel bulanık arka plan (madde 585): yuvanın 28x28 içi 1:1
 var tray_frame: bool = false ## hud.gd _apply_tray_slots (masaüstü panel, madde 459)
 const UNDER := HudTheme.DOCK_INSET ## madde 454
 const FIT := 32.0 ## hayvan en çok bu kareye sığar (çerçevenin iç kenarına 2 px taşabilir; çerçeve üstte çizilir)
 const TOOLTIP_WIDTH := 470.0
-const TOOLTIP_ICON := 48.0
+const TOOLTIP_ICON := 56.0 ## arka plan 2x (28) -> evcillerin çoğu 2x (madde 585; 48'de Hayalet/Köpek 1x kalıyordu)
 const REFRESH_INTERVAL := 0.5
 
 var _key: String = ""
 var _tex: Texture2D = null
+var _bg: Texture2D = null
 var tooltip_panel: PanelContainer = null
 var _stats_label: RichTextLabel = null
 var _refresh_t: float = 0.0
@@ -43,6 +45,7 @@ func _ready() -> void:
 func set_pet(key: String) -> void:
 	_key = key
 	_tex = PetCatalog.icon(key)
+	_bg = PetBadge.background(key)
 	tooltip_text = "" ## motorun düz ipucu yerine kendi levhamız (_open_tooltip)
 	if tooltip_panel and is_instance_valid(tooltip_panel):
 		_open_tooltip()
@@ -117,14 +120,7 @@ func _open_tooltip() -> void:
 	well.add_theme_stylebox_override("panel", HudTooltip.well_style(3.0, 3.0))
 	well.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	header.add_child(well)
-	var pic := TextureRect.new()
-	pic.texture = _tex
-	pic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	pic.custom_minimum_size = Vector2(TOOLTIP_ICON, TOOLTIP_ICON)
-	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	well.add_child(pic)
+	well.add_child(PetBadge.icon(_key, TOOLTIP_ICON)) ## arka planlı, tam katlı evcil (madde 585)
 	var head_col := VBoxContainer.new()
 	head_col.add_theme_constant_override("separation", 3)
 	head_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -162,7 +158,11 @@ func _close_tooltip() -> void:
 
 
 func _draw() -> void:
-	draw_rect(Rect2(Vector2.ZERO, size).grow(-4.0), UNDER)
+	var inner_bg: Rect2 = Rect2(Vector2.ZERO, size).grow(-4.0)
+	if _bg:
+		draw_texture_rect(_bg, inner_bg, false) ## 36 px yuvada iç 28x28 = doku 1:1 (madde 585)
+	else:
+		draw_rect(inner_bg, UNDER)
 	if _tex:
 		var ts: Vector2 = _tex.get_size()
 		var s: float = maxf(1.0, floorf(FIT / maxf(ts.x, ts.y)))

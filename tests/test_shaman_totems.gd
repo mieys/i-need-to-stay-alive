@@ -78,7 +78,7 @@ func test_only_shield_totem_deals_area_damage() -> void:
 	add_child(totem) ## "shaman_totems" grubunda - _cleanup() onu serbest bırakır (_spawned'a ekleme: çift serbest bırakma)
 	totem.setup_from_player(p)
 	assert(bool(totem.get("area_damage_enabled")), "Kalkan Totemi alan hasarı açık")
-	assert(totem.get_node_or_null("AreaAura") != null, "mor alan aurası Kalkan Totemi'nde")
+	assert(totem.get_node_or_null("AreaAura") == null, "mor alan çemberi çizilmez (madde 557 ek 2: dış halkalar kaldırıldı), hasar sürer")
 	totem._process_area_damage(0.02) ## ilk hasar dikildiği anda
 	assert(inside.hits.size() == 1 and is_equal_approx(float(inside.hits[0]), 20.0), "alanda saniyede %%20 AP: %s" % str(inside.hits))
 	for i in range(40):

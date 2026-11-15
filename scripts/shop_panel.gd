@@ -50,8 +50,8 @@ const UPGRADE_NAMES := {
 	"spray": "İtici Sprey",
 	"dagger": "Bıçak", "fire_staff": "Ateş Asası", "lightning_staff": "Yıldırım Asası", "tabanca": "Tabanca",
 	"tuftuf": "Zehir Asası", "tufek": "Tüfek", "arcane": "Arcane Asası", "yay": "Yay",
-	"crossbow": "Arbalet", "boomerang": "Bumerang", "buz_asasi": "Buz Asası", "fisek": "Fişek",
-	"pence": "Tırpan", "topuz": "Topuz", "uzunkilic": "Uzunkılıç",
+	"crossbow": "Arbalet", "boomerang": "Çakram", "buz_asasi": "Buz Asası", "fisek": "Dinamit",
+	"pence": "Tırpan", "topuz": "Balyoz", "uzunkilic": "Uzunkılıç",
 }
 
 ## Biriktirilebilir silahların ikonları - Geliştirmeler sekmesindeki her slot
@@ -60,18 +60,18 @@ const UPGRADE_NAMES := {
 const WEAPON_ICON_TEXTURES := {
 	"dagger": "res://assets/weapons/yeni/bicak.png",
 	"fire_staff": "res://assets/weapons/yeni/fire_staff.png",
-	"lightning_staff": "res://assets/weapons/lightning/icon_v3.png",
-	"tabanca": "res://assets/weapons/tabanca/icon_v2.png",
+	"lightning_staff": "res://assets/weapons/yeni/yildirim_asasi.png",
+	"tabanca": "res://assets/weapons/yeni/tabanca.png",
 	"tuftuf": "res://assets/weapons/yeni/zehir_asasi.png",
-	"tufek": "res://assets/weapons/tufek/icon.png",
+	"tufek": "res://assets/weapons/yeni/tufek.png",
 	"arcane": "res://assets/weapons/yeni/arcane.png",
 	"yay": "res://assets/weapons/yeni/yay.png",
 	"crossbow": "res://assets/weapons/yeni/arbalet.png",
-	"boomerang": "res://assets/weapons/boomerang/icon.png",
+	"boomerang": "res://assets/weapons/yeni/chakram.png",
 	"buz_asasi": "res://assets/weapons/yeni/buz_asasi.png",
-	"fisek": "res://assets/weapons/fisek/icon.png",
+	"fisek": "res://assets/weapons/yeni/dinamit.png",
 	"pence": "res://assets/weapons/yeni/tirpan.png",
-	"topuz": "res://assets/weapons/topuz/icon.png",
+	"topuz": "res://assets/weapons/yeni/topuz.png",
 	"uzunkilic": "res://assets/weapons/yeni/uzunkilic.png",
 }
 const WEAPON_KEYS := ["dagger", "fire_staff", "lightning_staff", "tabanca", "tuftuf", "tufek", "arcane", "yay", "crossbow", "boomerang", "buz_asasi", "fisek", "pence", "topuz", "uzunkilic"]

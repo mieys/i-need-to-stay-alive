@@ -259,7 +259,7 @@ func test_remote_kelebek_puppet_is_created_on_first_event_and_never_deals_damage
 
 func test_peri_heals_ten_percent_attack_power_every_six_seconds_when_hurt() -> void:
 	_begin()
-	assert(PetCatalog.PERI_HEAL_INTERVAL == 6.0 and PetCatalog.PERI_HEAL_RATIO == 0.10, "kullanıcı değerleri: 6 sn, %10")
+	assert(PetCatalog.PERI_HEAL_INTERVAL == 6.0 and PetCatalog.PERI_HEAL_RATIO == 0.10 and PetCatalog.PERI_HEAL_MAX_HP_RATIO == 0.015, "kullanıcı değerleri: 6 sn, %10 / azami canın %1,5'i (2026-11-14)")
 	var p: Node = _player("peri")
 	var k: Node = p.get_node_or_null("Peri")
 	assert(p._pet_kind == "peri" and k != null and not p.has_node("KelebekRuhu") and not p.has_node("KorsanParrot"), "peri düğümü kurulmalı")
@@ -284,6 +284,13 @@ func test_peri_heals_ten_percent_attack_power_every_six_seconds_when_hurt() -> v
 	p.health = p.max_health - 1.0
 	k.process_heal(0.016)
 	assert(is_equal_approx(p.health, p.max_health), "can üst sınırı aşmaz")
+	## 2026-11-14 denge turu: düşük saldırı gücü + yüksek azami can -> can = azami canın %1,5'i (saldırı gücü x %10 daha küçükse)
+	k.process_heal(30.0)
+	p.damage_bonus = 2.0
+	p.max_health = 1000.0
+	p.health = 500.0
+	k.process_heal(0.016)
+	assert(is_equal_approx(p.health, 500.0 + 15.0 * p.heal_power_mult()), "düşük saldırı gücü, azami can 1000 -> 15 can (%f)" % p.health)
 	_end()
 
 
@@ -342,7 +349,7 @@ func _hit(p: Node, amount: float, src: Node2D) -> float:
 
 func test_kirpi_reflects_five_percent_of_max_shield_and_cuts_damage_five_percent_while_shielded() -> void:
 	_begin()
-	assert(PetCatalog.KIRPI_REFLECT_RATIO == 0.05 and PetCatalog.KIRPI_SHIELD_REDUCTION == 0.05, "kullanıcı değerleri: %5 / %5")
+	assert(PetCatalog.KIRPI_REFLECT_RATIO == 0.12 and PetCatalog.KIRPI_SHIELD_REDUCTION == 0.08, "2026-11-14 denge turu: %12 / %8")
 	var p: Node = _player("kirpi")
 	var k: Node = p.get_node_or_null("Kirpi")
 	assert(p._pet_kind == "kirpi" and k != null and not p.has_node("Peri") and not p.has_node("KorsanParrot"), "kirpi düğümü kurulmalı")
@@ -352,12 +359,12 @@ func test_kirpi_reflects_five_percent_of_max_shield_and_cuts_damage_five_percent
 	p.item_shield_hp = 400.0
 	var e: FakeEnemy = _enemy(Vector2(60, 0))
 	var loss: float = _hit(p, 100.0, e)
-	assert(is_equal_approx(loss, 95.0), "kalkan varken hasar %%5 az: 100 -> 95 (%f)" % loss)
-	assert(e.taken.size() == 1 and is_equal_approx(e.taken[0], 20.0), "saldırgan azami kalkanın %%5'i = 20 hasar alır (%s)" % str(e.taken))
+	assert(is_equal_approx(loss, 92.0), "kalkan varken hasar %%8 az: 100 -> 92 (%f)" % loss)
+	assert(e.taken.size() == 1 and is_equal_approx(e.taken[0], 48.0), "saldırgan azami kalkanın %%12'si = 48 hasar alır (%s)" % str(e.taken))
 	p.item_shield_hp = 0.0
 	loss = _hit(p, 100.0, e)
 	assert(is_equal_approx(loss, 100.0), "kalkan yokken azalma yok (%f)" % loss)
-	assert(e.taken.size() == 2 and is_equal_approx(e.taken[1], 20.0), "yansıma kalkan boşken de sürer (azami kalkan x %5)")
+	assert(e.taken.size() == 2 and is_equal_approx(e.taken[1], 48.0), "yansıma kalkan boşken de sürer (azami kalkan x %12)")
 	p.item_shield_max = 0.0
 	_hit(p, 50.0, e)
 	assert(e.taken.size() == 2, "kalkan gücü yoksa yansıyacak hasar da yok")

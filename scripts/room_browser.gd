@@ -17,6 +17,7 @@ const UiAnim := preload("res://scripts/ui_anim.gd")
 const LobbyUI := preload("res://scripts/menu_lobby_ui.gd")
 const MobileUIScript := preload("res://scripts/mobile_ui.gd")
 const DK := preload("res://scripts/menu_dark_kit.gd")
+const GameModeScript := preload("res://scripts/pvp/game_mode.gd")
 const HearthBg := preload("res://scripts/menu_hearth_bg.gd")
 const PK := preload("res://scripts/phone_menu_kit.gd")
 const MapProfilesScript := preload("res://scripts/map_profiles.gd") ## harita seçimi (madde 444)
@@ -62,12 +63,13 @@ const BUSY_MIN_MS := 1500
 var _dialog: Control = null
 var _room_name_input: LineEdit = null
 var _room_pw_input: LineEdit = null
-## HARİTA SEÇİMİ (madde 444): oda kur formunda seçilen harita (configure_room -> GameManager.selected_map) ve düğmeleri.
-var _room_map: String = MapProfilesScript.DEFAULT_ID
-var _map_buttons: Dictionary = {} ## harita kimliği -> Button
 var _online_choice_btn: Button = null
 var _lan_choice_btn: Button = null
 var _use_online: bool = false
+## Oyun modu (PvPvE, madde 607): Ortak (co-op) / 2v2 Takım. Yalnız masaüstü formunda; telefon hep Ortak.
+var _mode_coop_btn: Button = null
+var _mode_pvp_btn: Button = null
+var _room_mode: String = "coop"
 var _dialog_error: Label = null
 ## Masaüstü: oda sayısı (liste başlığı) + bağlantı seçiminin açıklaması.
 var _count_label: Label = null
@@ -145,8 +147,8 @@ func _build_desktop() -> void:
 	_d_put(_d_list_box(), D_LIST)
 	_d_put(_d_ip_box(), D_IP)
 	_room_name_input.text = Loc.t("%s odası") % _player_name()
-	_set_room_map(GameManager.selected_map)
 	_set_connection(NetworkManager.is_online_available())
+	_set_game_mode(GameModeScript.COOP)
 
 
 func _d_put(c: Control, r: Rect2) -> void:
@@ -227,18 +229,6 @@ func _d_create_box() -> PanelContainer:
 	_room_pw_input.secret = true
 	_room_pw_input.text_submitted.connect(func(_t: String) -> void: _on_create_pressed())
 	v.add_child(_room_pw_input)
-	v.add_child(DK.lbl("Harita", DK.FS_LABEL, DK.C_DIM))
-	var map_row: HBoxContainer = null
-	for mid: String in MapProfilesScript.selectable_ids():
-		if map_row == null or map_row.get_child_count() >= 2: ## 2 sütunlu ızgara (uzun harita adları)
-			map_row = DK.h(6)
-			v.add_child(map_row)
-		var mb := DK.btn(str(MapProfilesScript.get_profile(mid)["ad"]), "tile", DK.FS_BODY, D_INPUT_H, 0)
-		mb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		mb.tooltip_text = str(MapProfilesScript.get_profile(mid).get("aciklama", ""))
-		mb.pressed.connect(_set_room_map.bind(mid))
-		map_row.add_child(mb)
-		_map_buttons[mid] = mb
 	v.add_child(DK.lbl("Bağlantı", DK.FS_LABEL, DK.C_DIM))
 	var conn := DK.h(6)
 	_online_choice_btn = DK.btn("İnternet", "tile", DK.FS_BODY, D_INPUT_H, 0)
@@ -255,11 +245,24 @@ func _d_create_box() -> PanelContainer:
 	v.add_child(conn)
 	_conn_hint = DK.wrap("", DK.FS_LABEL, DK.C_DIM, D_LEFT.size.x - 32, 2)
 	v.add_child(_conn_hint)
+	v.add_child(DK.lbl("Mod", DK.FS_LABEL, DK.C_DIM))
+	var mode_row := DK.h(6)
+	_mode_coop_btn = DK.btn(GameModeScript.display_name(GameModeScript.COOP), "tile", DK.FS_BODY, D_INPUT_H, 0)
+	_mode_coop_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_mode_coop_btn.pressed.connect(_set_game_mode.bind(GameModeScript.COOP))
+	mode_row.add_child(_mode_coop_btn)
+	_mode_pvp_btn = DK.btn(GameModeScript.display_name(GameModeScript.PVP), "tile", DK.FS_BODY, D_INPUT_H, 0)
+	_mode_pvp_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_mode_pvp_btn.tooltip_text = "İki takım aynı haritada: her takımın kendi kampı, yaratıklar herkese düşman."
+	_mode_pvp_btn.pressed.connect(_set_game_mode.bind(GameModeScript.PVP))
+	mode_row.add_child(_mode_pvp_btn)
+	v.add_child(mode_row)
 	v.add_child(DK.sp(0, 0, false, true))
 	_dialog_error = DK.wrap("", DK.FS_LABEL, DK.C_BAD, D_LEFT.size.x - 32, 2)
 	v.add_child(_dialog_error)
 	_create_btn = DK.btn("ODAYI KUR", "primary", DK.FS_TITLE, 72, 0)
 	_create_btn.pressed.connect(_on_create_pressed)
+	_create_btn.add_to_group(&"gamepad_first_focus") ## kumanda: ilk odak ANA MENÜ değil asıl eylem (ilk A sahneden çıkarıyordu)
 	v.add_child(_create_btn)
 	box.add_child(v)
 	return box
@@ -952,17 +955,6 @@ func _build_dialog() -> void:
 	cols.add_child(c1)
 	var c2 := DK.v(10)
 	c2.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	c2.add_child(PK.lbl("Harita", PK.FS_SMALL, DK.C_DIM))
-	var map_row: HBoxContainer = null
-	for mid: String in MapProfilesScript.selectable_ids():
-		if map_row == null or map_row.get_child_count() >= 2:
-			map_row = DK.h(8)
-			c2.add_child(map_row)
-		var mb := PK.button(str(MapProfilesScript.get_profile(mid)["ad"]), "secondary", PK.FS_BODY, [], 0.0, 96.0)
-		mb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		mb.pressed.connect(_set_room_map.bind(mid))
-		map_row.add_child(mb)
-		_map_buttons[mid] = mb
 	c2.add_child(PK.lbl("Bağlantı", PK.FS_SMALL, DK.C_DIM))
 	var conn_row := DK.h(8)
 	_online_choice_btn = PK.button("İnternet", "secondary", PK.FS_BODY, [], 0.0, 96.0)
@@ -993,22 +985,24 @@ func _build_dialog() -> void:
 	create.pressed.connect(_on_create_pressed)
 	btn_row.add_child(create)
 	v.add_child(btn_row)
-	_set_room_map(GameManager.selected_map)
 	_set_connection(NetworkManager.is_online_available())
 
 
-func _set_room_map(id: String) -> void:
-	_room_map = id if MapProfilesScript.is_selectable(id) else MapProfilesScript.DEFAULT_ID
-	for k in _map_buttons:
-		_style_choice(_map_buttons[k], str(k) == _room_map)
-
-
-## Oda satırı başlığı: ana harita dışındaki odalarda harita adı parantez içinde (madde 444).
+## Oda satırı başlığı: ana harita dışındaki odalarda harita adı parantez içinde (madde 444). Madde 604: harita OYUNU BAŞLAT'tan sonra
+## dünya haritasında seçildiği için yalnız BAŞLAMIŞ odada (in_game) gösterilir; bekleyen odanın ilanı host'un eski seçimini taşıyabilir.
 static func _room_title(r: Dictionary) -> String:
 	var mid: String = str(r.get("map", MapProfilesScript.DEFAULT_ID))
-	if mid == MapProfilesScript.DEFAULT_ID or not MapProfilesScript.has_profile(mid):
+	if not bool(r.get("in_game", false)) or mid == MapProfilesScript.DEFAULT_ID or not MapProfilesScript.has_profile(mid):
 		return str(r["room_name"])
 	return "%s (%s)" % [r["room_name"], MapProfilesScript.get_profile(mid)["ad"]]
+
+
+func _set_game_mode(mode: String) -> void:
+	_room_mode = mode if GameModeScript.MODES.has(mode) else GameModeScript.COOP
+	if _mode_coop_btn:
+		_style_choice(_mode_coop_btn, _room_mode == GameModeScript.COOP)
+	if _mode_pvp_btn:
+		_style_choice(_mode_pvp_btn, _room_mode == GameModeScript.PVP)
 
 
 func _set_connection(online: bool) -> void:
@@ -1045,7 +1039,8 @@ func _on_create_pressed() -> void:
 	_commit_name()
 	_dialog_error.text = ""
 	## Oyuncu sayısı seçimi kaldırıldı (2026-11-07, kullanıcı: "gerek yok"): her oda en fazla oyuncuya açık.
-	NetworkManager.configure_room(rname, _room_pw_input.text, NetworkManager.MAX_PLAYERS, _room_map)
+	GameModeScript.set_room_mode(_room_mode) ## PvPvE (madde 607): istemciler pvp_net.gd ile host'tan alır
+	NetworkManager.configure_room(rname, _room_pw_input.text, NetworkManager.MAX_PLAYERS) ## harita OYUNU BAŞLAT'ta seçilir (madde 606)
 	if _dialog:
 		_dialog.visible = false
 	_set_busy(true)

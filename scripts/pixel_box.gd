@@ -14,6 +14,18 @@ extends StyleBox
 const PX := 3 ## 1 sanat pikseli = 3 ekran px (stil rehberi)
 const SMALL := 30.0 ## bundan küçük kutuda kabartma yok, köşe en çok 1 sanat px
 
+## AHŞAP DAMAR DOKUSU (madde 662, kullanıcı seçimi E "Akan Damar", 2026-11-13; düz zemin "kusursuz ve ruhsuz" bulundu): pencere zemininde
+## 9 dilimin ORTA bölgesine (kenar + kabartma + köşe basamağının içi) karo döşenir; renk, kenar, köşe, saydamlık AYNEN kalır.
+## Yalnız pencere dolgusu (WIN_PANEL / WIN_PANEL2 / WIN_PANEL3) ve en kısa kenarı GRAIN_MIN ve üstü olan kutuda: düğme, kuyu (WIN_INSET),
+## altın düğme, küçük kutu düz kalır. %88 pencere (menu_dark_kit C_PANEL) = onaylanan prototip; daha saydam dolguda doku orantılı söner.
+## Kapatmak için kutuda `grain = false`. Karo: `tools/proto_20261113/panel_doku/gen_panel_doku2.py --oyun` (x3 hazır, 1:1 döşenir; yalnız
+## RIM_HI / DEEP alfa bantları, yeni renk yok). Karo dikeyde 24 bant (6'nın katı) -> tekrar sınırında düz çizgi yok.
+const GRAIN_TEX: Texture2D = preload("res://assets/ui/panel_doku/ahsap_damar.png")
+const GRAIN_MIN := 90.0
+const GRAIN_REF_ALPHA := 0.88
+const HT := preload("res://scripts/hud_theme.gd")
+const GRAIN_FILLS := [HT.WIN_PANEL, HT.WIN_PANEL2, HT.WIN_PANEL3]
+
 static var _cache: Dictionary = {}
 
 @export_storage var bg_color := Color(0.6, 0.6, 0.6):
@@ -101,6 +113,11 @@ static var _cache: Dictionary = {}
 ## StyleBoxFlat uyumu için (piksel kutuda anlamı yok)
 @export_storage var anti_aliasing := false
 @export_storage var corner_detail := 1
+## ahşap damar dokusu izni (koşullar: grain_applies). false = bu kutu hep düz.
+@export_storage var grain := true:
+	set(v):
+		grain = v
+		_dirty()
 
 ## kenar kalınlığından otomatik verilen içerik payı (elle verilen pay ezilmez)
 var _auto_cm: Array = [-1.0, -1.0, -1.0, -1.0]
@@ -193,6 +210,45 @@ func _draw(ci: RID, rect: Rect2) -> void:
 		return
 	RenderingServer.canvas_item_add_nine_patch(ci, r, Rect2(Vector2.ZERO, tex.get_size()), tex.get_rid(),
 		Vector2(m[0], m[1]), Vector2(m[2], m[3]), RenderingServer.NINE_PATCH_STRETCH, RenderingServer.NINE_PATCH_STRETCH, true)
+	if grain and draw_center and grain_applies(bg_color, r.size):
+		_draw_grain(ci, Rect2(r.position + Vector2(m[0], m[1]), r.size - Vector2(m[0] + m[2], m[1] + m[3])), r.size)
+
+
+## Doku bu kutuya düşer mi: pencere dolgusu + yeterince büyük (madde 662).
+static func grain_applies(fill: Color, size: Vector2) -> bool:
+	if fill.a <= 0.0 or minf(size.x, size.y) < GRAIN_MIN:
+		return false
+	for c: Color in GRAIN_FILLS:
+		if absf(fill.r - c.r) + absf(fill.g - c.g) + absf(fill.b - c.b) < 0.02:
+			return true
+	return false
+
+
+## Karonun kutudaki başlangıç kayması (ekran px, sanat pikseline oturur): kutudan kutuya farklı olsun diye BOYUTA bağlı -> üstüne gelince /
+## basınca (aynı boy, başka kutu örneği) doku kaymaz.
+static func grain_offset(box_size: Vector2) -> Vector2:
+	var ts: Vector2 = GRAIN_TEX.get_size()
+	var h: int = absi(hash(Vector2i(int(box_size.x), int(box_size.y))))
+	return Vector2(float((h % int(ts.x / PX)) * PX), float(((h / 7) % int(ts.y / PX)) * PX))
+
+
+func _draw_grain(ci: RID, inner: Rect2, box_size: Vector2) -> void:
+	if inner.size.x <= 0.0 or inner.size.y <= 0.0:
+		return
+	var ts: Vector2 = GRAIN_TEX.get_size()
+	var mod := Color(1, 1, 1, clampf(bg_color.a / GRAIN_REF_ALPHA, 0.0, 1.0))
+	var off: Vector2 = grain_offset(box_size)
+	var rid: RID = GRAIN_TEX.get_rid()
+	var y: float = -off.y
+	while y < inner.size.y:
+		var x: float = -off.x
+		while x < inner.size.x:
+			var tr := Rect2(inner.position + Vector2(x, y), ts)
+			var cl: Rect2 = tr.intersection(inner)
+			if cl.size.x > 0.0 and cl.size.y > 0.0:
+				RenderingServer.canvas_item_add_texture_rect_region(ci, cl, rid, Rect2(cl.position - tr.position, cl.size), mod)
+			x += ts.x
+		y += ts.y
 
 
 func _shadow_box() -> StyleBoxFlat:

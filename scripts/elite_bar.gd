@@ -28,6 +28,12 @@ var _has_shield: bool = false
 var _trail: float = 1.0
 var _trail_hold: float = 0.0
 
+const UiHideScript := preload("res://scripts/ui_hide.gd") ## F3 arayüzü gizle (madde 612): elit çubuğu + yıldızı da kapanır (`visibility_layer`)
+
+
+func _ready() -> void:
+	pass ## F3 arayüz gizliyken de görünür kalır (kullanıcı isteği 2026-11-14): mark_world YOK
+
 
 func setup(enemy: Node, bottom: float) -> void:
 	_enemy = enemy

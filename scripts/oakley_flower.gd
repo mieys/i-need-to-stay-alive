@@ -43,6 +43,7 @@ const PICKUP_DELAY := 0.5
 
 var flower_id: String = ""
 var _caster_damage_bonus: float = 0.0
+var _caster_heal_mult: float = 1.0 ## bkz. setup()
 var _growth_stage: int = 0 ## 0, 1, 2
 var _lifetime_remaining: float = LIFETIME
 var _growth_timer: float = GROWTH_INTERVAL
@@ -176,8 +177,11 @@ func _update_depth() -> void:
 ## uzak-oyunculardan gelen "oakley_flower_spawn" VFX'inde çağrılır - ikisi de
 ## AYNI veriyle (caster'ın O ANKİ saldırı gücü + benzersiz kimlik) kuruyor,
 ## yani hangi istemcide alınırsa alınsın can miktarı her yerde birebir aynı.
-func setup(caster_damage_bonus: float, p_flower_id: String) -> void:
+## caster_heal_mult: çiçeği bırakan Oakley'nin O ANKİ İyileştirme ve Kalkan Gücü çarpanı (Player.heal_power_mult, 1.0 = bonus yok) - veren taraf
+## büyütür; alan kim olursa olsun aynı (saldırı gücü gibi snapshot, ağda extra_data ile gider).
+func setup(caster_damage_bonus: float, p_flower_id: String, caster_heal_mult: float = 1.0) -> void:
 	_caster_damage_bonus = caster_damage_bonus
+	_caster_heal_mult = maxf(1.0, caster_heal_mult)
 	flower_id = p_flower_id
 
 
@@ -223,7 +227,7 @@ func _process_fx(delta: float) -> void:
 
 
 func _current_heal_amount() -> float:
-	return _caster_damage_bonus * HEAL_RATIO_OF_ATTACK * (1.0 + GROWTH_STAGE_BONUS * _growth_stage)
+	return _caster_damage_bonus * HEAL_RATIO_OF_ATTACK * (1.0 + GROWTH_STAGE_BONUS * _growth_stage) * _caster_heal_mult
 
 
 ## bkz. SHIELD_PERCENT_OF_TARGET_MAX üstündeki DÜZELTME notu - can miktarıyla
@@ -232,7 +236,7 @@ func _current_heal_amount() -> float:
 func _current_shield_amount(body: Node) -> float:
 	var target_max_shield: float = float(body.item_shield_max) if "item_shield_max" in body else 0.0
 	return (target_max_shield * SHIELD_PERCENT_OF_TARGET_MAX + _caster_damage_bonus * SHIELD_RATIO_OF_ATTACK) \
-			* (1.0 + GROWTH_STAGE_BONUS * _growth_stage)
+			* (1.0 + GROWTH_STAGE_BONUS * _growth_stage) * _caster_heal_mult
 
 
 ## Bu istemcinin Oakley'sinin çiçeği mi (flower_id = "<peer>_<sayaç>", player.gd _try_oakley_flower)? Shift ipucu "BU OYUNDA" için.

@@ -25,6 +25,22 @@ static func inside_owner_vision(pos: Vector2, owner_pos: Vector2, tree: SceneTre
 	return VisionFogScript.normalized_distance(pos - owner_pos, VisionFogScript.current_radius(tree), VisionFogScript.VISION_WIDTH_SCALE) <= OWNER_LEASH_MARGIN
 
 
+## Düz uzanan etkiler (Gökkuşağı Asası finali "Lux Huzmesi", madde 551): origin'den dir yönünde sahibin görüş elipsinin (merkez center,
+## yatay yarıçap x VISION_WIDTH_SCALE) kenarındaki nokta. origin elipsin dışındaysa origin döner.
+static func vision_edge_along(origin: Vector2, dir: Vector2, center: Vector2, tree: SceneTree) -> Vector2:
+	var r: float = VisionFogScript.current_radius(tree)
+	var rx: float = r * maxf(VisionFogScript.VISION_WIDTH_SCALE, 0.05)
+	var ry: float = r
+	var o: Vector2 = origin - center
+	var a: float = dir.x * dir.x / (rx * rx) + dir.y * dir.y / (ry * ry)
+	var b: float = 2.0 * (o.x * dir.x / (rx * rx) + o.y * dir.y / (ry * ry))
+	var c: float = o.x * o.x / (rx * rx) + o.y * o.y / (ry * ry) - 1.0
+	var disc: float = b * b - 4.0 * a * c
+	if a <= 0.0 or disc < 0.0:
+		return origin
+	return origin + dir * maxf(0.0, (-b + sqrt(disc)) / (2.0 * a))
+
+
 ## Elipsin dışındaysa kenara çeker, içindeyse aynen döner.
 static func clamp_to_owner_vision(pos: Vector2, owner_pos: Vector2, tree: SceneTree) -> Vector2:
 	var radius: float = VisionFogScript.current_radius(tree)

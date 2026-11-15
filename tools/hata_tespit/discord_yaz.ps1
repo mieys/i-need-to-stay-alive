@@ -9,14 +9,14 @@
     ... -DryRun   (gondermez, metni yazdirir)
 
   Guvenlik: etiket/baglanti atmaz (allowed_mentions bos), yalniz mesajlar.jsonl'da gorulmus mesaja yanit,
-  ayni mesaja ayni sablon bir kez, saatte en cok 5 / gunde en cok 20 yanit. Kayit: docs/hata_tespit/giden.jsonl
+  ayni mesaja ayni sablon bir kez, saatte en cok 12 / gunde en cok 60 yanit (sablonlar: dogrulandi, bilgi_gerekli, durum, oneri, denge, genel). Kayit: docs/hata_tespit/giden.jsonl
   (mesaj icerigi/yazar adi YOK). Bot "Mesaj Gonder" iznine sahip olmali.
   Cikis kodlari: 2 = parametre/ayar, 3 = Discord reddetti, 4 = sinir/tekrar kurali.
   Not: dosya bilerek sadece ASCII (Windows PowerShell 5.1); Turkce metin sablonlar.json'da (UTF-8).
 #>
 param(
   [Parameter(Mandatory = $true)][string]$ReplyTo,
-  [Parameter(Mandatory = $true)][ValidateSet("dogrulandi", "bilgi_gerekli", "durum")][string]$Sablon,
+  [Parameter(Mandatory = $true)][ValidateSet("dogrulandi", "bilgi_gerekli", "durum", "oneri", "denge", "genel")][string]$Sablon,
   [string]$Konu = "",
   [string[]]$Bilgi = @(),
   [string]$ChannelId = "",
@@ -69,8 +69,9 @@ if ($Sablon -eq "dogrulandi") {
   if ($k.Length -gt 90) { $k = $k.Substring(0, 90).Trim() + "..." }
   if ($k.Length -lt 3) { Fail "-Konu gerekli (en az 3 karakter, kisa ve duz metin)." 2 }
   $text = $tpl.dogrulandi.Replace("{konu}", $k)
-} elseif ($Sablon -eq "durum") {
-  $text = [string]$tpl.durum
+} elseif (@("durum", "oneri", "denge", "genel") -contains $Sablon) {
+  $text = [string]$tpl.$Sablon
+  if (-not $text) { Fail ("sablonlar.json'da '" + $Sablon + "' sablonu yok.") 2 }
 } else {
   $labels = @()
   $expanded = @()
@@ -103,8 +104,8 @@ if (Test-Path $ledger) {
     if (($now - $t).TotalHours -lt 24) { $lastDay++ }
   }
 }
-if ($lastHour -ge 5) { Fail "Saatlik sinir (5) doldu." 4 }
-if ($lastDay -ge 20) { Fail "Gunluk sinir (20) doldu." 4 }
+if ($lastHour -ge 12) { Fail "Saatlik sinir (12) doldu." 4 }
+if ($lastDay -ge 60) { Fail "Gunluk sinir (60) doldu." 4 }
 
 if ($DryRun) {
   Write-Output "KURU CALISMA (gonderilmedi):"

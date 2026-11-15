@@ -456,6 +456,7 @@ def facade(dz, x0, y0, x1, y1, pil=PIL_SQ, contents=FACADE_DEFAULT, step=5, ligh
             elif kind == 'relief':
                 dz.put('Duvar süsü', KM.RELIEF, cx, y - 2)
                 dz.occ[y - 2:y, cx:cx + 2] = True
+                dz.reliefs.append((cx, y))   # skull_traps(): yerleşim bitince alev tuzağı olur (madde 627)
             elif kind == 'hang':
                 spec = KM.HANGING[(cx + y) % len(KM.HANGING)]
                 hh = spec[1][3]
@@ -807,6 +808,26 @@ def dragon(dz, x, y, zone_h=3):
     return True
 
 
+SKULL_TRAP_SPAWN_DIST = 10   # doğuşa bu kadar hücreden yakın kabartma tuzak olmaz
+
+
+def skull_traps(dz):
+    """KAFATASI KABARTMASI tuzakları (madde 627, kullanıcı: "mavi gözlü tuzaklardan uzun ateş püskürtmeleri olmalıydı"): yüzdeki her kabartma
+    (2x2 bloğun SOL karosunda kafatası) altındaki tek sütuna ruh ateşi püskürtür (tur 'kafatasi', alan 1 x 3, çalışma anında ilk duvar/nesneye kadar
+    en çok 8 hücre, dungeon_props STYLE "tuzak_kafatasi"). Yerleşim bittikten SONRA eklenir: diğer tuzakların aralık kuralı / sakinler aynı kalır.
+    Altında 3 boş zemin yoksa ya da doğuşa yakınsa kabartma süs olarak kalır."""
+    sp = dz.spawn
+    made = 0
+    for (cx, y) in dz.reliefs:
+        if not (dz.lay.t[y:y + 3, cx] == Z.F).all():
+            continue
+        if sp is not None and math.dist((cx, y), sp) < SKULL_TRAP_SPAWN_DIST:
+            continue
+        dz.add_obj('tuzak', 'Kafatası Kabartması', cx, y, 1, 3, tur='kafatasi')
+        made += 1
+    dz.notes.append('kafatası kabartması tuzağı %d / %d' % (made, len(dz.reliefs)))
+
+
 def gate_ew(dz, x, y, style='diken'):
     """Yatay geçitte 1x3 kapı (x, y..y+2)."""
     for j in range(3):
@@ -837,6 +858,7 @@ def decorate(pl, bank, tl):
     wd = P.wall_distance(lay, cap=3)
     sx, sy = pl.spawn
     dz.spawn = (sx, sy)
+    dz.reliefs = []   # yüz kabartmaları (cx, zemin y) -> skull_traps()
     dz.add_obj('dogus', 'Doğuş', sx - 1, sy - 1, 3, 2)
     dz.reserve[sy - 3:sy + 4, sx - 4:sx + 5] = True
     # platform ön yüzleri: hareket engeli (merdivenler açık), üstlerine süs yok
@@ -1119,6 +1141,7 @@ def main(write=False):
             o['props']['r'] = int(round(int(o['props']['r']) * LIGHT_REACH))
     dwellers(dz, pl)
     dz.hunter_route('kemik_bekcisi')
+    skull_traps(dz)
     for o in dz.objects:
         o.setdefault('props', {})['tema'] = TEMA
     P.write_engel(lay, bank, tl, dz)

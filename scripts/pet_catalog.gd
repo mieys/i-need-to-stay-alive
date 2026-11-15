@@ -9,7 +9,7 @@ extends RefCounted
 ##  - kelebek: Kelebek Ruhu (kelebek_ruhu.gd) - KELEBEK_ATTACK_SPEED saldırı hızı + sahibin İLK silahının vurduğu düşmana pembe lazer
 ##    atışı (saldırı gücünün KELEBEK_DAMAGE_RATIO kadarı); kuklası ilk olayında kurulur (remote_player.gd kelebek_ruhu_event).
 ##  - peri: Peri (peri_pet.gd) - sahibin canı eksikken PERI_HEAL_INTERVAL saniyede bir can basar (saldırı gücünün PERI_HEAL_RATIO
-##    kadarı); kuklası ilk olayında kurulur (remote_player.gd peri_event).
+##    kadarı ya da azami canının PERI_HEAL_MAX_HP_RATIO'su, hangisi büyükse); kuklası ilk olayında kurulur (remote_player.gd peri_event).
 ##  - kirpi: Kirpi (kirpi_pet.gd) - sahibine saldıran yaratıklar sahibinin azami kalkanının KIRPI_REFLECT_RATIO'su kadar hasar alır, kalkan
 ##    varken alınan hasar KIRPI_SHIELD_REDUCTION azalır (player.gd _kirpi_on_hit); dikenleri sahibin görüşünde yaratık varsa açık, yoksa
 ##    kapalı (sadece görsel). Kuklası ilk olayında kurulur (remote_player.gd kirpi_event).
@@ -35,13 +35,16 @@ const KELEBEK_SHOT_INTERVAL := 0.2
 ## Peri: can %100'ün altındayken bu aralıkla can basar; miktar = sahibin saldırı gücü (damage_bonus) x oran.
 const PERI_HEAL_INTERVAL := 6.0
 const PERI_HEAL_RATIO := 0.10
+## 2026-11-14 denge turu: düşük saldırı gücünde Peri işe yaramıyordu - can = max(saldırı gücü x PERI_HEAL_RATIO, azami can x PERI_HEAL_MAX_HP_RATIO).
+const PERI_HEAL_MAX_HP_RATIO := 0.015
 ## Kirpi: sahibine saldıran yaratığa sahibin AZAMİ kalkanı (item_shield_max, Yansıtan Kubbe ile aynı "kalkan gücü" tanımı) x oran hasar;
 ## sahibin kalkanı (item_shield_hp) varken alınan hasar bu oran kadar azalır.
-const KIRPI_REFLECT_RATIO := 0.05
-const KIRPI_SHIELD_REDUCTION := 0.05
+## 2026-11-14 denge turu (kayıtta hasarın %0,4-1,9'u): yansıtma 0,05 -> 0,12, kalkan azaltma 0,05 -> 0,08.
+const KIRPI_REFLECT_RATIO := 0.12
+const KIRPI_SHIELD_REDUCTION := 0.08
 ## Minik Cadı (iyi slime): kalıcı saldırı gücü yüzdesi (item_ap_percent ile AYNI havuz: damage_bonus'u okuyan her yer etkin değeri görür).
 ## Ulti büyüsü: SLIME_BUFF_TIME sn boyunca azami can, saldırı gücü (= hasar), karakter boyu ve silah menzili +SLIME_BUFF_PERCENT.
-const SLIME_AP_PERCENT := 0.05
+const SLIME_AP_PERCENT := 0.08 ## 2026-11-14 denge turu: 0,05 -> 0,08
 const SLIME_BUFF_PERCENT := 0.15
 const SLIME_BUFF_TIME := 8.0
 const SLIME_COOLDOWN := 90.0 ## 2026-11-09 kullanıcı: 120 -> 90 (madde 513)
@@ -54,9 +57,9 @@ const DESCRIPTIONS := {
 	"kopek": "Yakındaki yaratıklara saldırır. Statları senin statlarınla aynıdır.",
 	"papagan": "Ağaçları gagalayıp yere eşya düşürür (yiyecek, kalkan, nadiren mıknatıs/parçacık). +10 şans verir.",
 	"kelebek": "+%10 saldırı hızı. İlk silahının vurduğuna lazer atar (%20 saldırı gücü).",
-	"peri": "Canın eksikken 6 saniyede bir can basar (saldırı gücünün %10'u).",
-	"kirpi": "Saldıran yaratıklar mana kalkanı gücünün %5'i kadar hasar alır. Mana kalkanın varken %5 az hasar alırsın.",
-	"slime": "+%5 saldırı gücü. Ultini kullanınca büyü yapar: 8 sn canın, hasarın, boyun ve menzilin %15 artar. (90 sn bekleme)",
+	"peri": "Canın eksikken 6 saniyede bir can basar (saldırı gücünün %10'u ya da azami canının %1,5'i, hangisi büyükse).",
+	"kirpi": "Saldıran yaratıklar mana kalkanı gücünün %12'si kadar hasar alır. Mana kalkanın varken %8 az hasar alırsın.",
+	"slime": "+%8 saldırı gücü. Ultini kullanınca büyü yapar: 8 sn canın, hasarın, boyun ve menzilin %15 artar. (90 sn bekleme)",
 	"hayalet": "+%5 sıvışma. Canın %25'in altına düşünce üstünü kaplar: 8 sn görünmez ve dokunulmaz olursun. (80 sn bekleme)",
 }
 ## Ikon: oyundaki hayvanın kendi sprite karesi (yeni sanat yok) - bkz. icon().

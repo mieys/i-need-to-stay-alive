@@ -140,11 +140,17 @@ static func cell_of(world: Vector2) -> Vector2i:
 const EJDER_ROWS := 8
 
 
-static func flame_rows(world_top_left: Vector2, min_rows: int) -> int:
+## cols: alev şeridinin sütun sayısı (ejder 2, kafatası kabartması 1).
+static func flame_rows(world_top_left: Vector2, min_rows: int, cols: int = 2) -> int:
 	var c0: Vector2i = cell_of(world_top_left + Vector2(2.0, 2.0))
 	var n: int = 0
 	for j in range(EJDER_ROWS):
-		if is_move_blocked_cell(c0 + Vector2i(0, j)) or is_move_blocked_cell(c0 + Vector2i(1, j)):
+		var blocked: bool = false
+		for i in range(cols):
+			if is_move_blocked_cell(c0 + Vector2i(i, j)):
+				blocked = true
+				break
+		if blocked:
 			break
 		n += 1
 	return maxi(n, min_rows)

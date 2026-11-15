@@ -33,6 +33,8 @@ from PIL import Image
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
+sys.path.insert(0, os.path.dirname(HERE))
+import harita_duvar  ## noqa: E402 (tools/harita_duvar.py, madde 676)
 ATLAS = json.load(open(os.path.join(HERE, 'atlas.json'), encoding='utf-8'))
 HDIR = os.path.join(ROOT, 'harita')
 CDIR = os.path.join(HDIR, 'col')
@@ -113,41 +115,73 @@ def P(x, y):
 
 
 ## ---------------------------------------------------------------- tasarım (oyun alanı yerel hücre, 0..242)
-SPAWN = (121, 214)
+## YERLEŞİM (madde 658, 2026-11-13, kullanıcı: "yaptığın haritalar hep birbirine benziyor hepsinin ortasında göl var"): ortadaki Büyük Vaha
+## KALDIRILDI - ortada su YOK. Harita artık KAYA PLATOLARI haritası: orta-batıda doğuya açılan AT NALI KANYON (içinde Firavun Vadisi), çevrede
+## dört geçilmez plato (ikisi kenardan içeri uzanan burun), Büyük Vaha güney-güneydoğuya kaydı, küçük vahalar dağınık. Doğuş doğuda.
+## Kara Bataklık = kıvrılan nehir, Ayaz Dağı = ortaya inen dağ sırtı.
+SPAWN = (210, 118)
 REGIONS = {
-    'kervan': (121, 214),     ## doğuş: açık kum düzlüğü, kırık sütunlar
-    'vaha': (121, 110),       ## Büyük Vaha: ortada göl, şelaleli ağaç, palmiye halkası
-    'firavun': (196, 44),     ## KD: Firavun Vadisi (firavun kapısı, yüzlü sütunlar, kaya)
-    'kure': (46, 46),         ## KB: Küre Tapınağı (mavi küre, kemer harabesi)
-    'sutunlar': (122, 32),    ## K: rüzgârın oyduğu kaya sütunları
-    'yilan': (204, 128),      ## D: Yılan Mezarlığı (dev kafatası, yılan iskeletleri)
-    'olu_ova': (38, 136),     ## B: Ölü Ağaçlar Ovası
-    'kaktus': (56, 204),      ## GB: Kaktüs Bahçesi (agav, fıçı kaktüs)
-    'kayalik': (196, 202),    ## GD: Kayalık (mağaralı kaya, yeşil vaha)
+    'kervan': (210, 118),     ## doğuş (D): açık kum düzlüğü, kırık sütunlar; batıda kanyonun ağzı görünür
+    'firavun': (102, 122),    ## orta-B: at nalı kanyonun içinde Firavun Vadisi (firavun kapısı, yüzlü sütunlar)
+    'vaha': (170, 196),       ## GGD: Büyük Vaha (şelaleli ağaç, palmiye halkası)
+    'kure': (42, 42),         ## KB: Küre Tapınağı (mavi küre, kemer harabesi)
+    'sutunlar': (142, 30),    ## K: rüzgârın oyduğu kaya sütunları
+    'kayalik': (214, 34),     ## KD köşe: Kayalık (mağaralı kaya)
+    'olu_ova': (30, 122),     ## B: Ölü Ağaçlar Ovası (kanyonun arkası)
+    'yilan': (42, 206),       ## GB: Yılan Mezarlığı (dev kafatası, yılan iskeletleri)
+    'kaktus': (98, 214),      ## G: Kaktüs Bahçesi (agav, fıçı kaktüs)
 }
 CLEARINGS = {'kervan': 13, 'vaha': 0, 'firavun': 8, 'kure': 7, 'sutunlar': 4, 'yilan': 6, 'olu_ova': 4, 'kaktus': 4, 'kayalik': 5}
+## GEÇİLMEZ KAYA PLATOLARI (dış şerit gibi: iç kenarında kaya duvarı, içi sık kaya - build_band + place_band_rocks).
+## At nalı: (merkez x, y, dış rx, ry, iç rx, ry, ağız yönü derece (0 = doğu), ağzın yarı açısı)
+HORSESHOE = (102, 122, 35, 29, 18, 14, 0.0, 52.0)
+## Platolar: her biri üst üste binen elipsler [(merkez x, y, rx, ry, açı radyan)]; kenara taşanlar burun gibi içeri uzanır
+MESAS = [
+    [(186, 72, 14, 9, 0.5), (175, 63, 7, 5, 0.2), (197, 81, 6, 5, 0.9)],
+    [(90, 40, 13, 8, -0.2), (79, 47, 6, 5, 0.0), (101, 33, 7, 5, -0.4)],
+    [(156, 154, 10, 7, 0.25), (165, 160, 6, 4, 0.6)],
+    [(140, 240, 17, 12, 0.0), (127, 231, 6, 5, 0.3)],
+    [(-2, 168, 19, 10, 0.3), (13, 161, 7, 4, 0.5)],
+]
 ## Vahalar: (merkez x, y, yarıçap x, y, yeşil mi, ek loblar [(x, y, rx, ry)]). Yeşil = çimen kıyısı + çimen halkası + palmiye; değil = kum kıyılı
 ## su birikintisi (kuyu).
 OASES = [
-    (121, 108, 19, 11, True, [(103, 103, 8, 6), (139, 114, 9, 6), (128, 97, 7, 4), (111, 119, 7, 4), (136, 102, 6, 4)]),
-    (150, 200, 5.5, 3.6, True, [(146, 203, 3, 2)]),
-    (186, 182, 6.5, 4.2, True, [(192, 186, 4, 3)]),
-    (28, 100, 6.0, 4.0, True, [(33, 97, 3, 2.5)]),
-    (222, 74, 5.0, 3.6, True, []),
-    (66, 70, 3.8, 2.6, False, []),
-    (80, 210, 3.2, 2.3, False, []),
-    (152, 52, 3.8, 2.7, False, []),
-    (212, 146, 3.4, 2.4, False, []),
-    (92, 162, 3.0, 2.2, False, []),
-    (58, 154, 2.6, 2.0, False, []),
+    (170, 194, 15, 8.5, True, [(155, 191, 7, 5), (185, 198, 8, 5), (176, 185, 6, 4), (162, 202, 6, 3)]),
+    (36, 82, 6.5, 4.2, True, [(41, 79, 3, 2.5)]),
+    (210, 160, 6.0, 4.0, True, [(215, 163, 3, 2)]),
+    (124, 66, 5.5, 3.6, True, [(119, 69, 3, 2)]),
+    (62, 170, 5.0, 3.5, True, []),
+    (150, 100, 3.6, 2.6, False, []),
+    (84, 186, 3.2, 2.3, False, []),
+    (182, 22, 3.4, 2.4, False, []),
+    (112, 170, 3.0, 2.2, False, []),
+    (226, 204, 3.0, 2.2, False, []),
+    (24, 24, 2.8, 2.0, False, []),
 ]
-GRASS_RING = {0: 7.0}  ## vaha indeksi -> çimen halkası genişliği (köşe); varsayılan 3.5
+GRASS_RING = {0: 6.0}  ## vaha indeksi -> çimen halkası genişliği (köşe); varsayılan 3.5
 BRUSH_COUNT = 10       ## saklanma çalılığı (kuru çayır yaması içinde)
 ## Kum tepeleri (tümsek kümeleri): (x, y, yarıçap)
-DUNES = [(88, 186, 16), (172, 150, 14), (82, 62, 12), (160, 72, 12), (30, 186, 12), (214, 98, 10), (100, 232, 12), (236, 214, 8)]
-## İç kaya kümeleri (yoğun kaya + sütun; aralarından geçilir): (x, y, yarıçap)
-ROCK_CLUSTERS = [(180, 30, 6), (212, 36, 5), (106, 22, 5), (140, 26, 5), (34, 30, 5), (206, 208, 7), (178, 216, 5), (16, 164, 5),
-                 (228, 168, 5), (64, 112, 4), (172, 120, 4), (84, 138, 3)]
+DUNES = [(128, 176, 16), (60, 98, 12), (166, 46, 12), (30, 150, 10), (222, 222, 8), (200, 96, 10), (110, 92, 10), (232, 140, 8)]
+## İç kaya kümeleri (yoğun kaya + sütun; aralarından geçilir; platoların eteği): (x, y, yarıçap)
+ROCK_CLUSTERS = [(162, 128, 4), (66, 70, 4), (206, 56, 4), (40, 158, 5), (120, 34, 5), (228, 136, 4), (114, 196, 4), (184, 228, 5),
+                 (18, 60, 4), (142, 82, 4), (72, 150, 4), (204, 92, 3)]
+
+
+def mesa_field(lx, ly, n=None, n2=None):
+    """kaya platosu maskesi (True = plato). lx/ly yerel hücre dizileri; n / n2 = 0..1 gürültü (kenar dalgası: ince + kaba) ya da None"""
+    j = 0.0 if n is None else (n - 0.5) * 0.45
+    if n2 is not None:
+        j = j + (n2 - 0.5) * 0.45
+    cx, cy, orx, ory, irx, iry, mouth, half = HORSESHOE
+    outer = ellipse_field(lx, ly, cx, cy, orx, ory) + j < 1.0
+    inner = ellipse_field(lx, ly, cx, cy, irx, iry) - j * 1.2 < 1.0
+    ang = np.degrees(np.arctan2(ly - cy, lx - cx)) - mouth
+    ang = (ang + 180.0) % 360.0 - 180.0
+    mask = outer & ~inner & (np.abs(ang) > half + (0 if n is None else (n - 0.5) * 22.0))
+    for parts in MESAS:
+        for (mx, my, mrx, mry, ma) in parts:
+            mask |= ellipse_field(lx, ly, mx, my, mrx, mry, ma) + j < 1.0
+    return mask
 
 
 ## ---------------------------------------------------------------- gürültü + yardımcılar (Kara Bataklık üretecinden)
@@ -488,12 +522,13 @@ def build_terrain(m):
     ## konur (place_brush) - kumun ortasında düz kenarlı bir ot öbeği gibi durmasın, kenarını setin saçaklı çimeni sarsın.
     m.brush_sites = []
     sx_, sy_ = SPAWN
+    mesa_near = cheb_dist(mesa_field(lx, ly), 14)  ## kaya platosuna uzaklık (köşe): çayır yaması platoya yaslanmasın
     for _ in range(4000):
         if len(m.brush_sites) >= BRUSH_COUNT:
             break
         bx, by_ = rng.uniform(16, PLAY - 16), rng.uniform(16, PLAY - 16)
         iy, ix = int(round(by_)) + PY0, int(round(bx)) + PX0
-        if not (10 <= m.lush_dist[iy, ix] <= 26) or math.hypot(bx - sx_, by_ - sy_) < 24:
+        if not (10 <= m.lush_dist[iy, ix] <= 26) or math.hypot(bx - sx_, by_ - sy_) < 24 or mesa_near[iy, ix] < 13:
             continue
         if any(math.hypot(bx - REGIONS[k][0], by_ - REGIONS[k][1]) < CLEARINGS[k] + 9 for k in REGIONS if CLEARINGS[k] > 0):
             continue
@@ -607,6 +642,9 @@ def build_band(m):
     ## doğuş ve bölge açıklıkları şeride değmesin (güneyde doğuş kenara yakın)
     yy, xx = np.mgrid[0:H, 0:W]
     lx, ly = xx - PX0, yy - PY0
+    ## iç kaya platoları + at nalı kanyon (madde 658): şeridin parçası (aynı görünmez engel + kaya duvarı)
+    mesa = mesa_field(lx + 0.5, ly + 0.5, cn, cn2)
+    band |= mesa
     keep = np.zeros((H, W), bool)
     for k, (rxk, ryk) in REGIONS.items():
         if CLEARINGS[k] > 0:
@@ -615,6 +653,7 @@ def build_band(m):
     band &= ~keep
     band &= m.c_land | (m.c_edge < 0)
     m.forest = band
+    m.mesa = mesa & band & (m.c_edge >= 0)  ## oyun alanındaki platolar (place_band_rocks: sık büyük kaya)
     for y in range(H):
         for x in range(W):
             if band[y, x]:
@@ -838,6 +877,18 @@ def place_band_rocks(m):
                 roots.add((x, yy))
                 n += 1
                 break
+    ## 1b) iç platolar + kanyon (madde 658): sık büyük kaya - kumda tek tük kaya gibi değil KAYA KÜTLESİ gibi okunsun
+    ys, xs = np.nonzero(m.mesa)
+    order = list(zip(xs.tolist(), ys.tolist()))
+    rng.shuffle(order)
+    for (x, y) in order:
+        if not free(x, y, 2):
+            continue
+        r = rng.random()
+        key = rng.choice(ROCK_BIG) if r < 0.8 else rng.choice(['sutun_1_s', 'sutun_2_s', 'mantar_kaya_1_s'])
+        if root_ok(m, key, x, y, 'land', avoid_forest=False, rows=1) and place_obj(m, key, x, y, 'nesne', cover_bases=True) is not None:
+            roots.add((x, y))
+            n += 1
     ## 2) şeridin geri kalanı
     ys, xs = np.nonzero(m.forest)
     order = list(zip(xs.tolist(), ys.tolist()))
@@ -1603,7 +1654,12 @@ def main():
     nspots = place_spots(m, imgs)
     nplants = place_plants(m)
     nwater = place_water_decor(m, imgs)
+    ## madde 676: görünmez engelin (şerit / plato / sırt) kenarı görünen kaya / ağaca hizalanır (tools/harita_duvar.py)
+    cov = harita_duvar.nesne_ortusu(m, imgs, tile_rgba, OBJ_LAYERS + ['Ağaç %d' % i for i in range(TREE_LAYERS)], H, W, T, FEET_SHIFT)
+    ncut = harita_duvar.duvari_hizala(m, imgs, cov, compute_blocked, flood, P(*SPAWN), (PX0, PY0, PLAY, PLAY))
     blocked, reach, npocket, cat = seal_pockets(m, imgs)
+    rim_all, rim_open = harita_duvar.acik_kenar(m, imgs, cov, compute_blocked, flood, P(*SPAWN))
+    print('duvar hizalama: kırpılan %d hücre, kenar %d (açık görünen %d)' % (ncut, rim_all, rim_open))
     play = blocked[PY0:PY0 + PLAY, PX0:PX0 + PLAY]
     rplay = reach[PY0:PY0 + PLAY, PX0:PX0 + PLAY]
     nobj = sum(1 for o in m.objects if o['layer'] in OBJ_LAYERS)

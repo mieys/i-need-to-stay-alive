@@ -142,7 +142,7 @@ func test_every_skill_use_surges_weapons() -> void:
 	p._buyucu_try_activate_variation()
 	assert(spy.calls == [p.BUYUCU_PASSIVE_SHOT_MULT], "E kullanımı da: %s" % str(spy.calls))
 	p.owned_weapon_nodes.erase(spy)
-	await get_tree().create_timer(0.4).timeout ## sekme coroutine'i bitsin (serbest kalmış oyuncuda devam etmesin)
+	await get_tree().create_timer(0.5).timeout ## sekme coroutine'i bitsin (serbest kalmış oyuncuda devam etmesin; 100 birim / 600 + 0,10)
 	_cleanup()
 
 
@@ -274,21 +274,33 @@ func test_e1_e4_arcane_blast_push_and_tornado_touch() -> void:
 	var p: Node = _make_player()
 	_evo(p, ["buyucu_e1", "buyucu_e4"])
 	var target: FakeEnemy = _make_enemy(Vector2(1100.0, 1000.0))
-	var near: FakeEnemy = _make_enemy(Vector2(1150.0, 1000.0)) ## patlama yarıçapında (75)
+	var near: FakeEnemy = _make_enemy(Vector2(1150.0, 1000.0)) ## patlama yarıçapında (52,5 - madde 563)
 	var far: FakeEnemy = _make_enemy(Vector2(1300.0, 1000.0))
 	await get_tree().physics_frame
-	p._buyucu_try_activate_variation() ## Set 1: Arcane Lanet - ilk isabet senkron
+	p._buyucu_try_activate_variation() ## Set 1: Arcane Lanet - madde 563: hasar göz hedefe VARINCA
+	assert(target.hits.is_empty() and near.hits.is_empty(), "göz kalkarken vuruş yok: %s" % str(target.hits))
+	var flight: float = p._buyucu_arcane_flight_time(p.global_position, target.global_position)
+	assert(is_equal_approx(flight, 100.0 / FxArcaneSkullBounce.SPEED), "uçuş = mesafe / göz hızı: %.3f" % flight)
+	await get_tree().create_timer(flight + 0.05).timeout
 	assert(target.hits.size() == 1 and is_equal_approx(float(target.hits[0]), 80.0), "ilk sekme %%80: %s" % str(target.hits))
 	assert(near.hits.size() == 1 and is_equal_approx(float(near.hits[0]), 60.0) and bool(near.area_flags[0]),
 		"patlama: isabetin %%75'i, alan hasarı: %s" % str(near.hits))
 	assert(far.hits.is_empty(), "patlama alanının dışı etkilenmez")
+	## Madde 563: görsel Yıldız Tozu (fx_arcane_blast), isabet noktasında, ölçek = yarıçap / çizildiği yarıçap
+	var blasts: Array = []
+	for c in get_tree().current_scene.get_children():
+		if c is FxArcaneBlast:
+			blasts.append(c)
+	assert(blasts.size() == 1 and (blasts[0] as Node2D).global_position.is_equal_approx(target.global_position)
+		and is_equal_approx((blasts[0] as Node2D).scale.x, p.EVO_BUYUCU_ARCANE_BLAST_RADIUS / FxArcaneBlast.DRAWN_RADIUS),
+		"patlama efekti: %d" % blasts.size())
 	assert(target.pushes.size() == 1 and float(target.pushes[0][1]) == p.EVO_BUYUCU_ARCANE_PUSH, "isabet edilen geri itilir")
 	var t_enemy: FakeEnemy = _make_enemy(Vector2(900.0, 1000.0))
 	p.buyucu_tornado_touch(t_enemy)
 	assert(t_enemy.elements.size() == 1 and str(t_enemy.elements[0][0]) == "vuln" and is_equal_approx(float(t_enemy.elements[0][1]["pct"]), 0.2),
 		"hortum teması +%%20 alınan hasar: %s" % str(t_enemy.elements))
 	assert(t_enemy.stuns == [1.0], "hortum teması 1 sn sersemletir")
-	await get_tree().create_timer(0.6).timeout ## kalan sekmeler bitsin
+	await get_tree().create_timer(1.2).timeout ## kalan sekmeler bitsin (madde 563: her sekme uçuş + 0,10 sn)
 	_cleanup()
 
 
@@ -308,9 +320,9 @@ func test_nova_focus_then_slow_wave() -> void:
 	await get_tree().physics_frame
 	p._buyucu_try_activate_variation_r()
 	assert(p.is_buyucu_nova_focusing(), "R: önce odak")
-	p._process_buyucu_nova(0.5)
+	p._process_buyucu_nova(float(p.BUYUCU_NOVA_FOCUS_TIME) * 0.5)
 	assert(p.is_buyucu_nova_focusing() and near.frost_slows.is_empty() and far.frost_slows.is_empty(), "odakta vuruş yok")
-	p._process_buyucu_nova(0.51) ## odak biter + dalga 0,51 sn: cephe 320 x front_ratio(0,22) ~ 126 px
+	p._process_buyucu_nova(float(p.BUYUCU_NOVA_FOCUS_TIME) * 0.5 + 0.3) ## odak biter + dalga 0,3 sn: cephe 320 x front_ratio(~0,23) ~ 130 px
 	assert(not p.is_buyucu_nova_focusing(), "odak bitti")
 	assert(near.frost_slows.size() == 1 and far.frost_slows.is_empty(), "cephe yakındakine ulaştı, uzaktakine henüz değil: %d / %d" % [near.frost_slows.size(), far.frost_slows.size()])
 	p._process_buyucu_nova(float(p.BUYUCU_NOVA_WAVE_TIME))
@@ -463,7 +475,7 @@ func test_skill_icon_enchant_glow_draws() -> void:
 # ------------------------------------------------------------------ pasif hissedilsin (2026-10-04)
 ## "pasifin aktifleştiği hiç hissedilmiyor": mesafe silahın yerel biriminde verildiği için asalarda ekranda ~2 px kalıyordu, hedef
 ## yokken de hiçbir görsel yoktu. Artık dünya biriminde ve hedefsiz de oynar.
-func test_passive_is_visible_even_without_target() -> void:
+func test_passive_shows_wave_but_weapon_icon_stays_still() -> void:
 	if get_tree().current_scene == null:
 		get_tree().current_scene = self
 	var p: Node = _make_player()
@@ -475,16 +487,22 @@ func test_passive_is_visible_even_without_target() -> void:
 	await get_tree().process_frame
 	assert(w.icon_sprite != null, "silahın ikonu var")
 	var start: Vector2 = w.icon_sprite.global_position
+	var start_mod: Color = w.icon_sprite.self_modulate
 	var max_move: float = 0.0
+	var max_flash: float = 0.0
 	var wave_seen: bool = false
 	p._buyucu_on_skill_used("skill2", 0) ## hedef yok
 	for i in 12:
 		await get_tree().process_frame
 		max_move = maxf(max_move, w.icon_sprite.global_position.distance_to(start))
+		var m: Color = w.icon_sprite.self_modulate
+		max_flash = maxf(max_flash, maxf(absf(m.r - start_mod.r), maxf(absf(m.g - start_mod.g), absf(m.b - start_mod.b))))
 		for c in p.get_children():
 			if str(c.name).contains("FxBuyucuSurgeWave") or c.get_script() != null and str(c.scene_file_path).contains("surge_wave"):
 				wave_seen = true
-	assert(max_move >= 15.0, "ikon dünya biriminde belirgin fırlar (>= 15 px), ölçülen: %.1f" % max_move)
+	## 2026-11-11 (kullanıcı: "silahları animasyon oynatıyordu, onu kaldır"): silah ikonu geri tepmez, parlamaz (eski tepme 46 dünya birimiydi).
+	assert(max_move < 5.0, "silah ikonu pasifte fırlamaz/geri tepmez, ölçülen: %.1f" % max_move)
+	assert(max_flash < 0.05, "silah ikonu pasifte mor parlamaz, ölçülen: %.2f" % max_flash)
 	assert(wave_seen, "karakterin ayağında mor dalga efekti çıkar")
 	assert(is_equal_approx(w._surge_pending_mult, p.BUYUCU_PASSIVE_SHOT_MULT), "güçlendirme bekler")
 	p.owned_weapon_nodes.erase(w)

@@ -260,6 +260,7 @@ static func make_section_header(text: String, font_size: int = FS_BODY) -> HBoxC
 
 
 const MenuDividerScript: GDScript = preload("res://scripts/menu_divider.gd")
+const MetaUpgradesScript: GDScript = preload("res://scripts/meta_upgrades.gd") ## karaktere özel stat adı/ikonu/biçimi (madde 677)
 
 
 ## Metni kutuya (max_width) sığana kadar 1'er 1'er küçültür (en az 16). Son çare: bugünkü isimlerin hepsi 32 px'te
@@ -407,22 +408,30 @@ static func add_background(root: Control) -> void:
 	root.add_child(bg)
 
 
-## Bir karakterin temel istatistikleri - ikon + değer (bkz. tools/gen_menu_kit.py STAT_ICONS). Değerler karakter başına
+## Bir karakterin temel istatistikleri - ikon (assets/ui/stat_icons/<icon>.png, oyundaki stat ikonlarıyla aynı) + değer. Değerler karakter başına
 ## Characters.BASE_STATS'tan gelir (madde 123); ikon/etiket sırası burada.
 const STAT_ROWS := [
-	{"icon": "stat_hp.png", "label": "Can", "key": "hp"},
-	{"icon": "stat_speed.png", "label": "Hız", "key": "speed"},
-	{"icon": "stat_dmg.png", "label": "Hasar", "key": "ap"},
-	{"icon": "stat_rate.png", "label": "Atış", "key": "atk"},
+	{"icon": "max_health", "label": "Can", "key": "hp"},
+	{"icon": "speed", "label": "Hız", "key": "speed"},
+	{"icon": "damage", "label": "Hasar", "key": "ap"},
 ]
 
 
 static func base_stat_text(char_id: int, key: String) -> String:
 	var b: Dictionary = Characters.get_base_stats(char_id)
-	if key == "atk":
-		## Saldırı Hızı bonusu puanı -> saniyedeki atış (taban 1/sn).
-		return (TranslationServer.translate("%.1f/sn") % (1.0 + float(b["atk"]) / 100.0)).replace(".", ",")
 	return str(int(round(float(b[key]))))
+
+
+## Karaktere özel başlangıç statı (Characters.SIGNATURE_STATS, madde 677) - 4. hücre: ikon dosyası, değer metni ("+%5", "+1,8") ve stat adı
+## (ipucu / ad etiketi; Ruh Mağazası adlarıyla aynı, çevirisi oradan). Özel statı olmayan karakterde boş sözlük.
+static func signature_info(char_id: int) -> Dictionary:
+	var sig: Dictionary = Characters.get_signature(char_id)
+	if sig.is_empty():
+		return {}
+	var id: String = str(sig["stat"])
+	var d: Dictionary = MetaUpgradesScript.def(id)
+	return {"icon": str(d.get("icon", id)), "value": MetaUpgradesScript.format_value(id, float(sig["value"])).replace(".", ","),
+		"name": str(d.get("name", id))}
 
 
 ## Seçili karakter değişince vitrin altındaki istatistik kutusunu günceller (make_stats_grid'in döndürdüğü kutu).
@@ -431,26 +440,43 @@ static func set_stats_grid_character(box: Control, char_id: int) -> void:
 	for i in range(mini(labels.size(), STAT_ROWS.size())):
 		var row: Dictionary = STAT_ROWS[i]
 		(labels[i] as Label).text = "%s %s" % [row["label"], base_stat_text(char_id, str(row["key"]))]
+	## 4. hücre: karaktere özel stat - ikon + değer (ad uzun, 336 px'e sığmaz -> ipucunda).
+	var sig_icon: TextureRect = box.get_meta("sig_icon", null)
+	var sig_label: Label = box.get_meta("sig_label", null)
+	if sig_icon == null or sig_label == null:
+		return
+	var info: Dictionary = signature_info(char_id)
+	var f: String = "res://assets/ui/stat_icons/%s.png" % str(info.get("icon", ""))
+	sig_icon.texture = load(f) as Texture2D if not info.is_empty() and ResourceLoader.exists(f) else null
+	sig_label.text = str(info.get("value", ""))
+	var cell: Control = sig_label.get_parent() as Control
+	cell.visible = not info.is_empty()
+	cell.tooltip_text = TranslationServer.translate(str(info.get("name", "")))
 
 
-## Vitrin altındaki 2x2 istatistik kutusu (çukur bej zemin, ikon + değer).
+## Vitrin altındaki 2x2 istatistik kutusu (çukur bej zemin, ikon + değer): Can / Hız / Hasar + karaktere özel stat (madde 677).
 static func make_stats_grid(char_id: int = 1) -> PanelContainer:
 	var box := make_panel("inset")
 	var grid := GridContainer.new()
 	grid.columns = 2
-	## 2 sütun 32 px metinle 336 px'lik vitrine sığmalı (en geniş: "Hasar 10" + "Atış 1/sn" = 300 + paylar).
+	## 2 sütun 32 px metinle 336 px'lik vitrine sığmalı (en geniş: "Hasar 16" + özel stat "+%12" + ikonlar).
 	grid.add_theme_constant_override("h_separation", 12)
 	grid.add_theme_constant_override("v_separation", 6)
 	grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	box.add_child(grid)
 	var labels: Array = []
-	for s: Dictionary in STAT_ROWS:
+	var rows: Array = STAT_ROWS.duplicate()
+	rows.append({"icon": "", "label": "", "key": "sig"})
+	for s: Dictionary in rows:
 		var cell := HBoxContainer.new()
 		cell.add_theme_constant_override("separation", 9)
 		cell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var icon := TextureRect.new()
-		icon.texture = tex(str(s["icon"]))
-		icon.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
+		if str(s["icon"]) != "":
+			icon.texture = load("res://assets/ui/stat_icons/%s.png" % str(s["icon"])) as Texture2D
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.custom_minimum_size = Vector2(32, 32) ## 16 sanat px x2 (eski menü ikonu 33 px idi)
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		cell.add_child(icon)
@@ -458,7 +484,12 @@ static func make_stats_grid(char_id: int = 1) -> PanelContainer:
 		l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		cell.add_child(l)
 		grid.add_child(cell)
-		labels.append(l)
+		if str(s["key"]) == "sig":
+			cell.mouse_filter = Control.MOUSE_FILTER_STOP ## ipucu (stat adı)
+			box.set_meta("sig_icon", icon)
+			box.set_meta("sig_label", l)
+		else:
+			labels.append(l)
 	box.set_meta("stat_labels", labels)
 	set_stats_grid_character(box, char_id)
 	return box

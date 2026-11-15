@@ -13,8 +13,6 @@ extends RefCounted
 const DEFS: Array[Dictionary] = [
 	{"id": "tier_5", "name": "Ayakta Kal", "desc": "V. Kademe'ye ulaş.", "key": "tier", "min": 5},
 	{"id": "tier_10", "name": "Kıdemli Avcı", "desc": "X. Kademe'ye ulaş.", "key": "tier", "min": 10},
-	{"id": "tier_15", "name": "Son Perde", "desc": "XV. Kademe'ye ulaş.", "key": "tier", "min": 15},
-	{"id": "final", "name": "Final Karşılaşması", "desc": "Final Kademesi'ne ulaş.", "key": "tier", "min": 16},
 	{"id": "victory", "name": "Hayatta Kaldım!", "desc": "Final'in tüm bosslarını yenip zafer kazan.", "key": "victory", "min": 1},
 	{"id": "victory_solo", "name": "Yalnız Kurt", "desc": "Tek oyunculu zafer kazan.", "key": "victory_solo", "min": 1},
 	{"id": "victory_coop", "name": "Takım Ruhu", "desc": "Çok oyunculu zafer kazan.", "key": "victory_coop", "min": 1},

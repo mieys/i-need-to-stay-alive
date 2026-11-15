@@ -12,6 +12,10 @@ func _initialize() -> void:
 
 func _run() -> void:
 	await process_frame
+	## Pasif altın (PASSIVE_GOLD_INTERVAL sn'de 1, GameManager._process_passive_gold) testlerde kapalı: altını tam sayan testler bozulmasın; sınayan test açar.
+	var gm: Node = root.get_node_or_null("GameManager")
+	if gm:
+		gm.set("passive_gold_enabled", false)
 	var path: String = OS.get_environment("TEST_FILE")
 	var script: GDScript = load(path) as GDScript
 	if script == null:

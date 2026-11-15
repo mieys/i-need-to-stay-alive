@@ -68,7 +68,7 @@ func _player(pos: Vector2) -> FakePlayer:
 func _boss(sp: Node, pos: Vector2) -> Node:
 	var b: Node = sp._spawn_creature("ucansetan1", pos, 555001)
 	b.add_to_group("boss")
-	sp._setup_boss_enemy(b, "ucansetan1", 16, 1)
+	sp._setup_boss_enemy(b, "ucansetan1", 11, 1) ## ölçek kademesi 11 = sonsuz Kat 1 (dalga çarpanı yok; 16 artık Kat 6 = boss dalgası, madde 597)
 	b._init_abilities()
 	return b
 
@@ -89,7 +89,7 @@ func test_sheets_scene_tables_stats_size_and_glow() -> void:
 	var shot: Texture2D = load("res://assets/fx/demon/fire_shot.png") as Texture2D
 	assert(shot != null and shot.get_width() == 128 and shot.get_height() == 24, "ateş topu şeridi")
 	assert(SpawnerScript.SCENES.has("ucansetan1") and SpawnerScript.ID_FAMILY["ucansetan1"] == "ucansetan" and AbilitiesScript.family_has_ability("ucansetan"), "tablolar")
-	assert(SpawnerScript.NEW_FINAL_BOSSES == ["ucansetan1"], "yeni Final")
+	assert(SpawnerScript.FIXED_BOSS_STATS.has("ucansetan1") and SpawnerScript.BOSS_HOME_TIER["ucansetan1"] == 16, "nihai statlı boss (madde 597: ayrı Final kademesi kalktı; çöl haritası K10 bossu olacak, Aşama 3; zafer akışı test_map_content_phase1)")
 	assert(BossBarArtScript.display_name("ucansetan1") == "UÇAN ŞEYTAN", "boss barı adı")
 	var sp: Node = _spawner()
 	var b: Node = _boss(sp, Vector2(500, 500))
@@ -97,36 +97,6 @@ func test_sheets_scene_tables_stats_size_and_glow() -> void:
 	assert(is_equal_approx(b.shield_protection, 0.9) and is_equal_approx(b.contact_damage, 150.0 * SpawnerScript.CREATURE_DAMAGE_CUT), "soğurma %90, saldırı 150 x0,8 (2026-10-11)")
 	assert(absf(b.frame_sprite.scale.x - 1.6 * EntityScale.SIZE * EntityScale.BOSS_EXTRA * 4.0) < 0.001, "4x boyut")
 	assert(b.get_node_or_null("BossGlow") != null and b.no_body_block, "dışa parıltı + içinden geçilebilir")
-	_cleanup()
-
-
-func test_final_flow_demon_spawns_after_the_tiers_and_killing_it_opens_endless() -> void:
-	var sp: Node = _spawner()
-	_player(Vector2(1000, 1000))
-	assert(sp._final_active() and sp._final_ids() == ["ucansetan1"], "Final aktif, tek boss")
-	GameManager.game_time = 1400.0
-	sp._check_final_tier()
-	assert(not sp._final_spawned and sp.get_endless_layer() == 0, "Kademe XV bitmeden Final yok")
-	GameManager.game_time = 1501.0
-	assert(sp._final_pending() or sp._final_gate_open(), "kapı açılır")
-	sp._check_final_tier()
-	assert(sp._final_spawned and sp._final_bosses.size() == 1, "Uçan Şeytan doğdu")
-	var boss: Node = sp._final_bosses[0]
-	assert(str(boss.get_meta("creature_id")) == "ucansetan1" and boss.is_boss, "Final bossu")
-	assert(sp.get_endless_layer() == 0, "boss sağken sonsuz yok")
-	sp._check_victory()
-	assert(sp.get_run_phase() == sp.RunPhase.NORMAL, "boss sağken zafer yok")
-	boss.is_dead = true
-	sp._check_victory()
-	assert(sp.get_run_phase() == sp.RunPhase.VICTORY, "boss ölünce zafer penceresi")
-	assert(sp.begin_endless() and sp.get_run_phase() == sp.RunPhase.ENDLESS and sp.get_endless_layer() == 1, "Sonsuza Devam Et -> sonsuz mod Kat 1")
-	## Kapatılınca eski davranış: Kademe XV bitince doğrudan sonsuz.
-	var sp2: Node = _spawner()
-	sp2.new_final_enabled = false
-	_player(Vector2(1000, 1000))
-	GameManager.game_time = 1501.0
-	sp2._check_final_tier()
-	assert(not sp2._final_active() and sp2.get_endless_layer() == 1 and not sp2._final_spawned, "new_final_enabled=false: doğrudan sonsuz")
 	_cleanup()
 
 

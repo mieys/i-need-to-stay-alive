@@ -42,7 +42,7 @@ const DamageStats := preload("res://scripts/damage_stats.gd")
 const UiAnim := preload("res://scripts/ui_anim.gd")
 const HudTheme := preload("res://scripts/hud_theme.gd")
 const HudTooltip := preload("res://scripts/hud_tooltip.gd")
-const COOLDOWN_ICON := preload("res://assets/ui/stat_mini/cooldown_reduction.png")
+const COOLDOWN_ICON := preload("res://assets/ui/stat_icons/cooldown_reduction.png")
 ## İpucu levhası genişliği (32 px m5x7 ile satır ~24 harf) ve başlıktaki ikon (144 px sanat 1/3 = 3 px/sanat pikseli, keskin).
 const TOOLTIP_WIDTH := 516.0
 const TOOLTIP_ICON := 48.0
@@ -135,7 +135,7 @@ func _on_mouse_entered() -> void:
 		desc = def.get("skill_desc", "Aktif yetenek açıklaması bulunmuyor.") as String
 		if not desc_override.is_empty():
 			desc = desc_override
-		keybind_text = "Q"
+		keybind_text = GameManager.get_action_hint_label("skill")
 
 		var base_cd: float = 20.0
 		var current_cd: float = 20.0
@@ -161,7 +161,7 @@ func _on_mouse_entered() -> void:
 		desc = str(spirit_def.get("desc", ""))
 		kind_fallback = "RUHANİ"
 		if bool(spirit_def.get("active", false)):
-			keybind_text = GameManager.get_action_key_label("skill4")
+			keybind_text = GameManager.get_action_hint_label("skill4")
 			cd_now = float(spirit_def.get("cooldown", 0.0))
 			cd_base = cd_now
 			cd_note = "azaltılamaz"
@@ -178,7 +178,7 @@ func _on_mouse_entered() -> void:
 		desc = def.get("skill3_desc", "3. yetenek açıklaması bulunmuyor.") as String
 		if not desc_override.is_empty():
 			desc = desc_override
-		keybind_text = "R"
+		keybind_text = GameManager.get_action_hint_label("skill3")
 		kind_fallback = "ULTİ"
 
 		var base_cd3: float = 15.0
@@ -215,7 +215,7 @@ func _on_mouse_entered() -> void:
 		desc = def.get("skill2_desc", "Temel yetenek açıklaması bulunmuyor.") as String
 		if not desc_override.is_empty():
 			desc = desc_override
-		keybind_text = "E"
+		keybind_text = GameManager.get_action_hint_label("skill2")
 		kind_fallback = "TEMEL"
 
 		var base_cd: float = 15.0

@@ -229,6 +229,22 @@ func test_disabled_reason_and_ingest_reject_reason() -> void:
 	_end()
 
 
+## Madde 633: ana menü "Debug Modu" (content_unlock_mode) balans kaydını KAPATMAZ, kayıt "unlock" işaretli yazılır; normal koşuda işaret false.
+func test_unlock_mode_still_writes_balance_record_marked() -> void:
+	_begin()
+	var normal: Dictionary = BalanceLogScript.write_run(null, _summary(), "end")
+	GameManager.content_unlock_mode = true
+	var reason: String = BalanceLogScript.disabled_reason()
+	var unlocked: Dictionary = BalanceLogScript.write_run(null, _summary(), "end")
+	GameManager.content_unlock_mode = false
+	var lines: int = _lines().size()
+	assert(reason == "", "kilit açık modda kayıt açık kalır (%s)" % reason)
+	assert(not normal.is_empty() and normal.get("unlock") == false, "normal koşu: unlock false")
+	assert(not unlocked.is_empty() and unlocked.get("unlock") == true, "kilit açık mod: kayıt yazılır, unlock true")
+	assert(lines == 2, "iki kayıt dosyaya yazıldı (%d)" % lines)
+	_end()
+
+
 ## main.gd kayıt günlüğü yardımcıları: neden metni, atlama satırının Main başına bir kez yazılması, headless'ta gerçek net_log'a YAZMAMA.
 func test_main_record_log_helpers() -> void:
 	var m: Node = (load("res://scripts/main.gd") as GDScript).new()

@@ -288,7 +288,7 @@ func try_reroll_stock() -> Variant:
 	var cost: int = get_reroll_cost()
 	if GameManager.gold < cost:
 		return null
-	GameManager.gold -= cost
+	GameManager.spend_shop_gold(cost)
 	_rerolls_this_visit += 1
 	_current_stock = _generate_stock()
 	return _current_stock
@@ -564,6 +564,7 @@ func _create_interaction(pos: Vector2) -> void:
 	_prompt_layer = CanvasLayer.new()
 	_prompt_layer.name = "MerchantPromptLayer"
 	_prompt_layer.layer = 50
+	UiHideScript.mark_layer(_prompt_layer)
 	_prompt_label = Label.new()
 	_prompt_text = Loc.t("Seyyar Satıcı ile konuşmak için %s tuşuna bas") % GameManager.get_action_key_label("interact")
 	_prompt_label.text = _prompt_text
@@ -581,6 +582,9 @@ func _create_interaction(pos: Vector2) -> void:
 	_prompt_label.visible = false
 	_prompt_layer.add_child(_prompt_label)
 	add_child(_prompt_layer)
+
+
+const UiHideScript := preload("res://scripts/ui_hide.gd") ## F3 arayüzü gizle (madde 612): etkileşim ipucu katmanı kayıtlı
 
 
 func _free_interaction() -> void:
@@ -625,7 +629,7 @@ func _process_interaction() -> void:
 	if _shop_screen and is_instance_valid(_shop_screen):
 		_hide_prompt()
 		return
-	_prompt_label.text = _prompt_text
+	_prompt_label.text = Loc.t("Seyyar Satıcı ile konuşmak için %s tuşuna bas") % GameManager.get_action_hint_label("interact") ## kumandayla LB
 	_prompt_label.visible = true
 	var f_just_pressed: bool = Input.is_action_just_pressed("interact") and not bool(player.get("is_chat_typing"))
 	if f_just_pressed:

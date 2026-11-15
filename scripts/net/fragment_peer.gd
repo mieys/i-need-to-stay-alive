@@ -22,6 +22,10 @@ const FRAG_HEADER := 7
 ## Epic sınırı 1170 bayt; EOSG kendi 6 baytlık başlığını ekliyor. Pay bırakılarak 1100.
 const DEFAULT_LIMIT := 1100
 const PARTIAL_TIMEOUT_MS := 4000
+## HİLE/DoS KORUMASI (2026-11-12): kötü niyetli eş "toplam=65535" parçalarla bellek şişiremesin. Meşru en büyük mesaj (rejoin / katılım
+## yakalaması) yüzlerce parça; 2048 parça ~2,2 MB, 96 eşzamanlı yarım mesaj yeterince geniş.
+const MAX_FRAGMENTS := 2048
+const MAX_PARTIALS := 96
 
 var _inner: MultiplayerPeer
 var _limit: int
@@ -116,10 +120,12 @@ func _add_fragment(from: int, ch: int, mode: TransferMode, data: PackedByteArray
 	var msg_id: int = data.decode_u16(1)
 	var idx: int = data.decode_u16(3)
 	var count: int = data.decode_u16(5)
-	if count == 0 or idx >= count:
+	if count == 0 or idx >= count or count > MAX_FRAGMENTS:
 		return
 	var key: int = from * 65536 + msg_id
 	var entry: Dictionary = _partials.get(key, {})
+	if entry.is_empty() and _partials.size() >= MAX_PARTIALS:
+		return ## yarım mesaj tavanı: yeni mesaj başlatılmaz (eskiler zaman aşımıyla temizlenir)
 	if entry.is_empty() or int(entry["count"]) != count:
 		var parts: Array = []
 		parts.resize(count)

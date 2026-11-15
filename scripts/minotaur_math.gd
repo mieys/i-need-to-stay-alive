@@ -52,10 +52,12 @@ const HORN_HOMING_TIME := 0.35
 const STAMPEDE_START_SPEED := 70.0
 const STAMPEDE_TOP_SPEED := 520.0
 const STAMPEDE_ACCEL := 300.0 ## px/sn^2 (tam hıza ~1,5 sn)
-const STAMPEDE_TURN_DEG := 80.0 ## derece/sn (tam hızda dönüş yarıçapı ~370 px: son anda yana kaçan yakalanmaz)
-const STAMPEDE_MAX_TIME := 3.6
+## 2026-11-14 (kullanıcı: "minotaur bazen drift atıyor, asla gösterdiği sınıra doğru gitmiyor"): koşu da ARTIK KIVRILMAZ - yön windup'ta kilitlenir, boss tam olarak
+## çizilen şerit boyunca (STAMPEDE_RUN_LEN, duvara kısaltılmış) koşar ve şeridin sonunda biter. Eskiden 80 derece/sn oyuncuya doğru kavis çizip gösterilen şeridi terk ediyordu.
+const STAMPEDE_TURN_DEG := 0.0 ## derece/sn kıvrılma (0 = çizilen şerit = gerçek yol)
+const STAMPEDE_MAX_TIME := 3.6 ## emniyet sınırı (şerit uzunluğu zaten koşuyu ~2 sn'de bitirir)
 const STAMPEDE_AFTER_HIT := 0.5 ## birine vurduktan sonra koşu bu kadar daha sürer
-const STAMPEDE_PREVIEW_LEN := 260.0 ## uyarı şeridinin gösterdiği başlangıç uzunluğu
+const STAMPEDE_RUN_LEN := 700.0 ## uyarı şeridinin uzunluğu = koşunun yolu (70 -> 520 px/sn hızlanırken ~2 sn)
 const STAMPEDE_LANE_WIDTH := 64.0 ## ~ boss gövde çapı (ölçekli yarıçap ~31,5): isabet yarıçapı = yarısı + oyuncu 11,4 = gövdeye değen vurulur
 
 # ---------------------------------------------------------------- toparlanma

@@ -109,7 +109,7 @@ func test_lanet_eye_hop_and_impact() -> void:
 	assert(is_equal_approx(eye.scale.x, BuyucuFxScript.PX * (1.0 + 0.12 * 2)), "3. sekme %%24 büyük: %.3f" % eye.scale.x)
 	assert(_world_sheets("lanet_cast").is_empty(), "kalkış mührü sadece ilk sekmede")
 	var mid_off: float = 0.0
-	for i in 40: ## 124 birim / 750 = 0,17 sn (başsız koşuda kare süresi değişken - zamanla bekle)
+	for i in 40: ## 124 birim / 600 = 0,21 sn (madde 563; başsız koşuda kare süresi değişken - zamanla bekle)
 		await get_tree().create_timer(0.02).timeout
 		if not is_instance_valid(fx):
 			break
@@ -132,6 +132,58 @@ func test_lanet_eye_hop_and_impact() -> void:
 	for c in get_tree().current_scene.get_children():
 		if c is BuyucuFxScript.Sheet:
 			c.free()
+
+
+## Madde 563: "Arcane Patlama" (E1) = Yıldız Tozu - ön + zemin sayfası TOPLAMALI, ölçek = yarıçap / DRAWN_RADIUS, zemin "Harita"nın hemen
+## arkasında (haritanın üstü, yaratıkların altı), düğüm sayfa süresince yaşar. E1'de gözün çarpması küçük lanet_burst çizmez, ayak mührü
+## zemin yuvasında.
+func test_arcane_blast_star_dust_and_ground_slot() -> void:
+	if get_tree().current_scene == null:
+		get_tree().current_scene = self
+	var scene: Node = get_tree().current_scene
+	var map_node := Node2D.new()
+	map_node.name = "Harita"
+	scene.add_child(map_node)
+	scene.move_child(map_node, 0)
+	var later := Node2D.new() ## haritadan sonra eklenmiş bir "yaratık"
+	scene.add_child(later)
+	var blast: Node2D = (load("res://scenes/fx_arcane_blast.tscn") as PackedScene).instantiate() as Node2D
+	blast.scale = Vector2.ONE * 1.25 ## Efsunlu Büyü
+	scene.add_child(blast)
+	blast.global_position = Vector2(300, 200)
+	await get_tree().process_frame
+	var front: Array = _world_sheets("patlama_front")
+	var ground: Array = _world_sheets("patlama_ground")
+	assert(front.size() == 1 and ground.size() == 1, "ön + zemin sayfası: %d / %d" % [front.size(), ground.size()])
+	for s in [front[0], ground[0]]:
+		assert((s as CanvasItem).material is ShaderMaterial and ((s as CanvasItem).material as ShaderMaterial).shader == BuyucuFxScript.AddShader
+			and BuyucuFxScript.AddShader.code.contains("blend_add"), "toplamalı (ilk karede hazır shader, madde 563)")
+		assert(is_equal_approx((s as Node2D).scale.x, BuyucuFxScript.PX * 1.25), "ölçek PX x yarıçap oranı: %.3f" % (s as Node2D).scale.x)
+		assert((s as Node2D).global_position.is_equal_approx(Vector2(300, 200)), "isabet noktasında")
+	assert((front[0] as CanvasItem).z_index == FxArcaneBlast.FRONT_Z, "ön katman yaratıkların üstü")
+	assert((ground[0] as CanvasItem).z_index == 0 and (ground[0] as Node).get_index() == map_node.get_index() + 1
+		and (ground[0] as Node).get_index() < later.get_index(), "zemin haritanın hemen arkasında, sonradan eklenenlerin altında")
+	for i in 20:
+		await get_tree().create_timer(0.05).timeout
+	assert(not is_instance_valid(blast) and _world_sheets("patlama_front").is_empty(), "patlama ~0,6 sn sonra silinir")
+	## E1'de çarpma: lanet_burst yok, ayak mührü zemin yuvasında
+	var impact := Node2D.new()
+	impact.set_script(preload("res://scripts/fx_arcane_impact.gd"))
+	impact.set("p0", Vector2(100, 200))
+	impact.set("blast", true)
+	scene.add_child(impact)
+	impact.global_position = Vector2(300, 200)
+	await get_tree().process_frame
+	assert(_world_sheets("lanet_burst").is_empty(), "E1: küçük çarpma pufu çizilmez")
+	var brand: Array = _world_sheets("lanet_brand")
+	assert(brand.size() == 1 and (brand[0] as Node).get_index() == map_node.get_index() + 1, "ayak mührü zemin yuvasında")
+	for c in scene.get_children():
+		if c is BuyucuFxScript.Sheet:
+			c.free()
+	if is_instance_valid(impact):
+		impact.free()
+	map_node.free()
+	later.free()
 
 
 ## Hortum: doğuş -> döngü sayfası; ömür bitince "ending" + çözülme sayfası, hasar biter, düğüm kendini siler. Uzak kopya da begin_out'la.

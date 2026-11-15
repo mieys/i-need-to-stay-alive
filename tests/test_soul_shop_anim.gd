@@ -68,11 +68,11 @@ func _row_on(shop: Node, id: String) -> bool:
 	return r != null and (r.get_theme_stylebox("panel").get("bg_color") as Color).a > 0.05 ## PixelBox (madde 417)
 
 
-## Sahne figürü: alttan + ortadan çapalı TextureRect.
+## Sahne figürü: ortadan çapalı TextureRect - karakterde alttan, diğerlerinde ortada (stüdyo ışığı kalkınca 2026-11-13, madde 656).
 func _figure(shop: Node) -> TextureRect:
 	for t: Node in shop.find_children("*", "TextureRect", true, false):
 		var tr := t as TextureRect
-		if is_equal_approx(tr.anchor_left, 0.5) and is_equal_approx(tr.anchor_top, 1.0):
+		if is_equal_approx(tr.anchor_left, 0.5) and (is_equal_approx(tr.anchor_top, 1.0) or is_equal_approx(tr.anchor_top, 0.5)):
 			return tr
 	return null
 

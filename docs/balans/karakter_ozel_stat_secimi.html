@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Karaktere Özel Stat</title>
+<style>
+:root {
+  --bg: #1d1712; --panel: #2a211a; --line: #4a3a2c; --text: #f1e4cf; --muted: #b39d82;
+  --accent: #e8b25a; --good: #8fcf6a; --input: #15100c; --sel: #3b2d1f;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.4 system-ui, "Segoe UI", sans-serif; padding: 16px; }
+h1 { font-size: 20px; margin: 0 0 4px; color: var(--accent); }
+p.sub { margin: 0 0 14px; color: var(--muted); font-size: 13px; max-width: 900px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 12px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; }
+.card h2 { font-size: 16px; margin: 0 0 2px; display: flex; justify-content: space-between; gap: 8px; }
+.card h2 small { color: var(--muted); font-weight: 400; font-size: 12px; }
+.kit { color: var(--muted); font-size: 12px; margin: 0 0 8px; }
+.opt { display: grid; grid-template-columns: 20px 24px 1fr auto; gap: 4px 8px; align-items: center; padding: 6px; border-radius: 4px; border: 1px solid transparent; cursor: pointer; }
+.opt:hover { border-color: var(--line); }
+.opt.on { background: var(--sel); border-color: var(--accent); }
+.opt input[type=radio] { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
+.opt img { width: 24px; height: 24px; image-rendering: pixelated; }
+.opt .nm { font-weight: 600; }
+.opt .why { grid-column: 3 / 5; color: var(--muted); font-size: 12px; }
+.rec { color: var(--good); font-size: 11px; font-weight: 700; margin-left: 4px; }
+input[type=text].amt { width: 96px; background: var(--input); color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 3px 5px; font: inherit; font-size: 13px; text-align: right; }
+select { background: var(--input); color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 3px; font: inherit; font-size: 13px; max-width: 190px; }
+.none { font-size: 12px; color: var(--muted); margin-top: 4px; display: flex; gap: 6px; align-items: center; cursor: pointer; }
+.box { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px; margin: 14px 0; }
+.box h3 { margin: 0 0 6px; font-size: 14px; color: var(--accent); }
+table.ref { border-collapse: collapse; font-size: 13px; width: 100%; }
+table.ref td { padding: 3px 8px; border-bottom: 1px solid var(--line); }
+table.ref td:last-child { color: var(--muted); }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 8px; align-items: center; }
+button { background: #3a2d22; color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 6px 12px; font: inherit; cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); color: #1d1712; border-color: var(--accent); font-weight: 700; }
+textarea { width: 100%; min-height: 240px; background: var(--input); color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 8px; font: 12px/1.45 Consolas, monospace; }
+#copied { color: var(--good); font-size: 13px; }
+.count { font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+<h1>Karaktere özel başlangıç statı</h1>
+<p class="sub">Her karaktere bir şık seç. 4 şık kitine göre önerildi ("öneri" yazan benim seçimim); 5. satırdaki "Başka" ile listedeki herhangi bir statı da seçebilirsin, aynı stat birden çok karakterde olabilir. Miktar kutuları düzenlenebilir. Varsayılan miktarlar eşit değerde: her biri ruh dükkanında yaklaşık 100 kıymık tutan seviye kadar. Bitince alttaki metni kopyalayıp bana yapıştır.</p>
+
+<div class="grid" id="cards"></div>
+
+<div class="box">
+  <h3>Varsayılan miktarlar (≈100 kıymıklık ruh dükkanı seviyesi)</h3>
+  <table class="ref" id="ref"></table>
+  <p class="count" style="margin:8px 0 0">Dirilme Hakkı listede yok: ruh dükkanında 600 kıymık, tek başına diğerlerinin ~6 katı; karaktere bedava vermek dengeyi bozar. İstersen "Başka" ile yine seçebilirsin. Ücretsiz Karıştırma ve Evrim Karıştırma savaş gücü değil kolaylık, bu yüzden yalnız iki karakterde şık olarak duruyor.</p>
+</div>
+
+<div class="box">
+  <div class="btns">
+    <button class="primary" id="copy">Metni kopyala</button>
+    <button id="reset">Hepsini öneriye döndür</button>
+    <span id="copied"></span>
+    <span class="count" id="dist"></span>
+  </div>
+  <textarea id="out" readonly></textarea>
+</div>
+
+<script>
+const ICONS = {"pickup_range": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAABUElEQVR4nO2aP0rEQBjF3zzS7wnsZasFLQVzCWFhG7faMu0ewXbBxm4bIbBHsFFY2MYBK7Gw8wQ5QezGr8iiY4LxZfKrhjAzCbyX93354+q6hjKEOIQ4bvl+DWUIcQhxsq428vlzVJydPZ67Ls4rrwCRsoW8sc1qcxOOT2cnjfNfXz7C+C5fh7Vt7CSvAJGahfwR21T7tzAuinXj2s3TfRjPr74KaJlvf20neQWIFCzkf2CbcrfFdzYoLhd1k50ssXaSV4BILYWqSNtY7Bxrp5WxJXaJKUCIk+EfUBlbJqcAIQ4hDiEOkVoKTS5Ow3iOuJbY9lS2nZ6YPcdCNvhXiz6ytbZY21jKyJ5qUDcxIU72lyezadOm/xmUAkQKKeRN8tiH8cPtQ1SSHCtkbRJJXgEi5UJmiS1AXe1DiEOI48bPrD1DiOPGnz16hn1fQFs+ATwzfk7QHtzVAAAAAElFTkSuQmCC", "fire_rate": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAABUklEQVR4nO2YsUoDURBF71z8DK0sBBtFRGwDlum09wO2DAh+gSBY7gfYmy59+mChzYKFlR8Su2WKHXybty9mdnKqDZk3CczhvkkEGSy/P9ebnm0+ftrn6nYqm/YhnEM4R0o0zVFrcnwmoSZAOEesN+r5Yj1ESpTWiXAO4Rzpq0HfC0ireHp+1FnTqJ66JuWz3E+AiKBQnaBBSmKkJFJj6GT1dz8BwjnS90COTiUSiXAOEXmdXiakiqWTdbZRqmisRHI/AcI5BzmHrcQosZaPdgJEZIUqpYSVKpZaQ0E4h4isUE46WfUpNTrZ3E+AcI4M1cj64V+Car9Ojz2Fcli9f7XPr0+z/V+LO4/oF4uHu859Zvr81tbdP760NVeXJ0X1CHEPEBFSqFa7xzb1CDEBIoJCK6WHZpuqjHYChHNkdnPdmTCTi0P8dantAoRz+N9fIJdfp26EbvgIWbgAAAAASUVORK5CYII=", "health_regen": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAABfklEQVR4nO1ZsU7DMBQ8HwysXTqhiClsSJ2QOnRgoAN/wNx+AOI7UD+gzP2DDjB0YEBiYm7GjCysXVCYcFJkq07zKvRsbnqxnGdLd3l+55iz0wtoBqEchHIcB86rPONGaB/VvjnVM0BELKHqJ8ge75wTyslsb+p9+cuWOdUzQCiH+XWQOWl9GbzZeNof2nj99GXjcjLbyutZb2f+0ftlq5zqGSBirUInq8LG03Etm/nHq42vV72QNVrJcj6o848CqpN6BojIqlATlrL89gYuFIulr0o4332+/3TKxoctuT70nOuqZ4CIWEJS7bRTTpur3Mbn4yPn4dishD65qmeASMSRGc94SOtrx4vFspZTY8K68RQim6gYIBKRkJST2imnIkA2UTFApHaQZUJOypcf//dCMbbTWYiTarS+HeWU1kdMxHovlB/YSUnJiVAOIjVTvxFyUlIglIOIuJ02h3RSUiCUg0jN1BdCTkoKhHIQiTgyH7r8ZhWBegb41xvoim/7M5HSbl4FAQAAAABJRU5ErkJggg==", "lifesteal": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAABhklEQVR4nO2ZsUoDQRCGJ4MvYHXNgajNIVzlOwQknWBnKx4ErNUHkOtSBSLiK4hF5EAQxMLOKiDXRAlckyqVdezWv9jl5oQkN8t+1e7x53bh/7OzzBEFAoHAJung5Gl4vbSJev0boyuLO6smOTqzaqJ4x2i2067RLCbPRjOvZtb3SPbDpBwm5WzhZH9v14ynX9//finGBuOB4PMI9C5wb145wORThCKw0hUhfD75LK2a97fX2oUfx4UZpwdJrd4VM/UOMPlUyBaC4rJOSkFBVO8Ak0+n0M/J1d9kkJlh3j82Vl4OH1YapxzWQu67F346wKScjkRUJYfG1rj8WGmEKlgLca2r3gEmn06hthEL4qreASafIpRDETnPMuvdY50s4G52OxqRrZiqd4DJ1+s00oYIIeE63dpTaO7o4TQ9qSTWu06Y05dZo/2o/xMz+RShqaDngz0cSdvQBWpSeGcMRSofF8u63pF6B5h8ilAPPhxIkLQfm/4WkTQQ1DvAm95AIBAIkGp+AUcDklyOYuq3AAAAAElFTkSuQmCC", "shield_amount": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAABmUlEQVR4nO2asUvDQBTGvzwy5C8QhYKbXTTg1E46FKr/SBYRnFycMrk4CcUlHR11V6GDm8XtnOwmCFUnRzfdzle4o0lzJdy9ftMjebkLfD9e3t0lSlvbKKFfNKNoXgLBcxE8V4Thp/FGmvc0Niof6etZd83JxMXT19ycNO/pWOWjKEgHCJ4rLpPEsXk7PdPxT2vfmJ+8P+r4Yzox5qSWudTxFUQ5QJCAEBfHpn1yYK4qnV0dpoMjVFHGcB1LcIAgDaGEVRjgHyErBgPzOOsbWzq2VSoRDhAkV6GiRD9jw8aVCJ6LIA0hm1y12eIcIEhGKGsIm6AcIHiueBm9EP/A2VZeM6u56aTSs0E5QPBcsauBuPUzmwC37vufoBwgSECoYHj0a0xm20fiWi3qfVPsaqBVO72gwq1Cih0o8MOOB3bY0Wc71ZsX55Um/n4udNy5vtHx+HDH+A7BOkCQUIVUCZz2Lu+Nu9Y21cEmKAcI0j5kyoJT++5F57wynBL2LEerDjZBOUDwXFHJnz2W8UPIwtgE5QA1/QJ19Qf61mqMci4FBwAAAABJRU5ErkJggg==", "shield_regen": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAABaUlEQVR4nO2ZsUrDUBSG//vToYOzOHRzcLGCVKiCRDddfAxx7OTi5Ct0lD5GJwdBRagBRbCTg4PgUJwd3NKpt6eQS7hprJwev+kk3NwG/i/nprluq7EJzRDKIZRDKIdQDqGcWolrMvwuzlQChBGFsknxenkT9QNJ+lI4ZqNz5Ov0uJnF6KQ+AcJaF0qEEjL6ED1s554/3V319cf5BcwmQBhcyDy9x69cJSTyvBz/1r32dR2GEyAsKySReoS6VoLqIZRDKIdQDqEcwloXqn/eTQ/a+e85i4RQDmF5IUvEInUfqZNUcTTs202AUE6tqolCf95nupZAanP10Pb12X5qKwHCiEJuUoyGff/dZk0M+GkcFE4S0mbvfcXXg1mdCr8RqU+AUI6bc49sqlPzpLQ2IQbr36Hu5JYmAcK4QoUbH7HaxOqkPgFCOW4BO/VerdbtTulJng+f5OF/FzKlUFVbtG4pH2L+9Q3MyxjhvlSUmrSieQAAAABJRU5ErkJggg==", "heal_power": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAABSUlEQVR4nOWXMU7DQBBF/365JS2pOAC5AOl8CyqnQUakT25BnyJKgyuUS7jjBOEMTgsHMJ09xa7AQpb9d185Gnst/adZj2teHqAMIQ4hToaZUR3uW1+92H66KBMgxMkwM/b12VsvsIozAUKcbG7TBvVlUL98AoQ4bqp/oeXjxa9QagkQ4hDiEOIQ4mRTHdy8r7y/x6HpFOqXT4BIWaFq4PY0BoQ4REwKVUaJHU5d/bpde5WwPZYr1t767eGje/8rnrq6VS40baJNgIhJob1ZqHf5yXu5DI3YPtsGzioCC3sSCRAxKdQYPRwWffT5V9+U9yYc3769Ly3NtLHauHrhPSvpBIgUlvqlnSRWp78cMII2USVAiEOIQ4hDpLaRHc3lVW5ufu3BHUaFEIdITaHSaGMvKUu76S+75xqjQohDiEOIQ4jDqT/gv/wAaMdYshsjKtkAAAAASUVORK5CYII=", "crit_chance": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAABvklEQVR4nO2Yv0oDQRCHZ4Y8gJWIfyBoZ5GIELBQScAihV2s06W2EKyEiDYiXJlCUvgCpksRMHBRUwiCJCns1ICiIha+wVm5N8IuF5OccefyVZPNZm/h92X27hBGhHcF3neNa4D9rkNgOQSWg6O6sOd5vkKI2n2UKlU1Z3FpTo1nFpIoJgECy4nBP6BkUIVTPHqVmQCB1C7kGQ4a4zjrKtBky676w0aa/vzGdFvV6ZckBO3B+gQILAfDvoB739Y6lJ5PqLrx0AnsNpflLIpMgMByYmFrc9d6giCFir/URlQCBJYT+0ttftzn8MMOatFNgECSQtXdLaWBe/usxp36NQ5Dm+3cgaonUrW+O4+oBAikdqHM8qyqnfqwtCmo+iKfVfX4vZD4g2y9UAvUhmPShjOINqL+xASSFHLZ4cW7UOpxn83a0y50cniq1ebzpqzqTqsS+HIgcgkQWA6avuD3RSbNzj9mAi/AtQkDAsshkHqQuYaOxGsw6BS2NqISILAc5B9yibi288Qnp/QK9UAvT3aRToDAcnBnY0WrTff9TdWVTlcbPf9tL2ptHp+NFYqOQk4IHSMMCCyHRr2BQfkCLdabL7al7g0AAAAASUVORK5CYII=", "crit_damage": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAABbklEQVR4nOWaP0vDQBjGn/ch2EVKLZIlg9BBrJvoV3BxdLSDfg9nv4dLHR0d/AxCNwsOxcEMipRSXDqd23GFnEnx0va9/KZLcvkDz4/nQogYY6AZQjmEcuTj6NRuXPwsrE9Puy2BAgjlEMqR6529wgOjNLM6nXzlS+dgiyCUQygn8R1wtRmlmbvfbJNOhHKIWBWCo4erzaDTthOGs/nGdSKUQ8S6kP2BTyfUqdP9Ymrve9PqSjQJEA1UqFQnH8PZXELrRCiHiHghq4KrhI31uLtvd75Ov+140Gmb0DoRyiEa3kKFeri4Ovm4nUxkleaJKgGi4S2Eolbx6ZT1D+04H7/ZsatH3j9bSS31CRDKkVAt5OOu1yvVaYnHBxTplI1fEGUChHKSum/gNolPJx8+baJKgFCO1N1CVd5ncHlV2kjRJkAoR9apUCWdmpYAoZyk7k9/vjmhIJRDKEee04PgFz3/fF/bHySEcrjpB/gvvxitarfqGPGJAAAAAElFTkSuQmCC", "luck": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAABNUlEQVR4nO2ZsQ2DMBBFv79YIUUmSIpUbJARaJAyDBXDRKJhhGxAlYJMkCIrREpKrsDCFnais3mVZeEz0v+c7wywsbEK472iP39m54fnNG7H5bjNcYpT7uefqW6LcQjlEFlYqLfYxobNTi62sWGxk3oFCOUUUaJKe9SFsM0u+FaEcogsLDSIrOKbPdYwiH1TVYDIrhZqHA4jKf1DuPTwhtfadrmmUq8AkZ2FJPXJr0ZyobubrBQglGO8V2xZKCxEFhZqVnRS19c0vniW08PyoaZeASKLcrr8YQlt3XdEkgoQyinid1JxtkhGAUI5JsrttK0Lk/Muh1q13U6n3pG51E4SaSHPzivZj5hQjgkWyZadZDkdyDZJKUAox0Q/yCLYJikFCOUUwe58Ooe/8xEglMN/v8BavtoCUiaNS0iIAAAAAElFTkSuQmCC", "discount": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAABf0lEQVR4nO1aIXLDMBA83RT1DeUlnpoV9QPiIfmJZ0JCMtMn9Ach4f5AUJknJsX5Q6mKap07d7Vsi9xZiw6cZKDVem9t9/JUQSYEUrsVPZPo7rehRlAOBOV4WLCG0mBAd+iHuj5Vi3v+wJk/AQTlcIkqFDgagLT0TWDHNUF4+ljWp9EDhsVFhbSoUOCODD4iDdrjK7vQ73iqtBe+X0J3+JRUy5m5xAjGVChM0obQoPn6ll5S7MNSev5BUSFlKnSdps0IKYyQexxs9RIjmKVQP3Onuf2ZJjUE5UAwbKcDa6EpqhUWWtiyFiw0RbHTqiey9+dHtsHvovVdY6E92adMZJYoRMHKDaWW5JeSLPe5nxzwu/utTGSqo0XH0ckfo3o0e4GW2YJwQ1YCYQu5UDYI/qcTlGcTJ4BgNhc6JxzrXDudQI9WDhBKLqRChdxvUe9jGkw9zMgeX/In0o1AG7OXGMHwi8zxHxd4q+xJPbbK8xJsKLnQBiYyCeVnjyVQr0I/kjaM6ypTHKoAAAAASUVORK5CYII=", "shield_protection": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAACNElEQVR4nO1aMUgDMRT9Fxxcu+jQgoNDwbqoFQULddGKHQU3J706VgouzqKDIDra6uQmOHq0bhUHoaWTFjoKvaEKurrFyfxfSbirV7DJ9UEh9/tJUv679x9JLc45/MCyLJBhNr2KSQHQef+QxtsXdTGO7SbF2G3W5RsiYKA5GGiOEdUXlDaNrWsRtxfH/rxY6elN/kUK53QLmBM9zXIvOmlfAQaaw6IqNLec8aRN67ziOWk8n5HGX/cPpPGKc4QbupLTLHqaBRmdtK8AA1NVyFbQ5mFhxnPSuI+F7zf2pPHV2zPPHKMqwMBUChU/sW+koSzGPD6OSSlikR5Jn0korBNRGxUqNIfO+dK1FjemAgxMpVAuQmmAKmS1Ohhu0aaDcTsCno2MKgzfRsVL53CteB734CTmxdhtwrCRDT6FVN7GT5NSYeIEFcbu0UcZ+xIzCAOFWj4sdBA7DaR5qZQqamoFGISBQhT9stNfsTQ+EM/zFStLLb1jagUYaA4Gg4AUx4+WPyAAzFKhRvVeyEFnc17Uc/2mhkl+mtqit58ZbVfx4XFNbqE3qYUeHi1q1sjcwp2gk6OgU68eyQ8cShuyB9ghhwkmvcQMwuCFJpcO+06n7mPDYzFKTKyItdwwVICBSRccFr1mvSTnPwrQO6yuZufjjqzrwqJA1EaFoQrpRiH7uTdrq1KnXzlivH5TE4sVP/G0ORfhUjqVpi0zX2IGxqpQAESnklL++fnzRugqwP57A0HxDTAIusVGNiR9AAAAAElFTkSuQmCC", "free_reroll": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAABQklEQVR4nO2YsYrCQBCG//zE2ifw6uMq7X0NwVLYwvJaH+FawTZgIwg+gpUgWNhcFex9Amvhzm6dIguR3SCTyVcNIbsJzMfszGbnjxE0QyiHUE6eaiP3d/9/5f2CvSzFd9VngLCskBPaLA8b/7z8vfr4drxUr92t/doYndRngLCmkAtoc1rtfbzdrSvXzpc/Pp5i9twzQif1GSCUk6faSGoT0sB9L7wq08lTIdMZICwrVIoDSyohq0qoCoUOOHMZIJSTxUxkdXohidSmTtUykQHCskIxPVI3kbVFIUI5hHII5eRN3AWFDrImIJRDWB7q56I9/hoOfNwp9AL2FCpE6yuHdIlUq2kI5RDW2mkXaJtDyHZa0k1kbVEoj1kc0qM//qx83k1kbVQoS3UvVIdUg3yrMkBYrkJFA0qYywDf/QOxPAB7RXPCXYLtzAAAAABJRU5ErkJggg==", "evo_reroll": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAABjElEQVR4nOVaMWrDQBAcbeTWnbg+tUtDbPwX1wmkcpNWbRpXhvT+iyFFSj3CRzq3tkmq6FagQ3uJFLPaqQ6xdyeYYWa1KDs+LtA33PT962ftT4sMA4KgHATlyAc5dcOOLYeVGUE5CNYk5MqPQH05z27tSATlIJhzoe2lUypwYYnNpNWR+pITQTkI1iTkY9Tz8PpHRyIoB8GChFyE+qjzJPZILhKOktBUzwDBci+E1O3uzM6ZMPmF58CyMzRHxQBBOXJJUcN5EHGMN4TnT0vmGHO01kT2ckjCTj0DBGtBhkZgMcfwrG1msmlAUOMS+yX1DBCUIxdVCVplyQe+pMYcAwQTEnLnXmZEsb2pY8lRMUAwNxd6YUp5jYRaqiw9DzhjDBBMSMj/nmIRtpek0BwVAwTlyCVF1f1DvZ49Hzrb41hINcIuIsuK3VWsr+NngGBBQsX6WlNf7Va1PGZgcopBMNupdqvWu0wwQLDWCxWMYn8KP4p87u9qablpu2x4DRAcqRC4zWgZoFu/wF/xDebThg0wLMtgAAAAAElFTkSuQmCC", "revive": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAABPElEQVR4nO2YvwrCMBDGL0dxFBW3bh0EfRLBR3DwQTr3PezQRxB8EgWHbt1ExdGlbuUKPUzsPy7JN5WmuQS+X+9yAfDyaiXFDRwm8/LfoOnnqYaKiSBcCMIVcBYnUVS9D9crs6incyMqx93259TiemseyPOyCSfxDiAIl+oMGx0MDBWSPdCYcZ7b4wCCTVloLFR04teQ9ghJQKjoGY/L4974frNYuvUTI9iKUMgUsiHR2hCcuHXFO4DgQiEresAme72r5/1s6q4DCMIV1Jpl0vUkPS9sik1Mzj++IxN3L5SQTq2rIqWThTLyjb8XElfIUiY7Ubt1jr4cNpwyDWysqgMIwqVMJ7S5YaaiKGaG2FjlAIJrCLXBqStsrHIAwWWEOJzanG2ccwBBuFQfQbns1BU2VjmAY2/AywvG1Rc9P31mC7s8dAAAAABJRU5ErkJggg==", "cooldown_reduction": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAB40lEQVR4nO2XMUjDUBCGL4eKk7i5FAfpIpQUwdkOFUoH50IFI2QVFWmdxUlaKVW6OigouLZDLLRDxaUqSKPg5NbBSTu5CNbJl6u8RxJt0ZfXf/p5ufAC/8fdRbuZngOZhSC5ECTXiJci8+O9++WPcFQb5AeZPu+SPgGEoCJkkihb1W12Hk3k+o6TSe/Khpy78m3Xu6RPACFICJkkSnunzs4LqWXoN04iRK31EvOTyX2n3spw75I+AQQVBtnW+Qr33C9OImwKqRPmZ6ec+vF2I/gJIKiAUDSRA7foRThRfavhnkPtjNnihQIJIKiAUEuADe1OPTiRfcYqv/BrRDhlnXeVSABBBYSAdAaKjbCTUJVL7shV+bsQjCmQAIIKCMUeNplvQNFXd6IS1VgEm72ZXeaHu5AM0uBglftAz99y/84WmnfMNyIOTrCY5nYtOsiSh2u+sHm+rzBvZ+eHP/X/UhrUN1yLdKP+Y5x6BhORCJvw0ynzV28TzNvH8SFC8g4ym8SnG3GG0yXBKdbkDzsv2KRfH5m/BsVWCQQl1mkPOHVITaK9xF2JO1YGuAqFQdkEEFRDiEo0XMCodN3xc4YjlZfhFagEEFTYhQYtne5aHrAJVAIIkkvTQxGQWQiSC//6A36rT0KdzfQSDBx4AAAAAElFTkSuQmCC", "shield_pen_percent": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAACCUlEQVR4nO2az0sCQRSA374MhcJO3hKiS2GEkdgpKSgV7U/oHnQIulqHgghPnToIHoUuXaRDivSDwG4qFJHnQPsDEoKiwOjQ7DvMY93ciJn1O43r29mB9+3b56xGt9uFHwzDABnzSwkziNC4qYgTxmei0pjvacmYi5Hy3KxLF0TXjKA4CIrj4VITWU6KDweJM3E8FXoX43BwVsTkN2vSC2RyplpZJoZj4yQmzm0/1gwtM4Cgk0KRHrQpFK8sJ83kotLj1fK+5bmxlBmTX6+CrMpRnZTPAIJOClE4bQJTaTPoes9Sm7vjWzHeOcpKVeE042K0ygCCrgr1A9XGLtOTC+7KAIKbFcqS3oarQv2QIpVQ2wwgKI7BtdD17dNfTzq3tehIRaIEd1fFeNALKVeFCj200BSqDdUpPbEmjS89nVtP6vfpeRMjuO1BFqDtNIv1A4hqUxr1WsanO296ZgBBcTx/fQGuIjkFguIg6KRQg9ltbh1eiphCsWQ9a2jF1iIqL2aFSY75pMdhyNAzAwi6VqE22b7jdbLXI9FeqKf+xw0ZQHDDg6ztkE5Um3jnw/xixCOvPAQaT1+sKJ8BBJ1+1NuF04mj3PRK95HiRI8Q0an5+inGF/5hMb5vPQxecOihkF2duL2dMKkqVCdOG61uYgTFMZxSiML98YN7206hOnHaaJUB/O8F9MsX377CMY2UOScAAAAASUVORK5CYII="};
+const STATS = {
+  pickup:            {n:"Toplama Mesafesi",           i:"pickup_range",       a:"+%40"},
+  atk_speed:         {n:"Saldırı Hızı",               i:"fire_rate",          a:"+%6"},
+  regen:             {n:"Can Yenilenmesi",            i:"health_regen",       a:"+4,8 / 5 sn"},
+  lifesteal:         {n:"Can Çalma",                  i:"lifesteal",          a:"+%4,5"},
+  shield_amount:     {n:"Kalkan Miktarı",             i:"shield_amount",      a:"+%12"},
+  shield_regen:      {n:"Kalkan Yenilenmesi",         i:"shield_regen",       a:"+1,6 / sn"},
+  heal_power:        {n:"İyileştirme ve Kalkan Gücü", i:"heal_power",         a:"+%7,5"},
+  crit_chance:       {n:"Kritik Oran",                i:"crit_chance",        a:"+%3"},
+  crit_damage:       {n:"Kritik Hasar",               i:"crit_damage",        a:"+%9"},
+  luck:              {n:"Şans",                       i:"luck",               a:"+1,5"},
+  discount:          {n:"Fiyat İndirimi",             i:"discount",           a:"%4"},
+  shield_protection: {n:"Kalkan Soğurma",             i:"shield_protection",  a:"+%4"},
+  free_reroll:       {n:"Ücretsiz Karıştırma",        i:"free_reroll",        a:"1"},
+  evo_reroll:        {n:"Evrim Karıştırma",           i:"evo_reroll",         a:"+1"},
+  revive:            {n:"Dirilme Hakkı",              i:"revive",             a:"+1"},
+  cooldown:          {n:"Bekleme Süresi Azaltma",     i:"cooldown_reduction", a:"%4,5"},
+  skill_cost:        {n:"Yetenek Mana K. Bedeli",     i:"shield_amount",      a:"-%8"},
+  shield_pen:        {n:"Kalkan Delme",               i:"shield_pen_percent", a:"+%4"},
+};
+const REF_NOTE = {
+  pickup:"5 seviye", atk_speed:"3 seviye", regen:"4 seviye", lifesteal:"3 seviye", shield_amount:"3 seviye",
+  shield_regen:"4 seviye", heal_power:"3 seviye", crit_chance:"3 seviye", crit_damage:"3 seviye", luck:"3 seviye",
+  discount:"2 seviye", shield_protection:"2 seviye", cooldown:"3 seviye", skill_cost:"2 seviye", shield_pen:"2 seviye",
+  free_reroll:"tam (300 kıymık, kolaylık)", evo_reroll:"tam (300 kıymık, kolaylık)", revive:"tam (600 kıymık - önerilmiyor)",
+};
+// Her karakter: 4 şık [stat, neden], ilk şık = öneri.
+const CHARS = [
+  {id:1, n:"Talon", tr:"", kit:"Silah salvosu, hamle, aynalı silahlar; pasif yetenek kullandıkça güç yığar.", o:[
+    ["cooldown","Daha sık yetenek = pasif yükleri daha çok dolar."],
+    ["atk_speed","Silah salvosu ve aynalı kopyalar saldırı hızıyla katlanır."],
+    ["crit_damage","Çok silahlı vuruşlarda kritikler büyür."],
+    ["lifesteal","Silahların arasında dalan dövüşçüye can döner."]]},
+  {id:2, n:"Oakley", tr:"", kit:"Arılar, sarmaşık sabitleme, Hayat Ağacı; pasif çiçek bırakır.", o:[
+    ["heal_power","Çiçekler ve ağaç daha çok iyileştirir."],
+    ["cooldown","Arı halkası ve sarmaşık daha sık."],
+    ["regen","Alan kontrolcüsü, yerinde dayanır."],
+    ["pickup","Çiçek ve XP'yi uzaktan toplar."]]},
+  {id:3, n:"Matthew", tr:"", kit:"Şimşek zinciri, elektrik topu, yıldırım kalkanı; hareket ettikçe hızlanır.", o:[
+    ["crit_chance","6 hedefli şimşekte her vuruş kritik şansı taşır."],
+    ["shield_amount","Ulti kalkan çemberi ve elektrik topu kalkana dayanır."],
+    ["cooldown","Şimşek ve top daha sık."],
+    ["pickup","Hep koşan karakter, yol üstünü toplar."]]},
+  {id:4, n:"Lyra", tr:"Büyücü Kız", kit:"İki büyü seti (Arcane/Nova, Hortum/Meteor), Q ve E 1. seviyede açık.", o:[
+    ["skill_cost","Çok büyü yapan karakterin kalkanı daha geç biter."],
+    ["cooldown","Set değiştirip sürekli büyü atar."],
+    ["shield_regen","Kalkan bedelini daha çabuk geri doldurur."],
+    ["shield_pen","Büyü hasarı kalkanlı yaratıklara geçer."]]},
+  {id:5, n:"Kestrel", tr:"Assasin Çocuk", kit:"Görünmezlik, hamle, 15 vuruşluk ulti; pasif: yetenekten sonra 3 sn garantili kritik.", o:[
+    ["crit_damage","Garantili kritiklerin her biri büyür - pasifle doğrudan sinerji."],
+    ["cooldown","Daha sık yetenek = daha çok garantili kritik penceresi."],
+    ["lifesteal","Kırılgan vurucu, dalınca can kazanır."],
+    ["shield_pen","Elit ve kalkanlı hedefleri deler."]]},
+  {id:7, n:"Aldric", tr:"Şovalye Adam", kit:"Kalkan yenileme, yansıtan bariyer, koruma alanı; canı azalınca hasar azaltır.", o:[
+    ["shield_protection","Tankın kalkanı hasarın daha büyük kısmını emer."],
+    ["shield_amount","Ulti kalkan bitene kadar sürer - daha uzun koruma alanı."],
+    ["shield_regen","Kalkan karakterinin sürekli dolması."],
+    ["regen","Düşük can pasifinde daha uzun kalır."]]},
+  {id:8, n:"Elara", tr:"", kit:"Saldırı hızı patlaması, hızlı kaçış, çift tetikli ulti; pasif seviye başına saldırı hızı.", o:[
+    ["crit_chance","Çok sık vuruş = kritik şansı en verimli onda."],
+    ["crit_damage","Çift tetiklenen saldırılarda kritikler büyür."],
+    ["lifesteal","Sık vuruş başına can döner."],
+    ["atk_speed","Kimliğini güçlendirir (pasif sınırına daha erken dayanır)."]]},
+  {id:9, n:"Flint", tr:"Korsan", kit:"Saatli bombalar, bombardıman; pasif: öldürme başına altın, cüzdan = saldırı gücü.", o:[
+    ["discount","Alışveriş yapınca cüzdan (dolayısıyla SG) daha az erir."],
+    ["luck","Daha çok düşen eşya / ganimet - korsan teması."],
+    ["pickup","Altını uzaktan toplar."],
+    ["free_reroll","Dükkan/kart karıştırma bedava (kolaylık)."]]},
+  {id:10, n:"Seraphine", tr:"Melek", kit:"Can ve kalkan iyileştirmesi (kendine + müttefiğe), itme ultisi; pasif kalkan aurası.", o:[
+    ["heal_power","Tüm iyileştirme ve kalkanı büyür - destek kimliği."],
+    ["cooldown","İyileştirmeler daha sık."],
+    ["skill_cost","Destek yeteneklerini daha az kalkanla atar."],
+    ["shield_regen","Kendi kalkanı da çabuk dolar."]]},
+  {id:11, n:"Corvina", tr:"Necromancer", kit:"Ruh harcayarak iskelet ve golem çağırır, lanetli kafatası.", o:[
+    ["cooldown","Çağırmalar ve kafatası daha sık."],
+    ["shield_amount","Çağırıcı arkada kalır, kalkanla dayanır."],
+    ["shield_pen","Çağrıların hasarı kalkanlı yaratıklara geçer (çağrılara işliyorsa)."],
+    ["luck","Daha çok ölüm/düşen = ruh ve eşya akışı."]]},
+  {id:12, n:"Ulric", tr:"Shaman", kit:"Saldıran totem, iyileştiren totem, elemental golem ultisi; totem auraları.", o:[
+    ["cooldown","Totemler daha sık dikilir."],
+    ["heal_power","İyileştirme totemi güçlenir."],
+    ["atk_speed","Saldırı totemi ve golem saldırı hızına bağlı."],
+    ["shield_regen","Totem başında kalkanla dayanır."]]},
+  {id:13, n:"Nox", tr:"Vampir Çocuk", kit:"Kan emme, yarasa formu (can harcar), can harcayan ulti; pasif %1 can emme.", o:[
+    ["lifesteal","Vampir kimliği - pasif can emmeyi büyütür, can bedellerini karşılar."],
+    ["regen","Yetenek can bedellerini zamanla geri koyar."],
+    ["crit_chance","Kan emme yeteneği ve yarasalar daha sert vurur."],
+    ["shield_protection","Can harcayan karakterin kalkanı daha çok emer."]]},
+  {id:14, n:"Hadime", tr:"", kit:"Aç/kapa kitap odağı, lanetli çukur, Karabasan formu; pasif: düşünce hayalet olarak kalkar.", o:[
+    ["cooldown","Çukur ve Karabasan daha sık."],
+    ["skill_cost","Uzun açık kalan odak/yeteneklerde kalkan daha geç biter."],
+    ["shield_regen","Odak açıkken kalkan çabuk dolar."],
+    ["evo_reroll","Evrim seçimini kitine göre ayarlar (kolaylık)."]]},
+  {id:15, n:"Hazel", tr:"Cadı", kit:"Zehir bulutu (aç/kapa), süpürge (can + kalkan), iksir ulti; pasif: eksik can = şans.", o:[
+    ["luck","Şans pasifiyle aynı eksende - iksir/ganimet şansı."],
+    ["regen","Düşük canda şans kazanırken dayanır."],
+    ["heal_power","Süpürgenin can + kalkan yenilemesi büyür."],
+    ["cooldown","İksir yükleri daha çabuk dolar."]]},
+];
+const KEY = "karakter_ozel_stat_v1";
+const fresh = () => CHARS.map(c => ({pick: 0, other: "pickup", amt: {}}));
+let state = fresh();
+try { const s = JSON.parse(localStorage.getItem(KEY) || "null"); if (s && s.length === CHARS.length) state = s; } catch (e) {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} };
+const $ = id => document.getElementById(id);
+const amtOf = (i, stat) => state[i].amt[stat] ?? STATS[stat].a;
+
+function build() {
+  const g = $("cards");
+  g.innerHTML = "";
+  CHARS.forEach((c, i) => {
+    const card = document.createElement("div");
+    card.className = "card";
+    let h = `<h2>${c.n}<small>${c.tr}</small></h2><p class="kit">${c.kit}</p>`;
+    c.o.forEach(([st, why], k) => {
+      const S = STATS[st];
+      h += `<label class="opt" data-k="${k}">
+        <input type="radio" name="c${i}" value="${k}">
+        <img src="${ICONS[S.i]}" alt="" onerror="this.style.visibility='hidden'">
+        <span class="nm">${S.n}${k === 0 ? '<span class="rec">ÖNERİ</span>' : ""}</span>
+        <input type="text" class="amt" data-stat="${st}">
+        <span class="why">${why}</span></label>`;
+    });
+    h += `<label class="opt" data-k="4">
+        <input type="radio" name="c${i}" value="4">
+        <img class="oimg" alt="" onerror="this.style.visibility='hidden'">
+        <span class="nm">Başka: <select class="other">${Object.entries(STATS).map(([k, v]) => `<option value="${k}">${v.n}</option>`).join("")}</select></span>
+        <input type="text" class="amt other-amt">
+        <span class="why">Listedeki herhangi bir stat.</span></label>
+      <label class="none"><input type="radio" name="c${i}" value="-1"> Bu karaktere özel stat verme</label>`;
+    card.innerHTML = h;
+    card.addEventListener("input", e => {
+      const t = e.target, s = state[i];
+      if (t.type === "radio") s.pick = +t.value;
+      else if (t.classList.contains("other")) { s.other = t.value; s.pick = 4; }
+      else if (t.classList.contains("other-amt")) { s.amt[s.other] = t.value; s.pick = 4; }
+      else if (t.classList.contains("amt")) s.amt[t.dataset.stat] = t.value;
+      paint(i, card, t.classList.contains("other"));
+      output(); save();
+    });
+    g.appendChild(card);
+    paint(i, card, true);
+  });
+  output();
+}
+
+function paint(i, card, refillOther) {
+  const s = state[i];
+  card.querySelectorAll("input[type=radio]").forEach(r => r.checked = +r.value === s.pick);
+  card.querySelectorAll(".opt").forEach(o => o.classList.toggle("on", +o.dataset.k === s.pick));
+  card.querySelectorAll(".amt[data-stat]").forEach(a => { if (document.activeElement !== a) a.value = amtOf(i, a.dataset.stat); });
+  const sel = card.querySelector(".other");
+  sel.value = s.other;
+  const oa = card.querySelector(".other-amt");
+  if (refillOther || document.activeElement !== oa) oa.value = amtOf(i, s.other);
+  card.querySelector(".oimg").src = ICONS[STATS[s.other].i];
+}
+
+function chosen(i) {
+  const s = state[i], c = CHARS[i];
+  if (s.pick < 0) return null;
+  const st = s.pick === 4 ? s.other : c.o[s.pick][0];
+  return {st, amt: amtOf(i, st), rec: s.pick === 0};
+}
+
+function output() {
+  const lines = ["Karaktere özel başlangıç statı - seçimim:", ""];
+  const dist = {};
+  CHARS.forEach((c, i) => {
+    const ch = chosen(i);
+    const label = c.tr ? `${c.n} (${c.tr})` : c.n;
+    if (!ch) { lines.push(`- ${label}: YOK`); return; }
+    dist[ch.st] = (dist[ch.st] || 0) + 1;
+    const changed = String(ch.amt) !== STATS[ch.st].a;
+    lines.push(`- ${label}: ${STATS[ch.st].n} ${ch.amt}${ch.rec ? " (öneri)" : ""}${changed ? " [miktar değişti]" : ""}`);
+  });
+  $("out").value = lines.join("\n");
+  $("dist").textContent = "Dağılım: " + Object.entries(dist).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${STATS[k].n} x${v}`).join(", ");
+}
+
+function buildRef() {
+  $("ref").innerHTML = Object.entries(STATS).map(([k, v]) => `<tr><td>${v.n}</td><td>${v.a}</td><td>${REF_NOTE[k]}</td></tr>`).join("");
+}
+
+$("reset").addEventListener("click", () => { state = fresh(); save(); build(); });
+$("copy").addEventListener("click", async () => {
+  const t = $("out");
+  try { await navigator.clipboard.writeText(t.value); } catch (e) { t.select(); document.execCommand("copy"); }
+  $("copied").textContent = "Kopyalandı";
+  setTimeout(() => $("copied").textContent = "", 1500);
+});
+buildRef();
+build();
+</script>
+</body>
+</html>

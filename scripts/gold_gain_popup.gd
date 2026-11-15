@@ -23,6 +23,10 @@ const OUTLINE_SIZE := 3
 var anchor: Control = null
 
 var _prev: int = -1
+var _prev_silent: int = -1 ## GameManager.passive_gold_total'ın son görülen değeri (sessiz pasif gelir yazı çıkarmaz, 2026-11-14)
+var _silent_debt: int = 0 ## sayaçta henüz görülmemiş sessiz altın (bkz. note_value)
+var _silent_age: float = 0.0
+const SILENT_DEBT_TTL := 0.5 ## borç bu kadar sn içinde sayaçta görünmezse silinir (gerçek bir kazancı yutmasın)
 var _sum: int = 0
 var _age: float = 99.0 ## son kazançtan beri geçen süre
 
@@ -40,12 +44,25 @@ func _init() -> void:
 
 
 ## Kazancı kaydet (düşüş yoksayılır). Test edilebilsin diye _process'ten ayrı.
-func note_value(value: int) -> void:
-	if _prev < 0:
+## silent: o ana kadar SESSİZ kazanılan toplam (GameManager.passive_gold_total) - artışı kazançtan düşülür, pasif gelir "+1" yazmaz.
+func note_value(value: int, silent: int = 0) -> void:
+	if _prev < 0 or _prev_silent < 0:
 		_prev = value
+		_prev_silent = silent
 		return
+	var ds: int = maxi(0, silent - _prev_silent)
+	_prev_silent = silent
+	if ds > 0:
+		_silent_debt += ds
+		_silent_age = 0.0
 	var d: int = value - _prev
 	_prev = value
+	## Sayaç (GoldRewardFx) bu düğümden önce ya da sonra işlenebilir: sessiz artış aynı karede ya da birkaç kare sonra görünür -
+	## borç olarak tutulup ilk ARTIŞTAN düşülür (harcama borca dokunmaz).
+	if d > 0 and _silent_debt > 0:
+		var eat: int = mini(d, _silent_debt)
+		d -= eat
+		_silent_debt -= eat
 	if d <= 0:
 		return
 	_sum = _sum + d if _age <= MERGE_WINDOW and visible else d
@@ -63,7 +80,10 @@ static func alpha_at(age: float) -> float:
 
 
 func _process(delta: float) -> void:
-	note_value(GoldRewardFx.display_gold())
+	note_value(GoldRewardFx.display_gold(), GameManager.passive_gold_total)
+	_silent_age += delta
+	if _silent_age > SILENT_DEBT_TTL:
+		_silent_debt = 0
 	_age += delta
 	var a: float = alpha_at(_age)
 	var show_now: bool = a > 0.0 and _age < HOLD + FADE and anchor != null and is_instance_valid(anchor) and anchor.is_visible_in_tree()

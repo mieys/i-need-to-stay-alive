@@ -16,24 +16,25 @@ const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / L
 const WEAPON_ICONS := {
 	"dagger": "res://assets/weapons/yeni/bicak.png",
 	"fire_staff": "res://assets/weapons/yeni/fire_staff.png",
-	"lightning_staff": "res://assets/weapons/lightning/icon_v3.png",
-	"tabanca": "res://assets/weapons/tabanca/icon_v2.png",
+	"lightning_staff": "res://assets/weapons/yeni/yildirim_asasi.png",
+	"tabanca": "res://assets/weapons/yeni/tabanca.png",
 	"tuftuf": "res://assets/weapons/yeni/zehir_asasi.png",
-	"tufek": "res://assets/weapons/tufek/icon.png",
+	"tufek": "res://assets/weapons/yeni/tufek.png",
 	"arcane": "res://assets/weapons/yeni/arcane.png",
 	"yay": "res://assets/weapons/yeni/yay.png",
 	"crossbow": "res://assets/weapons/yeni/arbalet.png",
-	"boomerang": "res://assets/weapons/boomerang/icon.png",
+	"boomerang": "res://assets/weapons/yeni/chakram.png",
 	"buz_asasi": "res://assets/weapons/yeni/buz_asasi.png",
-	"fisek": "res://assets/weapons/fisek/icon.png",
+	"fisek": "res://assets/weapons/yeni/dinamit.png",
 	"pence": "res://assets/weapons/yeni/tirpan.png",
-	"topuz": "res://assets/weapons/topuz/icon.png",
+	"topuz": "res://assets/weapons/yeni/topuz.png",
 	"uzunkilic": "res://assets/weapons/yeni/uzunkilic.png",
 	"gokkusagi": "res://assets/weapons/yeni/gokkusagi.png",
 	"mizrak": "res://assets/weapons/zanaat/mizrak_L1.png",
 	"kalkan": "res://assets/weapons/zanaat/kalkan_L1.png",
 	"yinyang": "res://assets/weapons/zanaat/yinyang_L1.png",
 	"pompali": "res://assets/weapons/pompali/icon.png",
+	"makineli": "res://assets/weapons/makineli/icon.png", ## madde 652
 }
 const GOLD_CARD_AMOUNT := 15
 

@@ -29,7 +29,7 @@ const LEFT_W := 456.0
 const PANEL_PAD := 16
 ## Kart satırı (prototip C): 48 px simge (288'lik sanatın tam bölümü, keskin) + başlık 32 / kazanç 24 / bedel 24 (bedelsiz kartta bedel
 ## satırı gizli). Satır kutusu koyu kuyu + kademe renkli kenar, seçilince / üstündeyken açık dolgu + altın kenar.
-const CARD_H := 108.0 ## en uzun satırın kendi boyu + pay (test_card_lines_fit_every_card ölçer)
+const CARD_H := 114.0 ## en uzun satırın kendi boyu (takas kartı: pay 2x15 + başlık 32 + kazanç 24 + bedel 24 + aralık 4) (test_card_lines_fit_every_card ölçer)
 const CARD_PAD_X := 21.0
 const CARD_PAD_Y := 15.0
 const CARD_GAP := 16.0
@@ -456,6 +456,30 @@ func hover_card(card: Button, on: bool) -> void:
 	_style_card(card, on)
 
 
+## Açıklama satırı: stat satırıysa [stat ikonu | yazı] (kullanıcı 2026-11-13: verilen statın ikonu + alt alta), değilse düz yazı.
+## İkon DESC_ICON (16 sanat px x2 = m5x7 32 yazısıyla aynı piksel yoğunluğu), yazı ikonun yanında dikey ortalı.
+func _desc_line(text: String, icon_id: String, fs: int, w: float) -> Control:
+	var tex: Texture2D = _stat_tex(icon_id) if icon_id != "" else null
+	if tex == null:
+		return _k.wrap(_txt(text), fs, _k.c("text"), w)
+	var row: HBoxContainer = _k.h(DESC_ICON_GAP)
+	row.name = "StatLine"
+	var ic: TextureRect = TextureRect.new()
+	ic.name = "StatIcon"
+	ic.texture = tex
+	ic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	ic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	ic.custom_minimum_size = Vector2(DESC_ICON, DESC_ICON)
+	ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(ic)
+	var lb: Label = _k.wrap(_txt(text), fs, _k.c("text"), w - DESC_ICON - DESC_ICON_GAP)
+	lb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(lb)
+	return row
+
+
 func _stat_tex(id: String) -> Texture2D:
 	var f: String = str(StatIcon.ICON_PATHS.get(id, ""))
 	return load(StatIcon.ICON_DIR + f) as Texture2D if f != "" else null
@@ -504,6 +528,9 @@ const FRAME_WIN_PAD := PANEL_PAD - FRAME_RIM_PAD
 const DESC_FS := 32
 const DESC_PAD := 18.0 ## açıklama kuyusunun iç payı
 const DESC_GAP := 4 ## açıklama satırları arası
+const DETAIL_SEP := 14 ## önizleme bölümleri arası (taşan önizlemede _fit_recipe daraltır)
+const DESC_ICON := 32.0 ## stat satırı ikonu (16 sanat px x2 = DESC_FS 32 m5x7 ile aynı piksel boyu)
+const DESC_ICON_GAP := 10
 
 ## ŞUNA DÖNÜŞÜR simgesine tıklayınca açılan eşya penceresi (madde 494): envanterin çift ahşap çerçevesi + yetenek ipucu gibi simgeye
 ## basamaklı uçla bağlı; üstte yer yoksa altta açılır. Dışına tık / Esc / aynı simgeye tekrar tık kapatır.
@@ -556,7 +583,7 @@ func _build_market() -> void:
 	dbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	body.add_child(dbox)
 	_detail_box = dbox
-	_detail = _k.v(14)
+	_detail = _k.v(DETAIL_SEP)
 	dbox.add_child(_detail)
 	## pencerenin altında solda: tek karıştırma + yasak hakkı (DEVAM sağda, setup_market)
 	var bottom: HBoxContainer = _k.h(20)
@@ -784,7 +811,7 @@ func reroll() -> void:
 	var cost: int = Market.reroll_cost(shop_rerolls)
 	if GameManager.gold < cost:
 		return
-	GameManager.gold -= cost
+	GameManager.spend_shop_gold(cost)
 	shop_rerolls += 1
 	offers = Market.reroll(_player, offers)
 	_hover = []
@@ -874,6 +901,15 @@ func _fill(section: String, i: int) -> void:
 		g.name = "SavedLock"
 		g.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		r.add_child(g)
+	if not sold and str(e["type"]) == "item":
+		var want: String = str(Market.saved_part_targets().get(str(e["key"]), ""))
+		if want != "" and want != str(e["key"]):
+			var rg: Control = _k.glyph(DarkKit.G_DIAMOND, HudTheme.ACCENT_SOFT, 3)
+			rg.name = "SavedPartHint"
+			rg.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			rg.mouse_filter = Control.MOUSE_FILTER_PASS
+			rg.tooltip_text = tr("Kayıtlı %s için alt parça") % tr(Items.item_name(want))
+			r.add_child(rg)
 	if sold:
 		var st: HBoxContainer = _k.h(8)
 		st.name = "Sold"
@@ -968,6 +1004,7 @@ func _refresh_detail() -> void:
 	if _detail == null:
 		return
 	_close_item_popup() ## önizleme yeniden kurulurken simgeler gider; açık pencere de kapanır
+	_detail.add_theme_constant_override("separation", DETAIL_SEP) ## _fit_recipe daraltmış olabilir
 	for c in _detail.get_children():
 		_detail.remove_child(c)
 		c.queue_free()
@@ -1021,15 +1058,19 @@ func _refresh_detail() -> void:
 		dw.name = "DescWell"
 		var dv: VBoxContainer = _k.v(DESC_GAP)
 		dv.name = "DescLines"
-		for ln in lines:
-			var dl: Label = _k.wrap(_txt(str(ln)), DESC_FS, _k.c("text"), DETAIL_TEXT_W - 2.0 * DESC_PAD)
-			dv.add_child(dl)
+		var icons: Array = d.get("icons", [])
+		for n in lines.size():
+			dv.add_child(_desc_line(str(lines[n]), str(icons[n]) if n < icons.size() else "", DESC_FS, DETAIL_TEXT_W - 2.0 * DESC_PAD))
 		dw.add_child(dv)
 		_detail.add_child(dw)
 	if _ban_armed == _key(section, i):
 		_detail.add_child(_status_line(DarkKit.G_X, _k.c("bad"),
 			tr("Yasaklamak için tekrar bas: bu oyun boyunca bir daha çıkmaz (kalan hak %d)") % Market.bans_left()))
 	if str(e["type"]) == "item":
+		var want: String = str(Market.saved_part_targets().get(str(e["key"]), ""))
+		if want != "" and want != str(e["key"]) and not sold:
+			_detail.add_child(_status_line(DarkKit.G_DIAMOND, HudTheme.ACCENT_SOFT,
+				tr("Kayıtlı %s için alt parça: almanı öneririm") % tr(Items.item_name(want))))
 		_add_recipe(str(e["key"]))
 	_detail.add_child(_k.sp(0, 0, false, true)) ## kalan boşluk altta: ELİNDE / SATIN AL satırını aşağıda tutar
 	## alt: ELİNDE (bakiye) + SATIN AL / GELİŞTİR (alınamıyorsa düğme nedeni yazar ve kapalı; madde 433 ek 3: alma YALNIZ bu düğmeyle)
@@ -1058,6 +1099,8 @@ func _refresh_detail() -> void:
 		bb.pressed.connect(_on_buy_pressed)
 		foot.add_child(bb)
 	_detail.add_child(foot)
+	if str(e["type"]) == "item":
+		_fit_recipe(str(e["key"]), nm, head)
 	UISound.connect_all_buttons(_detail)
 
 
@@ -1127,7 +1170,40 @@ func _ban_button(section: String, i: int, sold: bool) -> Button:
 
 ## TARİF (alt eşyalar; sendekiler "SENDE", alt parçaları ipucunda) + ŞUNA DÖNÜŞÜR (bu eşyanın girdiği tarifler) - seyyar satıcının
 ## ağacı (scripts/recipe_tree.gd). İkisi de varsa yan yana (önizleme dikeyde sığsın).
-func _add_recipe(key: String) -> void:
+## Önizleme pencereye sığmıyorsa (uzun dillerde 2 satırlık ad + 3 satırlık pasif; İngilizcede Kan Kapanı 754 > 688) yalnız TARİF /
+## ŞUNA DÖNÜŞÜR satırı kalan yüksekliğe göre küçük boyla (ağaç 64 / 56, simgeler 56) yeniden kurulur; sığıyorsa hiçbir şey değişmez.
+## Ölçüm aynı karede: sarılan yazıların genişliği yerleşimden önce 0 olduğu için (ad 2 satır sayılıyordu) son genişlikleri burada verilir.
+func _fit_recipe(key: String, nm: Label, head: Control) -> void:
+	var row: Control = _detail.get_node_or_null("RecipeRow") as Control
+	if row == null:
+		return
+	var name_w: float = DETAIL_TEXT_W - float(head.get_theme_constant("separation")) * 2.0
+	for c: Node in head.get_children():
+		if c != nm.get_parent():
+			name_w -= (c as Control).get_combined_minimum_size().x
+	for l: Node in _detail.find_children("*", "Label", true, false):
+		var lb: Label = l as Label
+		if lb.autowrap_mode != TextServer.AUTOWRAP_OFF:
+			lb.size = Vector2(name_w if lb == nm else lb.custom_minimum_size.x, lb.size.y)
+	var room: float = MARKET_RECT.size.y - 2.0 * PANEL_PAD
+	var over: float = _detail_box.get_combined_minimum_size().y - room
+	if over <= 0.0:
+		return
+	var at: int = row.get_index()
+	var max_h: float = row.get_combined_minimum_size().y - over
+	_detail.remove_child(row)
+	row.queue_free()
+	_add_recipe(key, max_h)
+	var nr: Node = _detail.get_child(_detail.get_child_count() - 1)
+	_detail.move_child(nr, at)
+	## ağaç en küçük boyunda da sığmıyorsa (Kan Kapanı İngilizce: 18 px) bölümler arası boşluk gerektiği kadar daralır (14 -> en az 6)
+	over = _detail_box.get_combined_minimum_size().y - room
+	if over > 0.0:
+		var gaps: int = maxi(1, _detail.get_child_count() - 1)
+		_detail.add_theme_constant_override("separation", maxi(6, DETAIL_SEP - ceili(over / float(gaps))))
+
+
+func _add_recipe(key: String, max_h: float = INF) -> void:
 	var has_recipe: bool = not (Items.recipe(key) as Array).is_empty()
 	var ups: Array = Items.builds_into(key)
 	if not has_recipe and ups.is_empty():
@@ -1135,13 +1211,15 @@ func _add_recipe(key: String) -> void:
 	var row: HBoxContainer = _k.h(24)
 	row.name = "RecipeRow"
 	var recipe_w: float = 0.0 ## TARİF sütununun genişliği / ağaç boyu: ŞUNA DÖNÜŞÜR kalan yere ve aynı yüksekliğe sığar
-	var recipe_h: float = UPS_AREA_H
+	var head_h: float = 32.0 + 6.0 ## "TARİF" / "ŞUNA DÖNÜŞÜR" başlığı + aralık
+	var recipe_h: float = minf(UPS_AREA_H, max_h - head_h)
 	if has_recipe:
 		var rv: VBoxContainer = _k.v(6)
 		rv.add_child(_k.lbl("TARİF", 32, HudTheme.ACCENT_SOFT))
 		## Yalnız DOĞRUDAN alt eşyalar, kök yok (eşya başlıkta): tam ağaç efsanevide 9 yaprağı 32 px'e küçültüp okunmaz yapıyordu (kullanıcı
 		## 2026-11-07: "çok zor okunuyor, ufacıklar").
 		var area: Vector2 = RECIPE_AREA if ups.is_empty() else Vector2(RECIPE_SIDE_W, RECIPE_AREA.y)
+		area.y = minf(area.y, max_h - head_h)
 		var tv: Control = RecipeTree.fit_row(_k, RecipeTree.data(key, RecipeTree.owned_pool(), false, true, RECIPE_LEVELS), area,
 				RECIPE_SIZES, RECIPE_FS)
 		tv.name = "RecipeTree"
@@ -1161,6 +1239,10 @@ func _add_recipe(key: String) -> void:
 		flow.custom_minimum_size.x = ups_w
 		flow.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var chip_s: float = _ups_size(ups.size(), ups_w, recipe_h)
+		## akışın yüksekliği açıkça: HFlowContainer yerleşimden önce 0 bildirir, _fit_recipe aynı karede ölçer
+		var per_row: int = maxi(1, int(floorf((ups_w + UPS_GAP) / (chip_s + UPS_GAP))))
+		var n_rows: int = ceili(float(ups.size()) / float(per_row))
+		flow.custom_minimum_size.y = n_rows * chip_s + (n_rows - 1) * UPS_GAP
 		for u: String in ups:
 			flow.add_child(_item_chip(u, chip_s))
 		uv.add_child(flow)
@@ -1242,8 +1324,9 @@ func _open_item_popup(key: String, chip: Button) -> void:
 		var dw: PanelContainer = _k.box(HudTheme.WIN_INSET, Color(0, 0, 0, 0), 14, 0, 10)
 		dw.name = "PopupDesc"
 		var dv: VBoxContainer = _k.v(DESC_GAP)
-		for ln in lines:
-			dv.add_child(_k.wrap(_txt(str(ln)), POP_FS, _k.c("text"), inner_w - 28.0))
+		var icons: Array = d.get("icons", [])
+		for n in lines.size():
+			dv.add_child(_desc_line(str(lines[n]), str(icons[n]) if n < icons.size() else "", POP_FS, inner_w - 28.0))
 		dw.add_child(dv)
 		col.add_child(dw)
 	## tarif: neden yapıldığı (doğrudan alt eşyalar, pazardaki TARİF ile aynı ağaç)
@@ -1367,7 +1450,8 @@ func _input(event: InputEvent) -> void:
 		_close_item_popup()
 		return
 	var key := event as InputEventKey
-	if key != null and key.pressed and not key.echo and key.keycode == KEY_ESCAPE:
+	var pad_back: bool = event is InputEventJoypadButton and event.pressed and (event as InputEventJoypadButton).button_index == JOY_BUTTON_B
+	if (key != null and key.pressed and not key.echo and key.keycode == KEY_ESCAPE) or pad_back: ## B (kumanda) de kapatır - denetim 547
 		_close_item_popup()
 		get_viewport().set_input_as_handled()
 		GameManager.mark_ui_cancel_consumed()

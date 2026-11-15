@@ -24,8 +24,9 @@ const GhostSheets: Array = [
 	preload("res://assets/fx/kalkan/ghost_L3.png"), preload("res://assets/fx/kalkan/ghost_L4.png"),
 	preload("res://assets/fx/kalkan/ghost_L5.png"),
 ]
-const RingFxScene: PackedScene = preload("res://scenes/fx_kalkan_ring.tscn") ## vurulanın ayağında kırık halka, z -1
-const WallFxScene: PackedScene = preload("res://scenes/fx_kalkan_wall.tscn") ## Final: karakterin çevresinde büyük halka, z -1
+const RingFxScene: PackedScene = preload("res://scenes/fx_kalkan_ring.tscn") ## vurulanın ayağında kırık halka, zemin yuvasında
+const WallFxScene: PackedScene = preload("res://scenes/fx_kalkan_wall.tscn") ## Final: karakterin çevresinde büyük halka, zemin yuvasında
+const GroundSlotScript := preload("res://scripts/ground_slot.gd") ## z 0 + "Harita"nın hemen arkası (z -1 haritanın altında kalıyordu, madde 573)
 const MeleeChainMath := preload("res://scripts/melee_chain_math.gd") ## vuruş sonrası bekleme (madde 347 zincir)
 
 const CELL := 48
@@ -155,6 +156,15 @@ static func contact_point(plan: Dictionary) -> Vector2:
 
 static func contact_delay(speed: float) -> float:
 	return CONTACT / maxf(0.01, speed)
+
+
+## Çarpmanın sarsılarak OTURDUĞU an (STEPS'in ilk 5 adımı; ardındaki "bekle" + zincir beklemesi + dönüş kalkanı hedefin başında tutar).
+## Siper duruşu (madde 687): gelen atış tehdidi bu andan sonra beklemeyi/dönüşü böler, kalkan atışa döner.
+static func settle_delay(speed: float) -> float:
+	var s: float = 0.0
+	for i in range(mini(5, STEPS.size())):
+		s += float((STEPS[i] as Array)[0])
+	return s / maxf(0.01, speed)
 
 
 ## Darbe hareketinin toplam süresi (dönüş hariç).
@@ -317,6 +327,7 @@ static func spawn_rings(fx_parent: Node, victims_list: Array, plan: Dictionary) 
 			spawn_point_fx(RingFxScene, fx_parent, (v as Node2D).global_position, float(plan["k"]))
 
 
+## Yerdeki halka (RingFxScene / WallFxScene - ikisi de zemin): haritanın üstü, yaratıkların altı (GroundSlot).
 static func spawn_point_fx(scene: PackedScene, parent: Node, pos: Vector2, k: float) -> AnimatedSprite2D:
 	if parent == null or not is_instance_valid(parent) or not parent.is_inside_tree():
 		return null
@@ -324,4 +335,5 @@ static func spawn_point_fx(scene: PackedScene, parent: Node, pos: Vector2, k: fl
 	parent.add_child(fx)
 	fx.global_position = pos
 	fx.global_scale = Vector2.ONE * FX_WORLD_PX * k
+	GroundSlotScript.place(fx)
 	return fx

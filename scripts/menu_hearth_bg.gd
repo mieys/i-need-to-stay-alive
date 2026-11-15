@@ -1,15 +1,13 @@
 extends RefCounted
 
-## ORTAK MENÜ ARKA PLANI "Ocak Başı" (2026-10-16, kullanıcı: "çok oyunculu, oda kurma ve tek oyunculunun arka planı ana menüdekiyle aynı
-## olsun"): ocak_basi.png + canlı şömine ateşi + şömineye dönük oturan parti + uyuyan köpek - ana menünün sahnesi (main_menu.gd _build_scene).
-## Ölçü/konum/ton sabitleri ve SheetAnim/SceneSprite TEK yerde, main_menu.gd'de: burası onları kullanır, kopyalamaz (sahne değişirse bu
-## ekranlar da değişir). main_menu.gd bu dosyayı preload ETMESİN (döngü); ana menü kendi sahnesini sol menü gölgesiyle kurar.
+## ORTAK MENÜ ARKA PLANI (2026-10-16, kullanıcı: "çok oyunculu, oda kurma ve tek oyunculunun arka planı ana menüdekiyle aynı olsun"):
+## ana menünün sahnesi - 2026-11-15'ten beri "Nehir Kenarı Kampı" (menu_camp_scene.gd; eskiden "Ocak Başı" şöminesi). Sahne TEK yerde,
+## menu_camp_scene.gd'de: burası onu kurar, kopyalamaz. main_menu.gd bu dosyayı preload ETMESİN (döngü).
 ## Kullanan: character_select.gd, room_browser.gd, lobby_menu.gd, soul_shop_screen.gd (masaüstü, load() ile - preload döngüsü olmasın). Hepsi statik: const HearthBg := preload("res://scripts/menu_hearth_bg.gd").
 
 const HT := preload("res://scripts/hud_theme.gd") ## tek arayüz paleti (stil rehberi, madde 403)
-const MM := preload("res://scripts/main_menu.gd")
-const PC := preload("res://scripts/pet_catalog.gd")
-## Koyu kit panelleri (menu_dark_kit.gd) sahnenin üstünde okunur kalsın diye düz koyu örtü; şömine ışığı yine seçilir.
+const CampScene := preload("res://scripts/menu_camp_scene.gd")
+## Koyu kit panelleri (menu_dark_kit.gd) sahnenin üstünde okunur kalsın diye düz koyu örtü; kamp ateşi yine seçilir.
 const DIM_COLOR := HT.DEEP ## tek palet: sıcak koyu ahşap (madde 403; eskiden Gece Sıvası mor-laciverti)
 const DIM_DESKTOP := 0.3
 
@@ -26,19 +24,8 @@ static func add_to(root: Control, dim: float = 0.0) -> Control:
 	var stage := Control.new()
 	stage.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(stage)
-	stage.size = MM.SCREEN
-	stage.add_child(MM.scene_background()) ## ışıksız taban + yumuşak ışık shader'ı (ana menüyle aynı)
-	var fire = MM.SheetAnim.new(load("res://assets/ui/ana_menu/ocak_ates.png"), MM.FIRE_FRAME, MM.FIRE_FRAMES, MM.FIRE_FPS, MM.ART_K)
-	stage.add_child(fire)
-	fire.position = MM.FIRE_POS * MM.ART_K
-	fire.size = MM.FIRE_FRAME * MM.ART_K
-	var pet_spec: Array = PC.FRAMES.get(MM.DOG[0], [])
-	if not pet_spec.is_empty():
-		_add_sprite(stage, load(str(pet_spec[0])) as SpriteFrames, str(MM.DOG[1]), MM.DOG[2])
-	var party: Array = MM.PARTY.duplicate()
-	party.sort_custom(func(a: Array, b: Array) -> bool: return (a[2] as Vector2).y < (b[2] as Vector2).y)
-	for p: Array in party:
-		_add_sprite(stage, load(str(Characters.get_def(int(p[0])).get("frames", ""))) as SpriteFrames, str(p[1]), p[2])
+	stage.size = CampScene.SCREEN
+	CampScene.build(stage)
 	if dim > 0.0:
 		var shade := ColorRect.new()
 		shade.color = Color(DIM_COLOR, dim)
@@ -50,18 +37,9 @@ static func add_to(root: Control, dim: float = 0.0) -> Control:
 	return layer
 
 
-static func _add_sprite(stage: Control, sf: SpriteFrames, clip: String, foot: Vector2) -> void:
-	if sf == null:
-		return
-	var s = MM.SceneSprite.new(sf, clip, MM.ART_K)
-	stage.add_child(s)
-	s.place_at(foot)
-	s.modulate = MM.SCENE_TINT
-
-
 static func _fit(layer: Control, stage: Control) -> void:
 	if not is_instance_valid(stage) or layer.size.x < 1.0:
 		return
-	var s: float = maxf(layer.size.x / MM.SCREEN.x, layer.size.y / MM.SCREEN.y)
+	var s: float = maxf(layer.size.x / CampScene.SCREEN.x, layer.size.y / CampScene.SCREEN.y)
 	stage.scale = Vector2(s, s)
-	stage.position = ((layer.size - MM.SCREEN * s) * 0.5).floor()
+	stage.position = ((layer.size - CampScene.SCREEN * s) * 0.5).floor()

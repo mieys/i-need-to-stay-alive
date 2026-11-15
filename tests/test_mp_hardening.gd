@@ -139,16 +139,17 @@ func test_spawner_uses_the_real_player_count_for_enemy_health() -> void:
 	add_child(c)
 	sp._apply_global_buff(c, 4) ## 4 oyunculu çarpan daha yüksek can verir
 	assert(float(c.max_health) > float(a.max_health), "oyuncu sayısı çarpanı çalışıyor")
-	## 2026-11-07 (madde 435): sıradan yaratıkta ek oyuncu başına +%60 (eskiden +%50): 4 oyuncu / 1 oyuncu = 1 + 3 x 0,6 = 2,8.
+	## 2026-11-07 (madde 435): sıradan yaratıkta ek oyuncu başına +%60, 2026-11-09'da +%55 (EXTRA_PLAYER_CREATURE_DEFENSE_BONUS 0,05): 4 oyuncu = 1 + 3 x 0,55 = 2,65.
+	var per: float = sp.EXTRA_PLAYER_DEFENSE_MULT + sp.EXTRA_PLAYER_CREATURE_DEFENSE_BONUS
 	var d: Node = scene.instantiate()
 	add_child(d)
 	sp._apply_global_buff(d, 1)
 	var ratio4: float = float(c.max_health) / float(d.max_health)
-	assert(absf(ratio4 - 2.8) < 0.001, "sıradan yaratık canı 4 oyuncuda x2,8 (ek oyuncu başı +%60): %s" % ratio4)
+	assert(absf(ratio4 - (1.0 + 3.0 * per)) < 0.001, "sıradan yaratık canı 4 oyuncuda x2,65 (ek oyuncu başı +%%55): %s" % ratio4)
 	var ratio2: float = float(a.max_health) / float(d.max_health)
-	assert(absf(ratio2 - 1.6) < 0.001, "sıradan yaratık canı 2 oyuncuda x1,6: %s" % ratio2)
+	assert(absf(ratio2 - (1.0 + per)) < 0.001, "sıradan yaratık canı 2 oyuncuda x1,55: %s" % ratio2)
 	if float(d.item_shield_max) > 0.0:
-		assert(absf(float(c.item_shield_max) / float(d.item_shield_max) - 2.8) < 0.001, "kalkan da aynı oranda (x2,8)")
+		assert(absf(float(c.item_shield_max) / float(d.item_shield_max) - (1.0 + 3.0 * per)) < 0.001, "kalkan da aynı oranda (x2,65)")
 	assert(is_equal_approx(sp.EXTRA_PLAYER_DEFENSE_MULT, 0.5), "boss çarpanı aynı kaldı (+%50)")
 	for n in [a, b, c, d, sp]:
 		n.free()

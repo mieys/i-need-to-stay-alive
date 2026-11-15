@@ -19,10 +19,14 @@ const SPARK_LIFE := 3.0 / FPS
 var from_pos: Vector2 = Vector2.ZERO
 var to_target: Node2D = null
 var to_pos: Vector2 = Vector2.ZERO
-var speed: float = 750.0
+## Göz hızı (dünya/sn). player.gd _buyucu_arcane_flight_time hasarı bu hızla varış anına koyar - ikisi aynı sabit (madde 563: 750 -> 600).
+const SPEED := 600.0
+var speed: float = SPEED
 var elapsed: float = 0.0
 ## Kaçıncı sekme (0 = karakterden ilk kalkış) - boyut + kalkış mührü. Uzak kopyaya "hop" ile gider.
 var hop: int = 0
+## "Arcane Patlama" (E1) var: varışta küçük lanet_burst çizilmez, patlamayı fx_arcane_blast (Yıldız Tozu) çizer. Uzak kopyaya "blast" ile (madde 563).
+var blast: bool = false
 
 var _base: Vector2 = Vector2.ZERO ## düz hat üstündeki ilerleme noktası (kavis bunun üstüne eklenir)
 var _traveled: float = 0.0
@@ -138,6 +142,7 @@ func _spawn_impact() -> void:
 	impact.set("p0", from_pos)
 	impact.set("hop", hop)
 	impact.set("fx_scale", scale.x)
+	impact.set("blast", blast)
 	get_tree().current_scene.add_child(impact)
 	impact.global_position = to_pos
 

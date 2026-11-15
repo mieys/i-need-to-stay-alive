@@ -154,7 +154,7 @@ func test_timing_evolutions() -> void:
 	var r0: Dictionary = p._skill3_timing_for(39)
 	assert(is_equal_approx(float(q0["cooldown"]), 20.0) and is_equal_approx(float(q0["duration"]), 10.0), "Q temel 20 sn / 10 sn")
 	assert(is_equal_approx(float(e0["cooldown"]), 16.0), "E temel bekleme 16 sn")
-	assert(is_equal_approx(float(r0["duration"]), 12.0) and is_equal_approx(float(r0["cooldown"]), 60.0), "R temel 12 sn / 60 sn")
+	assert(is_equal_approx(float(r0["duration"]), 20.0) and is_equal_approx(float(r0["cooldown"]), 60.0), "R temel 20 sn / 60 sn")
 	p.apply_skill_evolution("oakley_q1", true)
 	p.apply_skill_evolution("oakley_q3", true)
 	p.apply_skill_evolution("oakley_e1", true)
@@ -164,7 +164,7 @@ func test_timing_evolutions() -> void:
 	assert(is_equal_approx(float(q1["duration"]), 13.0), "Geniş Halka: süre +3 sn (bulunan %s)" % str(q1["duration"]))
 	assert(is_equal_approx(float(p._skill2_timing_for(10)["cooldown"]), 12.0), "Çabuk Filiz: 16 -> 12 sn")
 	var r1: Dictionary = p._skill3_timing_for(39)
-	assert(is_equal_approx(float(r1["duration"]), 16.0) and is_equal_approx(float(r1["cooldown"]), 60.0), "Kadim Gövde: 16 sn, bekleme aynı")
+	assert(is_equal_approx(float(r1["duration"]), 24.0) and is_equal_approx(float(r1["cooldown"]), 60.0), "Kadim Gövde: 24 sn, bekleme aynı")
 	_cleanup()
 
 
@@ -428,16 +428,17 @@ func test_tree_evolution_params() -> void:
 	get_tree().current_scene = self
 	var caster := FakeCaster.new()
 	add_child(caster)
-	var tree: OakleyTree = OakleyTree.spawn(self, Vector2(300.0, 300.0), caster, {"dur": 16.0, "zone": 1.25, "fruit": 1.4, "flowers": 6, "revive": true})
-	assert(is_equal_approx(tree._duration, 16.0) and is_equal_approx(tree._zone_mult, 1.25) and tree._flower_count == 6 and tree._revive_enabled, "parametreler okunmalı")
+	var tree: OakleyTree = OakleyTree.spawn(self, Vector2(300.0, 300.0), caster, {"dur": 24.0, "zone": 1.25, "fruit": 1.4, "flowers": 6, "revive": true})
+	assert(is_equal_approx(tree._duration, 24.0) and is_equal_approx(tree._zone_mult, 1.25) and tree._flower_count == 6 and tree._revive_enabled, "parametreler okunmalı")
 	var rx: float = OakleyTree.ZONE_RX * 1.25
 	assert(tree.in_zone(Vector2(300.0 + rx - 2.0, 300.0)) and not tree.in_zone(Vector2(300.0 + rx + 3.0, 300.0)), "alan x1,25 (yatay %s)" % str(rx))
-	assert(int(OakleyTree.tree_state(12.2, 16.0)[0]) == 2 and int(OakleyTree.tree_state(12.2)[0]) == 1, "16 sn'de ağaç 12. sn'de hâlâ tam boy")
-	assert(OakleyTree.zone_alpha(12.5, 16.0) > 0.99 and OakleyTree.zone_alpha(12.5) < 1.0, "alan 16 sn'ye kadar açık")
-	assert(is_equal_approx(tree._zone.scale.x, 1.25) and is_equal_approx(tree._rays_back.scale.x, 1.25), "görsel alan da büyür")
+	assert(int(OakleyTree.tree_state(20.2, 24.0)[0]) == 2 and int(OakleyTree.tree_state(20.2)[0]) == 1, "24 sn'de ağaç 20. sn'de hâlâ tam boy")
+	assert(OakleyTree.zone_alpha(20.5, 24.0) > 0.99 and OakleyTree.zone_alpha(20.5) < 1.0, "alan 24 sn'ye kadar açık")
+	assert(is_equal_approx(float(tree._zone_mat.get_shader_parameter("rx")), rx) and is_equal_approx(float(tree._front_mat.get_shader_parameter("ry")), rx * 0.5), "görsel alan da büyür (shader yarıçapı)")
+	assert(tree._zone.scale.x >= 2.0 * rx and is_equal_approx(tree._zone.scale.x, roundf(tree._zone.scale.x)), "alan dörtgeni alanı kaplar, tam sayı boy (piksel ızgarası, madde 704)")
 	var plain: OakleyTree = OakleyTree.spawn(self, Vector2(300.0, 300.0), caster)
-	assert(is_equal_approx(plain._duration, 12.0) and is_equal_approx(plain._zone_mult, 1.0) and plain._flower_count == 3 and not plain._revive_enabled, "parametresiz: eski değerler")
-	var cosmetic: OakleyTree = OakleyTree.spawn(self, Vector2(300.0, 300.0), null, {"dur": 16.0, "zone": 1.25, "revive": true})
+	assert(is_equal_approx(plain._duration, 20.0) and is_equal_approx(plain._zone_mult, 1.0) and plain._flower_count == 3 and not plain._revive_enabled, "parametresiz: eski değerler")
+	var cosmetic: OakleyTree = OakleyTree.spawn(self, Vector2(300.0, 300.0), null, {"dur": 24.0, "zone": 1.25, "revive": true})
 	assert(cosmetic.is_cosmetic() and not cosmetic._revive_enabled, "kozmetik kopya diriltemez")
 	_cleanup()
 
@@ -453,18 +454,18 @@ func test_fruit_bonus_and_six_flowers() -> void:
 	p.damage_bonus = 50.0
 	p.facing = "right"
 	p._activate_skill3()
-	assert(is_equal_approx(p.skill3_timer, 16.0), "R 16 sn aktif (bulunan %s)" % str(p.skill3_timer))
+	assert(is_equal_approx(p.skill3_timer, 24.0), "R 24 sn aktif (bulunan %s)" % str(p.skill3_timer))
 	var tree: OakleyTree = null
 	for n in get_tree().get_nodes_in_group("oakley_trees"):
 		if n.get("caster") == p:
 			tree = n
-	assert(tree != null and is_equal_approx(tree._duration, 16.0) and is_equal_approx(tree._zone_mult, 1.25), "ağaç evrim parametreleriyle kurulmalı")
+	assert(tree != null and is_equal_approx(tree._duration, 24.0) and is_equal_approx(tree._zone_mult, 1.25), "ağaç evrim parametreleriyle kurulmalı")
 	var hp0: float = p.health
 	tree._heal_target(p)
 	var expected: float = (50.0 * OakleyTree.HEAL_AP_RATIO + 200.0 * OakleyTree.HEAL_MAX_HP_PERCENT) * 1.4
 	assert(absf((p.health - hp0) - expected) < 0.01, "meyve can x1,4 (beklenen %s, bulunan %s)" % [str(expected), str(p.health - hp0)])
 	var before: int = _flower_count()
-	tree._t = 16.0 + OakleyTree.FLOWER_DELAY
+	tree._t = 24.0 + OakleyTree.FLOWER_DELAY
 	tree._process(0.01)
 	assert(_flower_count() - before == 6, "ağaç solarken 6 çiçek (bulunan %d)" % (_flower_count() - before))
 	_cleanup()
@@ -478,16 +479,19 @@ func test_tree_revives_downed_ally_once_in_zone() -> void:
 	tree._opened = true
 	var inside := FakeRemote.new()
 	inside.add_to_group("remote_players")
+	inside.add_to_group("remote_allies") ## destek yetenekleri müttefik grubunu tarar (madde 617)
 	inside.peer_id = 11
 	add_child(inside)
 	inside.global_position = Vector2(340.0, 290.0)
 	var outside := FakeRemote.new()
 	outside.add_to_group("remote_players")
+	outside.add_to_group("remote_allies") ## destek yetenekleri müttefik grubunu tarar (madde 617)
 	outside.peer_id = 12
 	add_child(outside)
 	outside.global_position = Vector2(900.0, 300.0)
 	var standing := FakeRemote.new()
 	standing.add_to_group("remote_players")
+	standing.add_to_group("remote_allies") ## destek yetenekleri müttefik grubunu tarar (madde 617)
 	standing.peer_id = 13
 	add_child(standing)
 	standing.global_position = Vector2(310.0, 300.0)
@@ -498,6 +502,7 @@ func test_tree_revives_downed_ally_once_in_zone() -> void:
 	## ağaç başına bir kez
 	var second := FakeRemote.new()
 	second.add_to_group("remote_players")
+	second.add_to_group("remote_allies") ## destek yetenekleri müttefik grubunu tarar (madde 617)
 	second.peer_id = 14
 	second.is_downed = true
 	add_child(second)

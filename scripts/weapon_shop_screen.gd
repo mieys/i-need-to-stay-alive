@@ -479,7 +479,6 @@ func _build_center() -> VBoxContainer:
 	var cv: VBoxContainer = _k.v(10)
 	var vit: PanelContainer = _k.box(_k.c("inset"), _k.c("line"), 0.0)
 	vit.custom_minimum_size.y = 200.0 if _phone else SHOW_H
-	vit.add_child(DarkKit.Spot.new(_k.c("spot"), 0.84))
 	_show_icon = CenterContainer.new()
 	_show_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vit.add_child(_show_icon)

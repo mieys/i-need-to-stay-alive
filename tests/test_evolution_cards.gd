@@ -143,8 +143,9 @@ func test_every_evolution_fits_on_screen() -> void:
 				worst_id = str(batch[j]["id"])
 		i += 3
 	var card_h: float = worst + 2.0 * float(screen.get("EVO_BOX_PAD"))
-	var end: float = float(screen.get("EVO_BOX_TOP")) + card_h + float(screen.get("EVO_COUNTDOWN_GAP")) + 74.0
-	print("%d evrim, en uzun kart %s: %.0f px, geri sayım sonu y %.0f" % [all.size(), worst_id, card_h, end])
+	var end: float = float(screen.get("EVO_BOX_TOP")) + card_h + float(screen.get("EVO_COUNTDOWN_GAP")) \
+			+ (screen.get("REROLL_SIZE") as Vector2).y + 12.0 + 74.0 ## karıştır düğmesi kartların altında, geri sayım onun altında
+	print("%d evrim, en uzun kart %s: %.0f px, düğme + geri sayım sonu y %.0f" % [all.size(), worst_id, card_h, end])
 	assert(all.size() > 150, "evrim listesi okunmalı")
 	assert(end <= 1080.0, "en uzun evrim kartı + geri sayım ekrana sığmalı: %.0f" % end)
 	_close(pair)
@@ -169,3 +170,32 @@ func test_pick_keeps_pixel_card_and_emits_choice() -> void:
 		assert(c.find_child("PickGlow", true, false) == null and c.find_child("HoverGlow", true, false) == null, "hale yok")
 	assert((cards[0] as Control).modulate.a < 0.6, "seçilmeyen kart söner")
 	_close(pair)
+
+
+## Evrim kartı karıştırması (2026-11-13): KOŞU BAŞINA ücretsiz hak (GameManager.free_evo_rerolls_left), altın yok, hak bitince düğme pasif;
+## karıştırınca önceki üç evrim havuz yettiği sürece tekrar gelmez; normal level kartı hakkına (free_rerolls_per_card) dokunmaz.
+func test_evolution_reroll_uses_per_run_free_pool() -> void:
+	var saved_evo: int = GameManager.free_evo_rerolls_left
+	var saved_gold: int = GameManager.gold
+	GameManager.free_evo_rerolls_left = 2
+	GameManager.gold = 1000
+	var pair: Array = await _open([])
+	var screen: Node = pair[0]
+	var btn: Button = screen.reroll_button
+	assert(bool(screen.get("_evo_mode")) and btn.visible and not btn.disabled, "evrim ekranında karıştır düğmesi görünür ve açık")
+	assert(btn.text.ends_with("x2"), "düğme kalan hakkı gösterir: %s" % btn.text)
+	var first_ids: Array = screen.get("_evo_offers").map(func(e: Dictionary) -> String: return str(e["id"]))
+	screen.call("_on_reroll_pressed")
+	assert(GameManager.free_evo_rerolls_left == 1 and GameManager.gold == 1000, "ilk karıştırma bedava, 1 hak kaldı")
+	var second_ids: Array = screen.get("_evo_offers").map(func(e: Dictionary) -> String: return str(e["id"]))
+	assert(second_ids.size() == first_ids.size(), "kart sayısı değişmez")
+	for id in second_ids:
+		assert(not first_ids.has(id), "karıştırınca önceki evrim tekrar gelmemeli: %s" % id)
+	screen.call("_on_reroll_pressed")
+	assert(GameManager.free_evo_rerolls_left == 0 and GameManager.gold == 1000, "ikinci karıştırma da bedava")
+	assert(btn.disabled, "hak bitince düğme pasif")
+	screen.call("_on_reroll_pressed")
+	assert(GameManager.free_evo_rerolls_left == 0 and GameManager.gold == 1000, "hak bitince altınla karıştırma YOK")
+	_close(pair)
+	GameManager.free_evo_rerolls_left = saved_evo
+	GameManager.gold = saved_gold

@@ -5,9 +5,10 @@ extends RefCounted
 ## tools/proto_20261016/gen_buyucu_buyu.py çizimleri) -> assets/fx/buyucu/*.png (yatay şerit, Sprite2D hframes; .tres YOK).
 ##   Q Büyü Değişimi  fx_mage_swap.tscn (props target_set) - havada büyü kitabı + set zerreleri, Set 1 soğuk / Set 2 sıcak
 ##   E Arcane Lanet   fx_arcane_skull_bounce.gd (lanet gözü + iz + kıvılcım) + fx_arcane_impact.gd (patlama + ayak mührü + lanet ipi)
+##                    + E1 "Arcane Patlama" fx_arcane_blast.gd (Yıldız Tozu, toplamalı, madde 563)
 ##   E Hortum         fx_buyucu_tornado.gd (hortum_in -> hortum_loop -> hortum_out) + fx_buyucu_tornado_cast/_hit.tscn
 ##   Pasif            fx_buyucu_surge_wave.tscn (mor dalga) + güçlendirilmiş mermiye style_surge_projectile (namlu parlaması + mor iz
-##                    + isabette mor patlama). Geri tepme/mor parlama/kıvılcım (WeaponJuice.arcane_surge) aynen kaldı.
+##                    + isabette mor patlama). Silah ikonunda animasyon YOK (geri tepme/mor parlama/kıvılcım 2026-11-11'de kaldırıldı).
 ##   R Meteor         fx_buyucu_meteor_channel.tscn (ayak altında rün çemberi, ateş yayı 3 sn'de dolar + şapka ucundan korlar) +
 ##                    fx_meteor_strike.gd (uyarı gölgesi/halkası, korlu kaya, patlama + parçalar, hasar yarıçapında halka, krater).
 ##                    "Yükseliş" (R1) havalanması ESKİ (buyucu_levitate.gd) - kullanıcı 2026-10-17. Don Nova ESKİ.
@@ -24,6 +25,7 @@ const SHEETS := {
 	"surge_wave": 6, "surge_muzzle": 2, "surge_hit": 7,
 	"r_ring": 45, "r_ring_end": 7, "r_embers": 20,
 	"meteor_fall": 4, "meteor_warn": 7, "meteor_burst": 10, "meteor_ring": 4, "meteor_crater": 20,
+	"patlama_front": 12, "patlama_ground": 12, ## "Arcane Patlama" (E1) "Yıldız Tozu" - fx_arcane_blast.gd, tools/gen_arcane_blast_fx.py (madde 563)
 }
 ## Bir Büyücü sanat pikselinin dünya boyutu (2,2368375 x EntityScale 0,8075 x oyuncu kökü 0,5).
 const PX := 0.903
@@ -128,6 +130,19 @@ static func char_layer(host: Node2D, p: Node, sheet: String, z: int, fps: float,
 	s.flip_h = flip
 	host.add_child(s)
 	return s.setup([[sheet, loop]], fps)
+
+
+const AddShader: Shader = preload("res://shaders/toplamali.gdshader")
+static var _add_mat: ShaderMaterial = null
+
+
+## Toplamalı karışım (renk = eklenen ışık; yeşil kanalı ~0 paletlerle - mor + çimen griye dönmesin). ShaderMaterial (render_mode
+## blend_add): CanvasItemMaterial'ın shader'ı ilk kullanımda bir kare geç hazır oluyordu, ilk kare normal karışımla çiziliyordu (madde 563).
+static func add_material() -> ShaderMaterial:
+	if _add_mat == null:
+		_add_mat = ShaderMaterial.new()
+		_add_mat.shader = AddShader
+	return _add_mat
 
 
 ## Dünyada duran sayfa (sahnenin köküne): 1 piksel = PX * size dünya birimi.

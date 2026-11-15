@@ -26,13 +26,20 @@ const SS := preload("res://scripts/spiritual_skills.gd")
 const MP := preload("res://scripts/meta_progress.gd")
 const LU := preload("res://scripts/menu_lobby_ui.gd")
 const PortraitFace := preload("res://scripts/portrait_face.gd") ## yüz + karaktere özel bulanık arka plan (madde 464/485)
+const PetBadge := preload("res://scripts/pet_badge.gd") ## evcile özel bulanık arka plan (madde 585)
+## Oyuncu kartındaki silah / evcil / ruhani yuva yüzü (madde 681): 64 = 32 px silah çizimi 2x; çerçeveyle 72 = portre boyu.
+const CARD_SLOT_PX := 64.0
 const CornerBrackets := preload("res://scripts/corner_brackets.gd") ## seçili / üstündeki kartın köşebentleri (madde 538)
 const SI := preload("res://scripts/stat_icon.gd")
+const WeaponStatBars := preload("res://scripts/weapon_stat_bars.gd")
 const PreviewScript := preload("res://scripts/menu_character_preview.gd")
 const RR := preload("res://scripts/run_records.gd")
 const RunSummaryUI := preload("res://scripts/run_summary_ui.gd")
 const MobileUIScript := preload("res://scripts/mobile_ui.gd")
 const PK := preload("res://scripts/phone_menu_kit.gd")
+const GameModeScript := preload("res://scripts/pvp/game_mode.gd") ## 2v2: oyuncu kartları takım başlıkları altında (madde 608)
+const TeamsScript := preload("res://scripts/pvp/teams.gd")
+const PvpNetScript := preload("res://scripts/pvp/pvp_net.gd")
 
 const LEFT := Rect2(32, 24, 440, 1024)
 const MID := Rect2(488, 24, 760, 1024)
@@ -40,7 +47,7 @@ const RIGHT := Rect2(1264, 24, 624, 908)
 const START_Y := 948.0
 const CARD := Vector2(134, 150)
 const TILE := Vector2(108, 124)
-const SHORT := {4: "Büyücü", 5: "Assasin", 7: "Şovalye", 13: "Vampir", 14: "Hadime"}
+const SHORT := {} ## uzun unvanların kart kısaltması; karakterlere isim verilince boşaldı (madde 623)
 const CHAT_KEEP := 50
 
 ## Tek oyunculu kip (build'den ÖNCE atanır).
@@ -60,6 +67,7 @@ var _chat_scroll: ScrollContainer = null
 var _chat_input: LineEdit = null
 var _open_count: Label = null
 var _char_name: Label = null
+var _char_title: Label = null ## lakap satırı (madde 623); boşsa gizli
 var _stats: GridContainer = null
 var _skills: VBoxContainer = null
 var _preview: Control = null
@@ -70,11 +78,10 @@ var _tab_grid: GridContainer = null
 var _detail_name: Label = null
 var _detail_cat: Label = null
 var _detail_desc: Label = null
+var _detail_bars: GridContainer = null ## silah stat çubukları (weapon_stat_bars.gd); yalnız SİLAH sekmesinde görünür
 var _start_btn: Button = null
-## HARİTA (madde 444, tek oyunculu): oda kur formundaki seçimin aynısı; seçim GameManager.selected_map'e yazılır, Main onu yükler.
+## Harita artık OYUNU BAŞLAT'tan sonra dünya haritasında seçilir (world_map_screen.gd, madde 606); buradaki HARİTA kutusu kalktı.
 const MapProfilesScript := preload("res://scripts/map_profiles.gd")
-var _map_buttons: Dictionary = {} ## harita kimliği -> Button
-var _map_desc: Label = null
 var _start_info: Label = null
 var _lock: ColorRect = null
 var _pending_shown: int = -1
@@ -96,6 +103,10 @@ func build() -> void:
 	theme = DK.theme()
 	_validate_loadout()
 	_warm_previews()
+	if not solo:
+		var pvp_net: Node = PvpNetScript.instance()
+		if pvp_net != null and not pvp_net.is_connected("teams_changed", _on_teams_changed):
+			pvp_net.connect("teams_changed", _on_teams_changed)
 	if MobileUIScript.enabled:
 		_build_phone()
 		return
@@ -145,6 +156,9 @@ func _warm_previews() -> void:
 func _exit_tree() -> void:
 	if NetworkManager.chat_message_received.is_connected(_on_chat_message):
 		NetworkManager.chat_message_received.disconnect(_on_chat_message)
+	var pvp_net: Node = PvpNetScript.instance()
+	if pvp_net != null and pvp_net.is_connected("teams_changed", _on_teams_changed):
+		pvp_net.disconnect("teams_changed", _on_teams_changed)
 
 
 func _process(delta: float) -> void:
@@ -232,6 +246,7 @@ func _build_left() -> void:
 	_chat_input = LineEdit.new()
 	_chat_input.placeholder_text = "Mesaj yaz... (Enter)"
 	_chat_input.max_length = 200
+	_chat_input.keep_editing_on_text_submit = true ## Enter sonrası odak kaybolmasın
 	_chat_input.text_submitted.connect(func(_t: String) -> void: _send_chat())
 	cv.add_child(_chat_input)
 	chat.add_child(cv)
@@ -274,42 +289,18 @@ func _build_left_solo() -> void:
 	room.add_child(rv)
 	_put(room, Rect2(LEFT.position, Vector2(LEFT.size.x, 0)))
 
+	## Oyuncu kartı / EN İYİ KOŞULLAR tek VBox'ta alt alta; kayıt kutusu kalan yüksekliği doldurur (alt kenar 1048).
+	## (Aradaki HARİTA kutusu madde 606'da kalktı: harita OYUNU BAŞLAT'tan sonra dünya haritasında seçilir.)
+	var stack := DK.v(12)
+	stack.name = "SoloStack"
+	_put(stack, Rect2(LEFT.position.x, 184, LEFT.size.x, LEFT.end.y - 184.0))
 	_players = DK.v(10)
-	_put(_players, Rect2(LEFT.position.x, 184, LEFT.size.x, 0))
+	_players.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	stack.add_child(_players)
 	_refresh_players()
-	_put(_map_box(), Rect2(LEFT.position.x, 470, LEFT.size.x, 0))
-	_put(_records_box(), Rect2(LEFT.position.x, 716, LEFT.size.x, 332))
-
-
-func _map_box() -> PanelContainer:
-	var box := DK.box(DK.C_PANEL, DK.C_LINE, 14)
-	var v := DK.v(10)
-	v.add_child(DK.title_bar("HARİTA"))
-	var row: HBoxContainer = null
-	for mid: String in MapProfilesScript.selectable_ids():
-		if row == null or row.get_child_count() >= 2: ## 2 sütunlu ızgara
-			row = DK.h(6)
-			v.add_child(row)
-		var b := DK.btn(str(MapProfilesScript.get_profile(mid)["ad"]), "tile", DK.FS_BODY, 52, 0)
-		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		b.pressed.connect(_set_map.bind(mid))
-		row.add_child(b)
-		_map_buttons[mid] = b
-	_map_desc = DK.wrap("", DK.FS_LABEL, DK.C_DIM, LEFT.size.x - 28, 2)
-	v.add_child(_map_desc)
-	box.add_child(v)
-	_set_map(GameManager.selected_map)
-	return box
-
-
-func _set_map(id: String) -> void:
-	if not MapProfilesScript.is_selectable(id):
-		id = MapProfilesScript.DEFAULT_ID
-	GameManager.selected_map = id
-	for k in _map_buttons:
-		DK.style_button(_map_buttons[k], "tile_on" if str(k) == id else "tile", 4, 6.0)
-	if _map_desc != null:
-		_map_desc.text = str(MapProfilesScript.get_profile(id).get("aciklama", ""))
+	var records := _records_box()
+	records.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	stack.add_child(records)
 
 
 ## Tek oyunculu kartın verisi (çok oyunculuda lobby_players'tan gelir).
@@ -385,6 +376,8 @@ func _refresh_room() -> void:
 	else:
 		_chips.add_child(DK.chip(DK.G_GLOBE, (Loc.t("LAN %s") % NetworkManager.room_code) if NetworkManager.room_code != "" else "LAN", DK.C_DIM))
 	_chips.add_child(DK.chip(DK.G_PERSON, "%d/%d" % [NetworkManager.lobby_players.size(), NetworkManager.room_max_players], DK.C_TEXT))
+	if _team_mode():
+		_chips.add_child(DK.chip(DK.G_CROWN, GameModeScript.display_name(GameModeScript.PVP), DK.C_ACCENT))
 
 
 func _refresh_players() -> void:
@@ -398,13 +391,92 @@ func _refresh_players() -> void:
 		_players.add_child(_player_card(0, 0))
 		return
 	var ids: Array = _player_ids()
-	for i in ids.size():
-		_players.add_child(_player_card(int(ids[i]), i))
+	if _team_mode():
+		## 2v2 (madde 608): iki takım başlığı, altında o takımın oyuncuları; kart rengi (index) kimlik sırasından, takım değişince değişmez.
+		for t in TeamsScript.TEAM_COUNT:
+			_players.add_child(_team_header(t))
+			for i in ids.size():
+				if TeamsScript.team_of(int(ids[i])) == t:
+					_players.add_child(_player_card(int(ids[i]), i))
+	else:
+		for i in ids.size():
+			_players.add_child(_player_card(int(ids[i]), i))
 	var pending: int = NetworkManager.pending_join_count()
 	_pending_shown = pending
 	for k in pending:
 		_players.add_child(_pending_card())
 	UISound.connect_all_buttons(_players)
+
+
+## 2v2 odası mı (oyuncular takım başlıkları altında gruplanır). Tek oyunculuda hiç.
+func _team_mode() -> bool:
+	return not solo and GameModeScript.is_pvp()
+
+
+## Takım başlığı: renkli ad + kişi sayısı; sağda bu takımda değilsem GEÇ düğmesi (takım doluysa kapalı), değilsem "TAKIMIN" etiketi.
+func _team_header(team: int) -> Control:
+	var col: Color = HT.TEAM_COLORS[team]
+	var cap: int = TeamsScript.team_capacity(NetworkManager.room_max_players)
+	var n: int = 0
+	for pid in _player_ids():
+		if TeamsScript.team_of(int(pid)) == team:
+			n += 1
+	var mine: bool = TeamsScript.team_of(_my_id()) == team
+	var hb := DK.h(10)
+	hb.name = "TeamHeader%d" % team
+	var stripe := ColorRect.new()
+	stripe.color = col
+	stripe.custom_minimum_size = Vector2(6, 0)
+	stripe.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hb.add_child(stripe)
+	var title := DK.lbl(TeamsScript.TITLES[team], DK.FS_LABEL, col)
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	title.clip_text = true
+	title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	title.custom_minimum_size.x = 40
+	hb.add_child(title)
+	var count := DK.lbl("%d/%d" % [n, cap], DK.FS_LABEL, DK.C_DIM)
+	count.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	hb.add_child(count)
+	if mine:
+		hb.add_child(_team_tag(col))
+	else:
+		var full: bool = n >= cap
+		var b := DK.btn("DOLU" if full else "BU TAKIMA GEÇ", "off" if full else "tile", DK.FS_LABEL, 72.0 if _phone else 44.0, 0)
+		b.name = "TeamJoin%d" % team
+		b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		b.disabled = full
+		b.tooltip_text = "Takım dolu" if full else "%s takımına geç" % TeamsScript.NAMES[team]
+		b.pressed.connect(_on_team_join_pressed.bind(team))
+		hb.add_child(b)
+	return hb
+
+
+func _team_tag(col: Color) -> PanelContainer:
+	var p := DK.box(col, Color(0, 0, 0, 0), 2, 0, 3)
+	var st = p.get_theme_stylebox("panel") ## PixelBox (madde 417)
+	st.content_margin_left = 8
+	st.content_margin_right = 8
+	var l := DK.lbl("TAKIMIN", DK.FS_LABEL, DK.C_ACCENT_TEXT)
+	l.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0))
+	p.add_child(l)
+	p.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	return p
+
+
+func _on_team_join_pressed(team: int) -> void:
+	var net: Node = PvpNetScript.instance()
+	if net != null:
+		net.call("request_team", team)
+
+
+## Host takımları değiştirdi (ya da başkası geçti): kartlar + başlat bilgisi yenilenir.
+func _on_teams_changed() -> void:
+	if _players == null or not is_inside_tree():
+		return
+	_refresh_players()
+	_refresh_start()
 
 
 func _player_card(pid: int, index: int) -> PanelContainer:
@@ -414,7 +486,7 @@ func _player_card(pid: int, index: int) -> PanelContainer:
 	var card := DK.box(DK.C_PANEL3 if me else DK.C_PANEL, DK.C_ACCENT if me else DK.C_LINE, 10)
 	var hb := DK.h(12)
 	var stripe := ColorRect.new()
-	stripe.color = col
+	stripe.color = HT.TEAM_COLORS[TeamsScript.team_of(pid)] if _team_mode() else col
 	stripe.custom_minimum_size = Vector2(6, 0)
 	stripe.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hb.add_child(stripe)
@@ -448,14 +520,14 @@ func _player_card(pid: int, index: int) -> PanelContainer:
 	bot.add_child(cn)
 	var wkey: String = str(info.get("weapon", ""))
 	if WC.is_valid(wkey):
-		bot.add_child(DK.slot(WC.icon(wkey), 48, "Silah: " + WC.display_name(wkey)))
+		bot.add_child(_kind_slot("weapon", wkey, CARD_SLOT_PX, "Silah: " + WC.display_name(wkey)))
 	## Evcil: kendi kartında yerel seçim, başkasınınkinde lobby_players["pet"] (eski exe göndermez -> boş).
 	var pkey: String = PC.selected() if me else str(info.get("pet", ""))
 	if PC.is_valid(pkey):
-		bot.add_child(DK.slot(PC.icon(pkey), 48, "Evcil: " + PC.display_name(pkey)))
+		bot.add_child(_kind_slot("pet", pkey, CARD_SLOT_PX, "Evcil: " + PC.display_name(pkey)))
 	var sid: String = str(info.get("spirit", ""))
 	if SS.is_valid(sid):
-		bot.add_child(DK.slot(load(str(SS.get_def(sid).get("icon", ""))) as Texture2D, 48, "Ruhani: " + SS.skill_name(sid)))
+		bot.add_child(_kind_slot("spirit", sid, CARD_SLOT_PX, "Ruhani: " + SS.skill_name(sid)))
 	if NetworkManager.is_host and not me:
 		var kick := DK.btn("", "danger", DK.FS_LABEL, 40, 40)
 		kick.tooltip_text = "Odadan at (bu oda kapanana kadar geri giremez)"
@@ -596,8 +668,12 @@ func _build_mid() -> void:
 	mv.add_child(grid)
 	mv.add_child(DK.hline())
 	var nh := DK.h(12)
+	var name_col := DK.v(0)
 	_char_name = DK.lbl("", DK.FS_TITLE, DK.C_ACCENT)
-	nh.add_child(_char_name)
+	name_col.add_child(_char_name)
+	_char_title = DK.lbl("", DK.FS_LABEL, DK.C_DIM) ## lakap (madde 623)
+	name_col.add_child(_char_title)
+	nh.add_child(name_col)
 	nh.add_child(DK.sp(0, 0, true))
 	_stats = GridContainer.new()
 	_stats.columns = 2
@@ -729,6 +805,9 @@ func show_character(id: int, locked: bool) -> void:
 		_style_card(id)
 	var def: Dictionary = Characters.get_def(id)
 	_char_name.text = str(def.get("name", ""))
+	if _char_title:
+		_char_title.text = str(def.get("title_name", ""))
+		_char_title.visible = _char_title.text != ""
 	_fill_stats(id)
 	_fill_skills(id)
 	if _preview:
@@ -757,9 +836,12 @@ func _fill_stats(id: int) -> void:
 		_stats.remove_child(c)
 		c.queue_free()
 	var bs: Dictionary = Characters.get_base_stats(id)
-	var atk: int = int(bs.get("atk", 0))
-	for row: Array in [["max_health", "Can", str(int(bs.get("hp", 100)))], ["speed", "Hız", str(int(bs.get("speed", 252)))],
-			["damage", "Güç", str(int(bs.get("ap", 10)))], ["fire_rate", "Saldırı Hızı", ("%+d%%" % atk) if atk != 0 else "0"]]:
+	var rows: Array = [["max_health", "Can", str(int(bs.get("hp", 100)))], ["speed", "Hız", str(int(bs.get("speed", 252)))],
+			["damage", "Güç", str(int(bs.get("ap", 10)))]]
+	var sig: Dictionary = MenuKit.signature_info(id) ## karaktere özel stat (madde 677) 4. hücre
+	if not sig.is_empty():
+		rows.append([str(sig["icon"]), str(sig["name"]), str(sig["value"])])
+	for row: Array in rows:
 		var hb := DK.h(8)
 		hb.add_child(DK.icon(_stat_tex(row[0]), 32 if _fs_lab <= DK.FS_LABEL else 48))
 		var nlab := DK.lbl(row[1], _fs_lab, DK.C_DIM)
@@ -844,7 +926,6 @@ func _build_right() -> void:
 	var hv := DK.h(16)
 	var sc := DK.box(DK.C_INSET, DK.C_LINE, 0)
 	sc.custom_minimum_size = Vector2(184, 184)
-	sc.add_child(DK.Spot.new(DK.C_SPOT, 0.86))
 	_preview = PreviewScript.new()
 	_preview.custom_minimum_size = Vector2(184, 184)
 	sc.add_child(_preview)
@@ -873,8 +954,17 @@ func _build_right() -> void:
 	_tab_grid = GridContainer.new()
 	_tab_grid.columns = 5
 	_tab_grid.add_theme_constant_override("h_separation", 10)
-	_tab_grid.add_theme_constant_override("v_separation", 6)
-	xv.add_child(_tab_grid)
+	_tab_grid.add_theme_constant_override("v_separation", 3) ## 6 -> 3: 4 satırla da panel 8 px taşıyordu (madde 652 ölçümü)
+	## 2026-11-13 (madde 652, 21. silah Makineli): 20'den fazla seçenek 5. satırı açıp paneli yine OYUNU BAŞLAT'ın altına taşıyordu ->
+	## ızgara en çok 4 satır yüksekliğinde bir kaydırma kutusunda (fazlası tekerlekle kayar; 5 x 108 + aralık 580 < 600, çubuğa yer var).
+	var grid_scroll := ScrollContainer.new()
+	grid_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	## 2026-11-13 (silah stat çubukları, kullanıcı: "silahlara daha az yer kalsa da bu bilgi önemli"): ızgara 4 -> 3 satır, açılan ~127 px
+	## ayrıntı kutusundaki çubuklara gitti (fazlası yine kayar).
+	grid_scroll.custom_minimum_size = Vector2(0, TILE.y * 3.0 + 3.0 * 2.0)
+	_tab_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	grid_scroll.add_child(_tab_grid)
+	xv.add_child(grid_scroll)
 	xv.add_child(DK.sp(0, 0, false, true))
 	var wd := DK.box(DK.C_INSET, DK.C_LINE, 10)
 	var wdv := DK.v(4)
@@ -884,6 +974,9 @@ func _build_right() -> void:
 	_detail_cat = DK.lbl("", DK.FS_LABEL, DK.C_DIM)
 	wh.add_child(_detail_cat)
 	wdv.add_child(wh)
+	_detail_bars = WeaponStatBars.new()
+	_detail_bars.setup(3, 48.0, DK.FS_LABEL)
+	wdv.add_child(_detail_bars)
 	_detail_desc = DK.wrap("", DK.FS_LABEL, DK.C_DIM, RIGHT.size.x - 24 - 20, 3)
 	_detail_desc.custom_minimum_size.y = 3 * 26
 	wdv.add_child(_detail_desc)
@@ -927,10 +1020,58 @@ func _meta_kind(kind: String) -> String:
 func _opt_icon(kind: String, key: String) -> Texture2D:
 	match kind:
 		"weapon":
-			return WC.icon(key)
+			return WC.menu_icon(key) ## yatay çizimli tüfekler ızgarada çapraz + büyük (madde 581)
 		"pet":
 			return PC.icon(key)
 	return _tex(str(SS.get_def(key).get("icon", "")))
+
+
+## Yükleme satırı / oyuncu kartı yuvası (madde 679): portreyle aynı Gömme Tepsi çerçevesi (eski düz WIN_LINE kenar ahşap kartta kayboluyordu).
+## Silah açık ahşap kuyuda (HT.ITEM_WELL; çizimler siyah konturlu), evcil kendi arka planıyla (madde 585), ruhani kendi çizimli zemininde.
+## Toplam boy eskisiyle aynı: px + 2x4 çerçeve.
+func _kind_slot(kind: String, key: String, px: float, tip: String) -> Control:
+	var face: Control
+	if kind == "pet" and PetBadge.has_background(key):
+		face = PetBadge.box(key, px)
+	else:
+		var well := ColorRect.new()
+		well.color = HT.ITEM_WELL if kind == "weapon" else DK.C_INSET
+		well.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		## Silah: boş kenarı kırpılıp yuvaya tam katla sığan en büyük boyda, kenara en az 2 px kala (madde 681).
+		var ic := DK.icon(_trimmed(_opt_icon(kind, key)), px - 4.0) if kind == "weapon" else DK.icon(_opt_icon(kind, key), px)
+		ic.set_anchors_preset(Control.PRESET_FULL_RECT)
+		well.add_child(ic)
+		face = well
+	## Evcil arka planı tam katla kırpılır (PetBadge.fit): kutu px'ten 1-2 px küçük olabilir -> kendi boyuyla çerçevelenir.
+	var fs: Vector2 = face.custom_minimum_size if kind == "pet" and face.custom_minimum_size.x > 0.0 else Vector2(px, px)
+	var cc := PortraitFace.wrap_framed(face, fs, 1.0)
+	if tip != "":
+		cc.tooltip_text = tip
+		cc.mouse_filter = Control.MOUSE_FILTER_PASS
+	return cc
+
+
+## Dokunun saydam kenarını kırpar (silah çizimleri 32/48 tuvalde 26-30 px; kırpınca tam kat ölçek daha büyük sığar). Önbellekli.
+static var _trim_cache: Dictionary = {}
+
+static func _trimmed(tex: Texture2D) -> Texture2D:
+	if tex == null or tex.resource_path == "":
+		return tex
+	if _trim_cache.has(tex.resource_path):
+		return _trim_cache[tex.resource_path]
+	var out: Texture2D = tex
+	var img: Image = tex.get_image()
+	if img:
+		if img.is_compressed():
+			img.decompress()
+		var r: Rect2i = img.get_used_rect()
+		if r.size.x > 0 and r.size != img.get_size():
+			var at := AtlasTexture.new()
+			at.atlas = tex
+			at.region = Rect2(r)
+			out = at
+	_trim_cache[tex.resource_path] = out
+	return out
 
 
 func _opt_name(kind: String, key: String) -> String:
@@ -979,7 +1120,11 @@ func _fill_tab() -> void:
 		v.alignment = BoxContainer.ALIGNMENT_CENTER
 		## DK.icon tam katlı ölçekler: 64 kutuda 48 px sanat 1x kalıyordu (silahlar küçük görünürdü) -> silah 96 (2x).
 		var isz: float = (96.0 if _tab == "weapon" else 64.0) * (1.5 if _phone else 1.0)
-		v.add_child(DK.icon(_opt_icon(_tab, key), isz, lk))
+		if _tab == "pet" and PetBadge.has_background(key):
+			## karakter kartı portresiyle aynı çerçeve kalınlığı (madde 535) + arka plan (madde 585): masaüstü 56 iç (2x) + 2x4 kenar = 72
+			v.add_child(PetBadge.framed_icon(key, 104.0 if _phone else 72.0, 3.0 if _phone else 2.0, lk))
+		else:
+			v.add_child(DK.icon(_opt_icon(_tab, key), isz, lk))
 		var on_l := DK.lbl(_opt_name(_tab, key), _fs_small, DK.C_ACCENT if on else (DK.C_DIM if lk else DK.C_TEXT), HORIZONTAL_ALIGNMENT_CENTER)
 		on_l.clip_text = true
 		on_l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -1019,6 +1164,10 @@ func _fill_detail() -> void:
 	var key: String = _detail_key
 	var lk: bool = not MP.is_unlocked(_meta_kind(_tab), key)
 	_detail_name.text = _opt_name(_tab, key)
+	if _detail_bars != null:
+		_detail_bars.visible = _tab == "weapon"
+		if _tab == "weapon":
+			_detail_bars.call("show_weapon", key)
 	match _tab:
 		"weapon":
 			_detail_cat.text = WC.category_label(key)
@@ -1049,7 +1198,7 @@ func _refresh_loadout_header() -> void:
 		c.queue_free()
 	for kind: String in ["weapon", "pet", "spirit"]:
 		var key: String = _current(kind)
-		_load_icons.add_child(DK.slot(_opt_icon(kind, key), 48, _opt_tip(kind, key)))
+		_load_icons.add_child(_kind_slot(kind, key, 48, _opt_tip(kind, key)))
 
 
 ## ------------------------------------------------------------------ başlat / hazır + kilit
@@ -1063,6 +1212,11 @@ func _build_start() -> void:
 			ready_pressed.emit())
 	v.add_child(_start_btn)
 	_start_info = DK.lbl("", DK.FS_LABEL, DK.C_DIM, HORIZONTAL_ALIGNMENT_CENTER)
+	## Kilit metni anahtar da isteyince uzar ("Kilitli - 450 Ruh Kıymığı + 3 Bataklık Anahtarı (Ruh Mağazası)", madde 605): sütunu genişletmesin,
+	## sığmazsa kısalsın; tam metin fare üstünde ipucu.
+	_start_info.clip_text = true
+	_start_info.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_start_info.mouse_filter = Control.MOUSE_FILTER_PASS
 	v.add_child(_start_info)
 	_put(v, Rect2(RIGHT.position.x, START_Y, RIGHT.size.x, 0))
 
@@ -1092,6 +1246,7 @@ func _refresh_start() -> void:
 		_start_btn.disabled = _viewing_locked
 		DK.style_button(_start_btn, "off" if _viewing_locked else "primary")
 		_start_info.text = MP.lock_text(MP.CHAR, _sel_char) if _viewing_locked else ("" if _phone else "Tek oyunculu  ·  Esc: ana menü")
+		_start_info.tooltip_text = _start_info.text if _viewing_locked else ""
 		return
 	var lp: Dictionary = NetworkManager.lobby_players
 	var ready_n: int = 0
@@ -1103,15 +1258,18 @@ func _refresh_start() -> void:
 	if pending > 0:
 		info_text += Loc.t("  ·  %d oyuncu bağlanıyor") % pending
 	var kind: String = "primary"
+	var team_block: String = TeamsScript.lobby_start_block() if _team_mode() else "" ## 2v2: iki takımda da oyuncu olmalı (madde 608)
 	if NetworkManager.is_host:
 		_start_btn.text = "OYUNU BAŞLAT"
-		var can: bool = NetworkManager.all_players_ready() and not _viewing_locked
+		var can: bool = NetworkManager.all_players_ready() and not _viewing_locked and team_block == ""
 		_start_btn.disabled = not can
 		kind = "primary" if can else "off"
 		if _viewing_locked:
 			info_text = "Kilitli karakterle başlatılamaz  ·  " + info_text
 		elif not NetworkManager.all_players_ready():
 			info_text += "  ·  herkes hazır olunca başlatabilirsin"
+		elif team_block != "":
+			info_text += "  ·  " + team_block
 	else:
 		var local_ready: bool = _local_ready()
 		if NetworkManager.is_join_blocked_by_game():
@@ -1130,6 +1288,8 @@ func _refresh_start() -> void:
 				_start_btn.text = "KİLİTLİ KARAKTER"
 				kind = "off"
 		info_text += "  ·  host herkes hazır olunca başlatır"
+		if team_block != "":
+			info_text += "  ·  " + team_block
 	DK.style_button(_start_btn, kind)
 	_start_info.text = info_text.replace("  ·  ", ", ") if _phone else info_text
 	if _lock:
@@ -1288,6 +1448,9 @@ func _ph_opts_page() -> Control:
 	_detail_cat = PK.lbl("", PK.FS_SMALL, DK.C_DIM)
 	wh.add_child(_detail_cat)
 	wdv.add_child(wh)
+	_detail_bars = WeaponStatBars.new()
+	_detail_bars.setup(3, 48.0, PK.FS_SMALL)
+	wdv.add_child(_detail_bars)
 	_detail_desc = PK.lbl("", PK.FS_SMALL, DK.C_DIM)
 	_detail_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_detail_desc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1339,6 +1502,7 @@ func _ph_team_page() -> Control:
 	cv.add_child(_chat_scroll)
 	_chat_input = PK.line_edit("Mesaj yaz", PK.FS_SMALL, 80.0)
 	_chat_input.max_length = 200
+	_chat_input.keep_editing_on_text_submit = true ## Enter sonrası odak kaybolmasın
 	_chat_input.text_submitted.connect(func(_t: String) -> void: _send_chat())
 	cv.add_child(_chat_input)
 	chat.add_child(cv)
@@ -1354,7 +1518,6 @@ func _ph_team_page() -> Control:
 func _ph_build_detail(det: VBoxContainer) -> void:
 	var sc := PK.inset(0.8, 0.0, DK.C_LINE)
 	sc.custom_minimum_size = Vector2(0, 340)
-	sc.add_child(DK.Spot.new(DK.C_SPOT, 0.86))
 	_preview = PreviewScript.new()
 	_preview.custom_minimum_size = Vector2(0, 340)
 	sc.add_child(_preview)
@@ -1363,6 +1526,8 @@ func _ph_build_detail(det: VBoxContainer) -> void:
 	det.add_child(DK.sp(0, 12))
 	_char_name = PK.lbl("", PK.FS_TITLE, DK.C_ACCENT)
 	det.add_child(_char_name)
+	_char_title = PK.lbl("", PK.FS_SMALL, DK.C_DIM) ## lakap (madde 623)
+	det.add_child(_char_title)
 	_stats = GridContainer.new()
 	_stats.columns = 2
 	_stats.add_theme_constant_override("h_separation", 40)
@@ -1448,7 +1613,7 @@ func _ph_refresh_loadout() -> void:
 	var names: Array = []
 	for kind: String in ["pet", "weapon", "spirit"]:
 		var key: String = _current(kind)
-		_load_icons.add_child(DK.slot(_opt_icon(kind, key), 56, _opt_name(kind, key)))
+		_load_icons.add_child(_kind_slot(kind, key, 56, _opt_name(kind, key)))
 		names.append(_opt_name(kind, key))
 		var tr: Variant = _ph_rail_icons.get(kind)
 		if tr is TextureRect and is_instance_valid(tr):

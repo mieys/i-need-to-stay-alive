@@ -94,7 +94,7 @@ func _ready_player(player: Node) -> void:
 
 func test_roster_entry_and_files() -> void:
 	var def: Dictionary = Characters.DEFS[13]
-	assert(str(def["name"]) == "Vampir Çocuk", "isim: %s" % str(def["name"]))
+	assert(str(def["name"]) == "Nox", "isim: %s" % str(def["name"]))
 	assert(int(def["skill"]) == 40 and int(def["skill2"]) == 41 and int(def["skill3"]) == 42, "skill id'leri 40/41/42 olmalı")
 	assert(not bool(def.get("always_walk", false)), "yeni sette run_* var: always_walk olmamalı (yoksa koşma klibi hiç oynamaz)")
 	## Kullanıcı isteği (2026-09-22): Vampir %30, sonra %10, sonra %15 daha büyütüldü (scale 1.27575 x 1.3 x 1.1 x 1.15) -> ayaklar aynı
@@ -179,6 +179,7 @@ func test_passive_max_health_follows_attack_power_and_lifesteal_is_two_percent()
 	assert(is_equal_approx(player.max_health, mid), "AP geri düşünce maks. can geri düşer")
 	## Can emme: hasarın %1'i (kullanıcı isteği: %4 -> %2 -> 2026-09-24 %1).
 	player.health = player.max_health - 50.0
+	player.lifesteal_percent -= Characters.signature_value(13, "lifesteal") ## özel stat (+%6 genel can çalma, madde 677) bu ölçümü kirletmesin
 	var h0: float = player.health
 	player.on_dealer_hit(100.0)
 	assert(is_equal_approx(player.health, h0 + 1.0), "100 hasar -> 1 can emme (%%1), bulunan +%s" % str(player.health - h0))

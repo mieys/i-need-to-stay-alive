@@ -31,7 +31,7 @@ Kitler (`menu_dark_kit`, `shop_dark_kit` `PAL_WOOD`, `fire_menu_kit`, `phone_men
 
 **Anlamlı renkler bu kuralın dışında kalır**, çünkü oyun bilgisi taşır:
 - eşya kademe çerçeveleri (`TIER_COL`), efsun kontürleri, oyuncu renkleri (`PLAYER_COLORS`)
-- verilen hasar (turuncu) / alınan hasar (mavi), Ruh Kıymığı moru, silah parçacığı mavisi (`SHARD`), `INK` stat renkleri
+- verilen hasar (turuncu) / alınan hasar (mavi), Ruh Kıymığı orkide moru (`SOUL`, mor yıldız simgesi, madde 559), silah parçacığı zümrütü (`SHARD`), `INK` stat renkleri
 - level pazarında KAYDET'lenen seçenek yeşili (`SAVED_*`, madde 433): pazarda yeşil kenar yalnız "kayıtlı" demek
 
 Bunlar da tek yerde tanımlı kalır, ama zemin ya da yazı rengi olarak kullanılmaz.
@@ -58,6 +58,11 @@ Bunlar da tek yerde tanımlı kalır, ama zemin ya da yazı rengi olarak kullan�
   (`shop_dark_kit`, `menu_dark_kit`, Ruh Mağazası `_sb`) bunu döndürür; yeni kutu için `StyleBoxFlat.new()` yazma, kitin `sb()`'sini kullan.
   `phone_menu_kit.sb()` de bunu sarar. Henüz düz kutu: telefonun `_ph_box`/`_ph_sb` (level/sandık/envanter), `ui_kit._flat`, elle `draw_rect` kutular.
 - Pencereler için **"piksel ahşap"** görünüş seçeneği var: HUD levhası, kuyu ve düğme dokuları 9 dilim. Prototip: `tools/proto_20261106/stil_rehberi/piksel_arayuz.py`. **KARAR (2026-11-06): düz ahşap kalır**, dokulu levhaya geçilmeyecek.
+- **Pencere zemini ahşap damar dokusu (madde 662, 2026-11-13, kullanıcı seçimi E "Akan Damar")**: renk, kenar, köşe ve saydamlık AYNI kalır, yalnız
+  pencere zemininin içine hafif damar dokusu düşer (`pixel_box.gd` `GRAIN_*`, karo `assets/ui/panel_doku/ahsap_damar.png`). Kural otomatik: dolgu
+  `WIN_PANEL`/`WIN_PANEL2`/`WIN_PANEL3` ve kutunun kısa kenarı >= 90 px. Düğme, kuyu (`WIN_INSET`), altın düğme, küçük kutu düz kalır; istisna için kutuda
+  `grain = false`. Yeni doku yalnız `RIM_HI`/`DEEP` alfa bantlarıyla çizilir (yeni renk yok), 3 px ızgarada, sarmalı (tekrar sınırında çizgi olmamalı).
+  StyleBoxFlat / `ui_kit._flat` / elle `draw_rect` kutular dokusuz kalır; dokunun her yerde görünmesi için o kutular da kitin `sb()`'sine taşınmalı.
 
 ## 5. Ton
 Sıcak, kırsal, ocak başı: ahşap, krem, altın. Karanlık bölgeler ve kan yalnız vurgu olarak kullanılır, ana renk olmaz. Haritaya yeni içerik yalnız oyunun kendi tileset sanatıyla girer.

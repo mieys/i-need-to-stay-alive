@@ -97,8 +97,11 @@ const DOME_GLOW_START := 0.02 ## kalkan bu kadar yıprandıktan sonra parıltı 
 ## sabit 60 hasardı (saldırı gücüyle büyümüyordu) ve yalnız kalkan hasarla KIRILIRSA patlıyordu - %1000 SG kapasiteli kalkan çoğu
 ## zaman 15 sn'yi doldurup sessizce kapanıyordu. Artık süre dolunca da patlar; hasar = SG x BURST_AP_RATIO + kalkanın EMDİĞİ hasar x
 ## BURST_ABSORB_RATIO (emilen en çok kalkan kapasitesi kadar sayılır - "yüklenip boşalma").
+## DENGE (madde 356 ek, "100k vurmuş"): kritik patlamaya İKİ kez biniyordu (kapasite açılışta kritik atıyor, emilen pay da patlamada
+## yeniden kritikle çarpılıyordu) ve emilen pay %50'ydi -> kritikli yapıda ulti diğer R'lerin 10-15 katıydı. Artık patlamanın kritiği
+## yalnız SG x %400 kısmına biner; emilen pay (kapasite zaten kritikli) %25 ve ayrıca çarpılmaz.
 const BURST_AP_RATIO := 4.0 ## %400 saldırı gücü
-const BURST_ABSORB_RATIO := 0.5 ## emilen hasarın %50'si
+const BURST_ABSORB_RATIO := 0.25 ## emilen hasarın %25'i (kritiğe ikinci kez uğramaz)
 const BURST_RADIUS := 220.0 ## dünya birimi - nova sayfasının R'si (182 sanat px x TEXEL)
 const BURST_KNOCKBACK := 260.0
 const BURST_MAX_BOLTS := 6 ## Matthew'dan en yakın yaratıklara çakan Q şimşeği (ağda tek tek gider - sınırlı)
@@ -246,9 +249,10 @@ static func glow_level(dome_hp: float, dome_max: float) -> float:
 	return clampf(1.0 - dome_hp / dome_max, 0.0, 1.0)
 
 
-## Kalkan patlamasının hasarı (kritik hariç): SG x %400 + emilen hasarın %50'si.
-static func burst_damage(attack_power: float, absorbed: float) -> float:
-	return maxf(0.0, attack_power) * BURST_AP_RATIO + maxf(0.0, absorbed) * BURST_ABSORB_RATIO
+## Kalkan patlamasının hasarı: SG x %400 x kritik çarpanı + emilen hasarın %25'i. `crit_mult` (kritik yoksa 1) YALNIZ SG kısmına
+## biner - emilen miktar kalkan kapasitesinden gelir ve kapasite açılışta zaten kritik attı (çift kritik yok).
+static func burst_damage(attack_power: float, absorbed: float, crit_mult: float = 1.0) -> float:
+	return maxf(0.0, attack_power) * BURST_AP_RATIO * maxf(1.0, crit_mult) + maxf(0.0, absorbed) * BURST_ABSORB_RATIO
 
 
 ## Patlama parıltısı (0..1): patlamadan bu yana geçen süreye göre tamdan sıfıra.

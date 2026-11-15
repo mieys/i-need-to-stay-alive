@@ -126,14 +126,14 @@ const CAPTURE_FILL_TIME_MIN := 12.0
 ## Kullanıcı isteği (2026-09-26): "bazı görevlerin süresi yapma süresine göre gereksiz uzun, kısalt" - tek başına 45 sn'de
 ## dolan bayrağa 150 sn veriliyordu (3.3 kat). 150 -> 90 (tek kişilik dolum süresinin 2 katı).
 const CAPTURE_TIMEOUT := 90.0
-const CAPTURE_REWARD_GOLD := 120
+const CAPTURE_REWARD_GOLD := 180 ## 2026-11-15 kullanıcı ("oyun kolay olmasın"): görev altın ödülleri x2,5 -> x1,5 (taban 120; 2026-11-14'te x2,5 = 300 idi, x3 fazla gelmişti)
 
 ## Secure the Area (kullanıcı isteği: "~300 düşman, 3 dakika içinde").
 const SECURE_RADIUS := 300.0
 ## 2026-10-02 (kullanıcı: "hedef düşman öldürmesini %30 düşür"): 300 -> 210.
 const SECURE_KILL_TARGET := 210
 const SECURE_DURATION := 180.0
-const SECURE_REWARD_GOLD := 200
+const SECURE_REWARD_GOLD := 300 ## x1,5 (taban 200; 2026-11-14 x2,5 = 500)
 ## DÜZELTME (kullanıcı bildirimi 2026-09-24: "görevlerden çoğu çalışmıyor") - normal yaratık akışı 3
 ## dakikada 300 öldürmeye (1.7/sn) HİÇ yetmiyordu; bölgede oyuncu varken kenardan ek dalga doğar
 ## (bkz. enemy_spawner.gd spawn_mission_wave - yaratık tavanına uyar).
@@ -156,7 +156,7 @@ const COLLECT_DURATION := 150.0
 ## olarak gösterilir (bkz. minimap.gd set_collect_dots), tek bir "görev merkezi" işareti yok (HIDDEN_LOCATION_KINDS).
 ## Kullanıcı isteği (2026-10-01): 1.5 -> 2.0 ("25 tane toplamamız gerekiyorsa 50 tane çıksın").
 const COLLECT_ITEM_RATIO := 2.0
-const COLLECT_REWARD_GOLD := 150
+const COLLECT_REWARD_GOLD := 225 ## x1,5 (taban 150; 2026-11-14 x2,5 = 375)
 const CollectItemScript := preload("res://scripts/mission_collect_item.gd")
 const GoldRewardFx := preload("res://scripts/gold_reward_fx.gd")
 
@@ -180,20 +180,20 @@ const EnemyPathingScript: GDScript = preload("res://scripts/enemy_pathing.gd")
 ## süre = mesafe/hız * bu çarpan (geri kaymalara pay). 2026-09-26 (bkz. CAPTURE_TIMEOUT notu): 2.6 -> 1.5 - kesintisiz itme
 ## süresinin 2.6 katı (en uzun rotada ~14 dk) gereksiz uzundu; %50 pay geri kaymalara/savaşa yeter.
 const ESCORT_TIMEOUT_BUFFER := 1.5
-const ESCORT_REWARD_GOLD := 180
+const ESCORT_REWARD_GOLD := 270 ## x1,5 (taban 180; 2026-11-14 x2,5 = 450)
 const VanScript := preload("res://scripts/mission_van.gd")
 
 ## Defend the Tree (kullanıcı isteği: can+kalkan, faz her 10sn, mavi ateş topu, yaratıklar
 ## ağaca odaklanır; "geçici bi ağaç yap sonra değiştiririz").
 ## Görev süresi (2026-10-17, kullanıcı: "çok kısa sürüyor, 2 dakika daha korumak gereksin"): eski 5 faz x 10 sn = 50 sn -> 50 + 120 = 170 sn.
 const TREE_DURATION := 170.0
-const TREE_REWARD_GOLD := 220
+const TREE_REWARD_GOLD := 330 ## x1,5 (taban 220; 2026-11-14 x2,5 = 550)
 const TreeScript := preload("res://scripts/mission_tree.gd")
 
 ## Kill Your Copy (kullanıcı isteği: %90 az hasar alır/verir, %20 yavaş, yetenek yok, renk
 ## tersine çevrilmiş, 5 dakika, öldürülmezse yok olur).
 const COPY_BASE_DAMAGE := 10.0 ## kaynağın damage_bonus'u okunamazsa: BASE_STATS "Hasar:10" ile aynı taban (bkz. lobby_menu.gd)
-const COPY_REWARD_GOLD := 250
+const COPY_REWARD_GOLD := 375 ## x1,5 (taban 250; 2026-11-14 x2,5 = 625)
 const CopyScript := preload("res://scripts/mission_player_copy.gd")
 ## Tek kaynak: kopyanın kendi ömrü (mission_player_copy.gd LIFETIME) - görev süresi ile kopyanın kaybolma anı ayrışmasın.
 const COPY_LIFETIME: float = CopyScript.LIFETIME
@@ -224,7 +224,7 @@ const NEST_WAVE_INTERVAL := 3.5
 const NEST_WAVE_COUNT := 2
 const NEST_WAVE_RING := 34.0
 const NEST_DURATION := 150.0
-const NEST_REWARD_GOLD := 200
+const NEST_REWARD_GOLD := 300 ## x1,5 (taban 200; 2026-11-14 x2,5 = 500)
 
 ## RİTÜELİ BOZ: ortada ruh ateşli heykel (görsel, mission_ritual_altar.gd), çevresinde 3 kristal (RITUAL_RING). Süre dolmadan kristallerin
 ## hepsi kırılırsa başarı; dolarsa ritüel tamamlanır: heykelin dibinden bir ELİT + RITUAL_FAIL_WAVE yaratık doğar. Ritüel sürerken yakında
@@ -241,7 +241,7 @@ const RITUAL_WAVE_INTERVAL := 5.0
 const RITUAL_WAVE_COUNT := 2
 const RITUAL_WAVE_RING := 70.0
 const RITUAL_FAIL_WAVE := 8
-const RITUAL_REWARD_GOLD := 220
+const RITUAL_REWARD_GOLD := 330 ## x1,5 (taban 220; 2026-11-14 x2,5 = 550)
 
 ## KAÇAN HAZİNE: altın slime (mission_treasure_runner.gd: kaçar, soluklanır, vuruldukça altın saçar). RUNNER_LIFETIME içinde öldürülürse
 ## başarı (+ görev altını), yoksa kaçar (saçılan altın yerde kalır).
@@ -249,7 +249,7 @@ const RUNNER_HP_RATIO := 14.0
 const RUNNER_SHIELD_RATIO := 0.0
 const RUNNER_FALLBACK_HP := 500.0
 const RUNNER_LIFETIME := 50.0
-const RUNNER_REWARD_GOLD := 150
+const RUNNER_REWARD_GOLD := 225 ## x1,5 (taban 150; 2026-11-14 x2,5 = 375)
 
 ## GEZİCİ IŞIK: ruh feneri rota boyunca (konvoy rota bulucusu, daha kısa) LIGHT_SPEED ile süzülür - yalnız ışığın içinde (LIGHT_RADIUS) canlı
 ## oyuncu varken; çevresindeki karanlık halkada kalan oyuncu hasar alır (mission_light.gd, her makine kendi oyuncusuna). Işık yürürken
@@ -264,7 +264,7 @@ const LIGHT_TIMEOUT_EXTRA := 30.0
 const LIGHT_WAVE_INTERVAL := 4.0
 const LIGHT_WAVE_COUNT := 2
 const LIGHT_WAVE_RING := 400.0
-const LIGHT_REWARD_GOLD := 200
+const LIGHT_REWARD_GOLD := 300 ## x1,5 (taban 200; 2026-11-14 x2,5 = 500)
 
 var _next_mission_id: int = 1
 ## Her biri null ya da bir Dictionary.

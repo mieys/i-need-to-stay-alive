@@ -93,6 +93,36 @@ func test_rapid_fire_does_not_accumulate_drift() -> void:
 	_cleanup()
 
 
+## Kullanıcı isteği 2026-11-13: ateşli silahlar ateşte "sıvıymış gibi" ezilip esnemesin - normal atışta da kritikte de ölçek sabit,
+## geri tepme (konum) sürer. Yay hâlâ ezilir (liste yalnız ateşli silahlar).
+func test_guns_keep_their_shape_while_recoiling() -> void:
+	var base_scale := Vector2(0.4, 0.4)
+	for k: String in WeaponJuice.RIGID_GUNS:
+		for crit: bool in [false, true]:
+			var icon: Node2D = _icon(Vector2.ZERO, base_scale * Vector2(0.8, 1.2)) ## yarıda kesilmiş eski tween ölçeği
+			if crit:
+				WeaponCritAnim.play_ranged(self, icon, k, Vector2.RIGHT, Vector2.ZERO, base_scale, 10.0)
+			else:
+				WeaponJuice.ranged_recoil(self, icon, k, Vector2.RIGHT, Vector2.ZERO, base_scale, 10.0)
+			var min_x: float = 0.0
+			var t0: int = Time.get_ticks_msec()
+			while Time.get_ticks_msec() - t0 < 250:
+				await get_tree().process_frame
+				assert(icon.scale.is_equal_approx(base_scale), "%s (kritik=%s) ateşte ezilip esnememeli: %s" % [k, str(crit), str(icon.scale)])
+				min_x = minf(min_x, icon.position.x)
+			assert(min_x < -5.0, "%s (kritik=%s) yine de geri tepmeli: %.1f" % [k, str(crit), min_x])
+			_cleanup()
+	var bow: Node2D = _icon(Vector2.ZERO, base_scale)
+	WeaponJuice.ranged_recoil(self, bow, "yay", Vector2.RIGHT, Vector2.ZERO, base_scale, 10.0)
+	var squashed := false
+	var t1: int = Time.get_ticks_msec()
+	while Time.get_ticks_msec() - t1 < 150:
+		await get_tree().process_frame
+		squashed = squashed or not bow.scale.is_equal_approx(base_scale)
+	assert(squashed, "Yay ateşli silah değil - ezilme punch'ı sürmeli")
+	_cleanup()
+
+
 func test_tremor_is_small_steady_within_a_step_and_changes_between_steps() -> void:
 	var seen: Dictionary = {}
 	for i in range(40):

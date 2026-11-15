@@ -138,6 +138,9 @@ func refresh() -> void:
 	var order: Array = order_bosses(items, _main_id)
 	_main_id = int(order[0])
 	var boss: Node = by_id[_main_id]
+	if ArtScript.TRIO_IDS.has(str(boss.get_meta("creature_id", ""))):
+		_show_entry(_main_id, trio_entry(get_tree().get_nodes_in_group("boss"), _trio_max))
+		return
 	var e := {
 		"name": ArtScript.display_name(str(boss.get_meta("creature_id", ""))),
 		"hp": _ratio(float(boss.get("health")), float(boss.get("max_health"))),
@@ -146,8 +149,55 @@ func refresh() -> void:
 		"hp_text": ArtScript.bar_text(float(boss.get("health")), float(boss.get("max_health"))),
 		"sh_text": ArtScript.bar_text(float(boss.get("item_shield_hp")), float(boss.get("item_shield_max"))),
 	}
+	_show_entry(_main_id, e)
+
+
+## ÜÇ KARDEŞ (SAF - testler çağırır): sahnedeki kardeş bosslarından TEK bar girdisi. Parça sırası ArtScript.TRIO_IDS; ölen / silinen kardeşin parçası
+## boş (0) ama azami değeri toplam yazıda kalır (max_memory: kimlik -> [can maks, kalkan maks], çağıranın sözlüğü - kardeş ölünce düğüm gider).
+static func trio_entry(nodes: Array, max_memory: Dictionary) -> Dictionary:
+	var by_cid: Dictionary = {}
+	for b in nodes:
+		if is_instance_valid(b) and b.get("is_dead") != true:
+			var cid: String = str((b as Node).get_meta("creature_id", ""))
+			if ArtScript.TRIO_IDS.has(cid):
+				by_cid[cid] = b
+	var segs: Array = []
+	var hp_sum := 0.0
+	var hp_max_sum := 0.0
+	var sh_sum := 0.0
+	var sh_max_sum := 0.0
+	for cid: String in ArtScript.TRIO_IDS:
+		var hp := 0.0
+		var sh := 0.0
+		if by_cid.has(cid):
+			var b: Node = by_cid[cid]
+			hp = float(b.get("health"))
+			sh = float(b.get("item_shield_hp"))
+			max_memory[cid] = [float(b.get("max_health")), float(b.get("item_shield_max"))]
+		var mx: Array = max_memory.get(cid, [0.0, 0.0])
+		segs.append({"hp": _ratio(hp, float(mx[0])), "sh": _ratio(sh, float(mx[1]))})
+		hp_sum += maxf(hp, 0.0)
+		sh_sum += maxf(sh, 0.0)
+		hp_max_sum += float(mx[0])
+		sh_max_sum += float(mx[1])
+	return {
+		"name": ArtScript.TRIO_NAME,
+		"hp": _ratio(hp_sum, hp_max_sum),
+		"sh": _ratio(sh_sum, sh_max_sum),
+		"segs": segs,
+		"hp_text": ArtScript.bar_text(hp_sum, hp_max_sum),
+		"sh_text": ArtScript.bar_text(sh_sum, sh_max_sum),
+	}
+
+
+var _trio_max: Dictionary = {} ## Üç Kardeş: kardeş kimliği -> [can maks, kalkan maks] (ölen kardeşin parçası için)
+
+
+func _show_entry(main_id: int, e: Dictionary) -> void:
 	var sig: String = "%s:%d:%d:%s:%s" % [e["name"], int(round(float(e["hp"]) * 1000.0)), int(round(float(e["sh"]) * 1000.0)), e["hp_text"], e["sh_text"]]
-	_update_trail(_main_id, float(e["hp"]))
+	for seg: Dictionary in e.get("segs", []):
+		sig += ":%d/%d" % [int(round(float(seg["hp"]) * 1000.0)), int(round(float(seg["sh"]) * 1000.0))]
+	_update_trail(main_id, float(e["hp"]))
 	if not _shown:
 		_shown = true
 		visible = true
@@ -182,6 +232,10 @@ func _layout() -> void:
 
 func _draw() -> void:
 	if _entry.is_empty():
+		return
+	if _entry.has("segs"):
+		ArtScript.top_plaque_trio(self, Vector2.ZERO, scale_px, str(_entry["name"]), _entry["segs"], ArtScript.TOP_W,
+				str(_entry.get("hp_text", "")), str(_entry.get("sh_text", "")))
 		return
 	ArtScript.top_plaque(self, Vector2.ZERO, scale_px, str(_entry["name"]), float(_entry["hp"]), float(_entry["sh"]), ArtScript.TOP_W,
 			str(_entry.get("hp_text", "")), str(_entry.get("sh_text", "")), _trail)

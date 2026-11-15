@@ -177,7 +177,11 @@ static func get_instance(tree: SceneTree) -> Node2D:
 	return n
 
 
+const UiHideScript := preload("res://scripts/ui_hide.gd") ## F3 arayüzü gizle (madde 612): hasar sayıları da kapanır (`visibility_layer`)
+
+
 func _init() -> void:
+	## F3 arayüz gizliyken de görünür kalır (kullanıcı isteği 2026-11-14): mark_world YOK
 	## Eski floating_text düğümleri z=0'da ama sahneye EN SON eklendikleri için
 	## yaratıkların (z=0) üstünde çiziliyordu. Bu düğüm bir kez, erken ekleniyor -
 	## sonradan eklenen yaratıklar üstüne binmesin diye 1 (oyuncuyla aynı katman).

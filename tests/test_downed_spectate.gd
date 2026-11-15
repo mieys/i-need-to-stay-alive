@@ -29,6 +29,7 @@ func _make_ally(pos: Vector2, nm: String) -> FakeAlly:
 	var a := FakeAlly.new()
 	a.player_name = nm
 	a.add_to_group("remote_players")
+	a.add_to_group("remote_allies") ## destek yetenekleri müttefik grubunu tarar (madde 617)
 	add_child(a)
 	a.global_position = pos
 	_spawned.append(a)

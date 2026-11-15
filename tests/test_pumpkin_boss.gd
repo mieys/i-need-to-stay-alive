@@ -89,7 +89,7 @@ func test_sheets_scenes_and_tables_follow_the_conventions() -> void:
 	for id: String in ["balkabagi1", "kabak1", "yarasa1"]:
 		assert(SpawnerScript.SCENES.has(id) and SpawnerScript.ID_FAMILY.has(id), "doğuş tablolarında: " + id)
 		assert(AbilitiesScript.family_has_ability(SpawnerScript.ID_FAMILY[id]), "yeteneği var: " + id)
-	assert(SpawnerScript.NEW_BOSS_TIERS.get(8) == ["balkabagi1"], "Kademe 8 bossu")
+	assert(SpawnerScript.FIXED_BOSS_STATS.has("balkabagi1") and SpawnerScript.BOSS_HOME_TIER["balkabagi1"] == 8, "nihai statlı boss, eski kademe 8 (ana haritada doğmaz; Bataklık haritası K5 bossu, Aşama 3)")
 	assert(BossBarArtScript.display_name("balkabagi1") == "BALKABAĞI KAFA", "boss barı adı")
 	for tier: int in SpawnerScript.TIER_ROSTER.keys():
 		assert(not SpawnerScript.TIER_ROSTER[tier].has("kabak1") and not SpawnerScript.TIER_ROSTER[tier].has("yarasa1"), "minyonlar sıradan doğuşta çıkmaz")

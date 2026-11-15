@@ -1,0 +1,367 @@
+<title>Yetenek İkonu Seçimi</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=Nunito:wght@500;700;800&display=swap">
+<style>
+/* Yerleşim: yapışkan üst şerit (ilerleme + karakter atlama), altında karakter başına 4 yetenek kartı;
+   kartta "şu an" + 3 aday büyük tıklanır kare. Tek koyu tema = oyunun Kısık Ahşap HUD paleti (hud_theme.gd). */
+:root {
+  --deep: #140e09;
+  --bg: #1d150e;
+  --panel: #2c2016;
+  --panel-hi: #3a2b1d;
+  --rim: #6a4a30;
+  --rim-lo: #4b3320;
+  --text: #f3e6cc;
+  --dim: #c4b090;
+  --gold: #f0c070;
+  --gold-ink: #24160a;
+  --good: #8fb466;
+  --good-fill: #2d2b17;
+  --bad: #d06a4e;
+  --bad-fill: #2e1912;
+  --font-display: "Pixelify Sans", "Nunito", system-ui, sans-serif;
+  --font-body: "Nunito", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--text); font-family: var(--font-body); font-size: 15px; line-height: 1.45; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--deep); }
+.wrap { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); max-width: 1480px; margin: 0 auto; }
+
+header.bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--deep); border-bottom: 2px solid var(--rim-lo); }
+.bar .wrap { padding-block: 12px; display: flex; flex-direction: column; gap: 10px; }
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: 26px; color: var(--gold); margin: 0; letter-spacing: 0.02em; }
+.prog { display: flex; align-items: center; gap: 10px; flex: 1 1 260px; min-width: 0; }
+.prog-track { flex: 1; height: 12px; background: var(--panel); border: 2px solid var(--rim-lo); border-radius: 3px; overflow: hidden; }
+.prog-fill { height: 100%; width: 0; background: var(--good); transition: width .25s; }
+.prog-txt { font-variant-numeric: tabular-nums; font-weight: 800; white-space: nowrap; }
+.save { font-size: 13px; color: var(--dim); white-space: nowrap; }
+.save.ok { color: var(--good); }
+.save.warn { color: var(--bad); }
+.tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: thin; }
+.chip { flex: 0 0 auto; font: 700 13px var(--font-body); color: var(--dim); background: var(--panel); border: 2px solid var(--rim-lo); border-radius: 4px; padding: 4px 9px; text-decoration: none; display: flex; gap: 6px; align-items: center; }
+.chip:hover, .chip:focus-visible { color: var(--text); border-color: var(--rim); outline: none; }
+.chip .n { font-variant-numeric: tabular-nums; color: var(--gold); }
+.chip.done .n { color: var(--good); }
+.btn { font: 800 13px var(--font-body); color: var(--text); background: var(--panel-hi); border: 2px solid var(--rim); border-radius: 4px; padding: 6px 12px; cursor: pointer; }
+.btn:hover { border-color: var(--gold); }
+.btn:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.btn.on { background: var(--gold); color: var(--gold-ink); border-color: var(--gold); }
+
+main .wrap { padding-block: 18px 60px; display: flex; flex-direction: column; gap: 28px; }
+.intro { color: var(--dim); max-width: 70ch; margin: 0; }
+.intro b { color: var(--text); }
+section.char { display: flex; flex-direction: column; gap: 12px; scroll-margin-top: 140px; }
+section.char h2 { font-family: var(--font-display); font-weight: 700; font-size: 22px; margin: 0; color: var(--text); display: flex; align-items: baseline; gap: 10px; text-wrap: balance; }
+section.char h2 small { font: 700 13px var(--font-body); color: var(--dim); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 12px; }
+
+.card { background: var(--panel); border: 2px solid var(--rim-lo); border-radius: 6px; padding: 12px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.card.decided { border-color: var(--good); background: var(--good-fill); }
+.card.rejected { border-color: var(--bad); background: var(--bad-fill); }
+.card.hide { display: none; }
+.head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.key { flex: 0 0 auto; width: 26px; height: 26px; display: grid; place-items: center; font: 700 15px var(--font-display); color: var(--gold-ink); background: var(--gold); border-radius: 4px; box-shadow: inset 0 -3px 0 rgba(0,0,0,.25); }
+.key.p { background: var(--dim); }
+.sname { font-weight: 800; font-size: 16px; min-width: 0; overflow-wrap: anywhere; }
+.no { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--dim); font-size: 13px; font-weight: 700; }
+.desc { color: var(--dim); font-size: 13px; margin: 0; }
+.opts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.opt { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 4px 5px; background: var(--deep); border: 2px solid var(--rim-lo); border-radius: 5px; cursor: pointer; color: var(--dim); font: 700 12px var(--font-body); min-width: 0; }
+.opt:hover { border-color: var(--rim); color: var(--text); }
+.opt:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.opt[aria-pressed="true"] { border-color: var(--gold); color: var(--gold); box-shadow: 0 0 0 2px var(--gold) inset; }
+.opt[aria-pressed="true"]::after { content: "✓"; position: absolute; top: 2px; right: 4px; font-size: 14px; color: var(--gold); }
+.opt.cur { background: transparent; border-style: dashed; }
+.ic { width: 100%; max-width: 84px; aspect-ratio: 1; border-radius: 3px; background-image: url("ikonlar.webp"); background-repeat: no-repeat; }
+.opt .lbl { text-align: center; line-height: 1.2; overflow-wrap: anywhere; }
+.opt.t-rec .sub { color: var(--gold); }
+.opt.t-new .sub { color: var(--good); }
+.opt.t-new { border-color: #4d5a30; }
+.opt.t-old .sub { color: #8a7660; }
+.opt.t-tint { border-color: #8a6a2a; color: var(--gold); }
+.fresh { margin-left: auto; font: 800 11px var(--font-body); letter-spacing: .06em; text-transform: uppercase; color: var(--gold-ink); background: var(--good); border-radius: 3px; padding: 2px 6px; white-space: nowrap; }
+.fresh.tint { background: var(--gold); }
+.fresh + .no { margin-left: 6px; }
+.opts { grid-template-columns: repeat(auto-fill, minmax(66px, 1fr)); }
+@media (min-width: 760px) { .card.wide { grid-column: span 2; } }
+/* iksir sayfası: kart başına 49 küçük kare, piksel sanat keskin */
+.iksir .grid { grid-template-columns: 1fr; }
+.iksir .card.wide { grid-column: auto; }
+.iksir .grid { grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); }
+.iksir .opts { grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 6px; }
+.iksir .ic { image-rendering: pixelated; max-width: 96px; }
+@media (max-width: 460px) { .iksir .grid { grid-template-columns: 1fr; } }
+.iksir .opt { padding: 4px 2px 3px; font-size: 11px; }
+.foot { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.none { font: 700 12px var(--font-body); color: var(--dim); background: transparent; border: 2px solid var(--rim-lo); border-radius: 4px; padding: 5px 9px; cursor: pointer; }
+.none:hover { color: var(--text); border-color: var(--rim); }
+.none:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.none[aria-pressed="true"] { color: var(--text); background: var(--bad); border-color: var(--bad); }
+.note { flex: 1 1 140px; min-width: 0; font: 500 13px var(--font-body); color: var(--text); background: var(--deep); border: 2px solid var(--rim-lo); border-radius: 4px; padding: 5px 8px; }
+.note::placeholder { color: #8a7660; }
+.note:focus { outline: none; border-color: var(--gold); }
+
+.copybox { width: 100%; min-height: 160px; font: 13px ui-monospace, Consolas, monospace; color: var(--text); background: var(--deep); border: 2px solid var(--rim); border-radius: 4px; padding: 8px; }
+@media (max-width: 420px) { .opts { gap: 5px; } .opt { font-size: 11px; } h1 { font-size: 22px; } }
+@media (prefers-reduced-motion: reduce) { .prog-fill { transition: none; } }
+</style>
+
+<header class="bar">
+  <div class="wrap">
+    <div class="top">
+      <h1>Yetenek İkonu Seçimi</h1>
+      <div class="prog"><div class="prog-track"><div class="prog-fill" id="progFill"></div></div><span class="prog-txt" id="progTxt">0 / 56</span></div>
+      <span class="save" id="saveState" role="status">Kayıt bağlanıyor…</span>
+    </div>
+    <div class="tools">
+      <nav class="chips" id="chips" aria-label="Karaktere git"></nav>
+      <button class="btn" id="onlyFresh" type="button" aria-pressed="false">Yenilenenler</button>
+      <button class="btn" id="onlyOpen" type="button" aria-pressed="false">Sadece seçilmemişler</button>
+      <button class="btn" id="copyBtn" type="button">Seçimleri kopyala</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    <p class="intro">Seçimlerin oyunda: 56 yetenek + Büyücü Kız'ın 2. set büyüleri + Shaman'ın golem yetenekleri. Cadı'nın 6 iksiri ayrı sayfada (Transperent klasöründen) seçiliyor. <b>Yıldırım Kalkanı</b>'nda oyuna e'nin yalnız tonla sarı-turuncuya dönmüş ilk hâli yazıldı; zemini biraz açık olanı istersen ikinci altın kareyi seç.</p>
+    <div id="copyWrap" hidden><textarea class="copybox" id="copyBox" readonly aria-label="Seçimlerin metni"></textarea></div>
+    <div id="list"></div>
+  </div>
+</main>
+
+<script>
+const DATA = {"cols": 30, "rows": [{"no": 1, "karakter": "Talon", "yuva": "P", "yetenek": "Güç Yükü (pasif)", "mevcut": "talon_passive_icon", "oneri": "BUF-D8", "b": "BUF-E7", "c": "BAR-A1", "opts": [{"id": "mevcut", "label": "şu an", "icon": "talon_passive_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "BUF-D8", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "BUF-E7", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "BAR-A1", "tag": "", "col": 3}], "desc": "Yetenek kullandıkça güç yükü kazanır (+saldırı gücü, hasar azaltma).", "row": 0}, {"no": 2, "karakter": "Talon", "yuva": "Q", "yetenek": "Hamle Vuruşu", "mevcut": "talon_devlesme_icon", "oneri": "SWO-D7", "b": "SWO-C3", "c": "SWO-F7", "opts": [{"id": "mevcut", "label": "şu an", "icon": "talon_devlesme_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "SWO-D7", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "SWO-C3", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "SWO-F7", "tag": "", "col": 3}], "desc": "İleri hamle yapar, ardından bütün silahlar 3 kez ateş eder.", "row": 1}, {"no": 3, "karakter": "Talon", "yuva": "E", "yetenek": "Silah Salvosu", "mevcut": "talon_yer_sarsintisi_icon", "oneri": "SWO-C4", "b": "SWO-B6", "c": "UND-B7", "opts": [{"id": "mevcut", "label": "şu an", "icon": "talon_yer_sarsintisi_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "SWO-C4", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "SWO-B6", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "UND-B7", "tag": "", "col": 3}], "desc": "Silahlar etrafında dönüp sürekli ateş eder.", "row": 2}, {"no": 4, "karakter": "Talon", "yuva": "R", "yetenek": "Ayna Formu", "mevcut": "talon_ayna_formu_icon", "oneri": "PAL-C6", "b": "SWO-F3", "c": "PAL-C7", "opts": [{"id": "mevcut", "label": "şu an", "icon": "talon_ayna_formu_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "PAL-C6", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "SWO-F3", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "PAL-C7", "tag": "", "col": 3}], "desc": "Her silahın aynalı bir kopyası belirir.", "row": 3}, {"no": 5, "karakter": "Oakley", "yuva": "P", "yetenek": "Çiçek (pasif)", "mevcut": "oakley_cicek_icon", "oneri": "DRU-C1", "b": "FAI-C7", "c": "FAI-E7", "opts": [{"id": "mevcut", "label": "şu an", "icon": "oakley_cicek_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "DRU-C1", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "FAI-C7", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "FAI-E7", "tag": "", "col": 3}], "desc": "Yere şifa veren bir çiçek bırakır.", "row": 4}, {"no": 6, "karakter": "Oakley", "yuva": "Q", "yetenek": "Arı Sürüsü", "mevcut": "oakley_ari_suru_icon", "oneri": "FAI-B7", "b": "SUM-E3", "c": "ARC-D5", "opts": [{"id": "mevcut", "label": "şu an", "icon": "oakley_ari_suru_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "FAI-B7", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "SUM-E3", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "ARC-D5", "tag": "", "col": 3}], "desc": "Etrafını zehirleyen bir arı halkası sarar.", "row": 5}, {"no": 7, "karakter": "Oakley", "yuva": "E", "yetenek": "Sarmaşıklar", "mevcut": "oakley_sarmasik_icon", "oneri": "DRU-F4", "b": "FAI-C2", "c": "CUR-B5", "opts": [{"id": "mevcut", "label": "şu an", "icon": "oakley_sarmasik_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "DRU-F4", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "FAI-C2", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "CUR-B5", "tag": "", "col": 3}], "desc": "Yaratıkları yere sabitleyen 3 sarmaşık.", "row": 6}, {"no": 8, "karakter": "Oakley", "yuva": "R", "yetenek": "Hayat Ağacı", "mevcut": "oakley_passive_icon", "oneri": "DRU-A8", "b": "DRU-F3", "c": "FAI-E6", "opts": [{"id": "mevcut", "label": "şu an", "icon": "oakley_passive_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "DRU-A8", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "DRU-F3", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "FAI-E6", "tag": "", "col": 3}], "desc": "Gölgesi şifa veren bir Hayat Ağacı diker.", "row": 7}, {"no": 9, "karakter": "Matthew", "yuva": "P", "yetenek": "Yıldırım Hızı", "mevcut": "matthew_yildirim_hizi_icon", "oneri": "LIG-D7", "b": "AER-E2", "c": "LIG-D2", "opts": [{"id": "mevcut", "label": "şu an", "icon": "matthew_yildirim_hizi_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "LIG-D7", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "AER-E2", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "LIG-D2", "tag": "", "col": 3}], "desc": "Yürüdükçe hızlanır, arkasında yıldırım izi bırakır.", "row": 8}, {"no": 10, "karakter": "Matthew", "yuva": "Q", "yetenek": "Şimşek Hücumu", "mevcut": "matthew_simsek_hucumu_icon", "oneri": "LIG-F2", "b": "LIG-A1", "c": "DM1-F8", "opts": [{"id": "mevcut", "label": "şu an", "icon": "matthew_simsek_hucumu_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "LIG-F2", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "LIG-A1", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "DM1-F8", "tag": "", "col": 3}, {"id": "b_renk", "label": "b sarı-turuncu", "icon": "LIG-A1+renk", "tag": "tint", "col": 4}], "desc": "En yakın 6 düşmana sırayla şimşek çaktırır.", "row": 9}, {"no": 11, "karakter": "Matthew", "yuva": "E", "yetenek": "Elektrik Topu", "mevcut": "matthew_elektrik_topu_icon", "oneri": "LIG-C1", "b": "PAL-C3", "c": "LIG-B1", "opts": [{"id": "mevcut", "label": "şu an", "icon": "matthew_elektrik_topu_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "LIG-C1", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "PAL-C3", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "LIG-B1", "tag": "", "col": 3}], "desc": "Elektrik topuna dönüşür, değdiğine hasar verir.", "row": 10}, {"no": 12, "karakter": "Matthew", "yuva": "R", "yetenek": "Yıldırım Kalkanı", "mevcut": "matthew_yildirim_kalkani_icon", "oneri": "LIG-E2", "b": "BUF-A4", "c": "LIG-F1", "opts": [{"id": "mevcut", "label": "şu an", "icon": "matthew_yildirim_kalkani_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "LIG-E2", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "BUF-A4", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "LIG-F1", "tag": "", "col": 3}, {"id": "d", "label": "d", "icon": "LIG-A4", "tag": "new", "col": 4}, {"id": "e", "label": "e", "icon": "LIG-A5", "tag": "new", "col": 5}, {"id": "f", "label": "f", "icon": "LIG-D8", "tag": "new", "col": 6}, {"id": "g", "label": "g", "icon": "LIG-C2", "tag": "new", "col": 7}, {"id": "h", "label": "h", "icon": "LIG-C3", "tag": "new", "col": 8}, {"id": "i", "label": "i", "icon": "LIG-E3", "tag": "new", "col": 9}, {"id": "j", "label": "j", "icon": "PRI-D1", "tag": "new", "col": 10}, {"id": "k", "label": "k", "icon": "LIG-B6", "tag": "new", "col": 11}, {"id": "e_ton1", "label": "e sarı-turuncu zemin", "icon": "LIG-A5+ton1", "tag": "tint", "col": 12}, {"id": "e_ton2", "label": "e sarı-turuncu zemin, biraz açık", "icon": "LIG-A5+ton2", "tag": "tint", "col": 13}], "desc": "Hasar emen yıldırım kalkanı, sonunda patlar.", "row": 11}, {"no": 13, "karakter": "Büyücü Kız", "yuva": "P", "yetenek": "Büyü Dalgası", "mevcut": "buyucu_passive_icon", "oneri": "AER-F6", "b": "PAL-B3", "c": "BUF-C7", "opts": [{"id": "mevcut", "label": "şu an", "icon": "buyucu_passive_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "AER-F6", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "PAL-B3", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "BUF-C7", "tag": "", "col": 3}], "desc": "E/R sonrası silahlar geri tepip güçlü ateş eder.", "row": 12}, {"no": 14, "karakter": "Büyücü Kız", "yuva": "Q", "yetenek": "Büyü Değişimi", "mevcut": "buyucu_ulti_buyu_degisimi_icon", "oneri": "PAL-F4", "b": "MON-E2", "c": "NEC-F7", "opts": [{"id": "mevcut", "label": "şu an", "icon": "buyucu_ulti_buyu_degisimi_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "PAL-F4", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "MON-E2", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "NEC-F7", "tag": "", "col": 3}], "desc": "E ve R büyü setini değiştirir.", "row": 13}, {"no": 15, "karakter": "Büyücü Kız", "yuva": "E", "yetenek": "Arcane Lanet", "mevcut": "buyucu_skill_arcane_lanet_icon", "oneri": "WAR-C7", "b": "AER-D3", "c": "CUR-E6", "opts": [{"id": "mevcut", "label": "şu an", "icon": "buyucu_skill_arcane_lanet_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "WAR-C7", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "AER-D3", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "CUR-E6", "tag": "", "col": 3}, {"id": "d", "label": "d", "icon": "WAR-C5", "tag": "new", "col": 4}, {"id": "e", "label": "e", "icon": "WAR-C4", "tag": "new", "col": 5}, {"id": "f", "label": "f", "icon": "WAR-B8", "tag": "new", "col": 6}, {"id": "g", "label": "g", "icon": "AER-B7", "tag": "new", "col": 7}, {"id": "h", "label": "h", "icon": "WAR-D4", "tag": "new", "col": 8}, {"id": "i", "label": "i", "icon": "AER-D2", "tag": "new", "col": 9}], "desc": "Düşmanlar arasında seken lanet (2. set: Hortum).", "row": 14}, {"no": 16, "karakter": "Büyücü Kız", "yuva": "R", "yetenek": "Don Nova", "mevcut": "buyucu_skill_don_nova_icon", "oneri": "CRY-F2", "b": "CRY-B1", "c": "CRY-F7", "opts": [{"id": "mevcut", "label": "şu an", "icon": "buyucu_skill_don_nova_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "CRY-F2", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "CRY-B1", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "CRY-F7", "tag": "", "col": 3}, {"id": "d", "label": "d", "icon": "CRY-B4", "tag": "old", "col": 4}, {"id": "e", "label": "e", "icon": "CRY-B3", "tag": "old", "col": 5}, {"id": "f", "label": "f", "icon": "CRY-C4", "tag": "old", "col": 6}, {"id": "g", "label": "g", "icon": "CRY-D2", "tag": "old", "col": 7}, {"id": "h", "label": "h", "icon": "CRY-E3", "tag": "old", "col": 8}, {"id": "i", "label": "i", "icon": "CRY-B6", "tag": "old", "col": 9}, {"id": "j", "label": "j", "icon": "PAL-B6", "tag": "new", "col": 10}, {"id": "k", "label": "k", "icon": "CRY-B5", "tag": "new", "col": 11}, {"id": "l", "label": "l", "icon": "CRY-C8", "tag": "new", "col": 12}, {"id": "m", "label": "m", "icon": "CRY-C5", "tag": "new", "col": 13}, {"id": "n", "label": "n", "icon": "CRY-B8", "tag": "new", "col": 14}, {"id": "o", "label": "o", "icon": "DM2-A5", "tag": "new", "col": 15}, {"id": "p", "label": "p", "icon": "CRY-E4", "tag": "new", "col": 16}], "desc": "Yavaşlatan buz dalgası (2. set: Meteor).", "row": 15}, {"no": 57, "karakter": "Büyücü Kız", "yuva": "E", "yetenek": "Hortum (2. set)", "mevcut": "buyucu_skill_hortum_icon", "oneri": "AER-D2", "b": "EAR-B8", "c": "LIG-A6", "opts": [{"id": "mevcut", "label": "şu an", "icon": "buyucu_skill_hortum_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "AER-D2", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "EAR-B8", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "LIG-A6", "tag": "", "col": 3}, {"id": "d", "label": "d", "icon": "PYR-B4", "tag": "new", "col": 4}, {"id": "e", "label": "e", "icon": "PYR-B3", "tag": "new", "col": 5}, {"id": "f", "label": "f", "icon": "AER-B3", "tag": "new", "col": 6}, {"id": "g", "label": "g", "icon": "AER-B4", "tag": "new", "col": 7}], "desc": "2. sette E: etrafında dönen hortum.", "row": 16}, {"no": 58, "karakter": "Büyücü Kız", "yuva": "R", "yetenek": "Meteor Patlaması (2. set)", "mevcut": "buyucu_skill_meteor_icon", "oneri": "EAR-F8", "b": "WAR-C3", "c": "PYR-B8", "opts": [{"id": "mevcut", "label": "şu an", "icon": "buyucu_skill_meteor_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "EAR-F8", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "WAR-C3", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "PYR-B8", "tag": "", "col": 3}, {"id": "d", "label": "d", "icon": "PYR-D7", "tag": "new", "col": 4}, {"id": "e", "label": "e", "icon": "DM1-A8", "tag": "new", "col": 5}, {"id": "f", "label": "f", "icon": "PYR-B7", "tag": "new", "col": 6}, {"id": "g", "label": "g", "icon": "DM2-A4", "tag": "new", "col": 7}], "desc": "2. sette R: kanal sonrası göktaşı düşer.", "row": 17}, {"no": 17, "karakter": "Assasin Çocuk", "yuva": "P", "yetenek": "Bıçak Uzmanlığı", "mevcut": "assasin_passive_icon", "oneri": "THI-D6", "b": "THI-A3", "c": "BLD-A8", "opts": [{"id": "mevcut", "label": "şu an", "icon": "assasin_passive_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "THI-D6", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "THI-A3", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "BLD-A8", "tag": "", "col": 3}], "desc": "Yetenekten sonra 3 sn garantili kritik.", "row": 18}, {"no": 18, "karakter": "Assasin Çocuk", "yuva": "Q", "yetenek": "Şahin Hamlesi", "mevcut": "assasin_sahin_hamlesi_icon", "oneri": "SWO-C3", "b": "DM2-D7", "c": "THI-C3", "opts": [{"id": "mevcut", "label": "şu an", "icon": "assasin_sahin_hamlesi_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "SWO-C3", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "DM2-D7", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "THI-C3", "tag": "", "col": 3}, {"id": "d", "label": "d", "icon": "SUM-D5", "tag": "old", "col": 4}, {"id": "e", "label": "e", "icon": "DRU-E2", "tag": "old", "col": 5}, {"id": "f", "label": "f", "icon": "DRU-B3", "tag": "old", "col": 6}, {"id": "g", "label": "g", "icon": "AER-E3", "tag": "old", "col": 7}, {"id": "h", "label": "h", "icon": "ARC-C7", "tag": "old", "col": 8}, {"id": "i", "label": "i", "icon": "DRU-B7", "tag": "old", "col": 9}, {"id": "j", "label": "j", "icon": "SWO-D7", "tag": "old", "col": 10}, {"id": "k", "label": "k", "icon": "CRS-D3", "tag": "old", "col": 11}, {"id": "l", "label": "l", "icon": "MON-F1", "tag": "old", "col": 12}, {"id": "m", "label": "m", "icon": "BLD-D5", "tag": "old", "col": 13}, {"id": "n", "label": "n", "icon": "SWO-F7", "tag": "old", "col": 14}, {"id": "o", "label": "o", "icon": "SPE-F7", "tag": "old", "col": 15}, {"id": "p", "label": "p", "icon": "MON-C7", "tag": "old", "col": 16}, {"id": "q", "label": "q", "icon": "LIG-D2", "tag": "old", "col": 17}, {"id": "r", "label": "r", "icon": "MON-C6", "tag": "new", "col": 18}, {"id": "s", "label": "s", "icon": "MON-D3", "tag": "new", "col": 19}, {"id": "t", "label": "t", "icon": "MON-E7", "tag": "new", "col": 20}, {"id": "u", "label": "u", "icon": "SWO-F6", "tag": "new", "col": 21}, {"id": "v", "label": "v", "icon": "SWO-D3", "tag": "new", "col": 22}, {"id": "w", "label": "w", "icon": "THI-B6", "tag": "new", "col": 23}, {"id": "x", "label": "x", "icon": "THI-C2", "tag": "new", "col": 24}, {"id": "y", "label": "y", "icon": "THI-D5", "tag": "new", "col": 25}, {"id": "z", "label": "z", "icon": "SPE-D4", "tag": "new", "col": 26}, {"id": "w_ton1", "label": "w koyu lacivert zemin", "icon": "THI-B6+ton1", "tag": "tint", "col": 27}, {"id": "w_ton2", "label": "w koyu lacivert, kontur zeminle bir", "icon": "THI-B6+ton2", "tag": "tint", "col": 28}, {"id": "w_ton3", "label": "w orta lacivert zemin", "icon": "THI-B6+ton3", "tag": "tint", "col": 29}], "desc": "Yürüdüğü yöne hızlı hamle, 2 yük.", "row": 19}, {"no": 19, "karakter": "Assasin Çocuk", "yuva": "E", "yetenek": "Gölge Adımı", "mevcut": "assasin_golge_adimi_icon", "oneri": "THI-C8", "b": "AER-E6", "c": "DM1-F4", "opts": [{"id": "mevcut", "label": "şu an", "icon": "assasin_golge_adimi_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "THI-C8", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "AER-E6", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "DM1-F4", "tag": "", "col": 3}], "desc": "Odaklanıp 6 sn görünmez olur.", "row": 20}, {"no": 20, "karakter": "Assasin Çocuk", "yuva": "R", "yetenek": "Gölge Hücumu", "mevcut": "assasin_golge_hucumu_icon", "oneri": "THI-F3", "b": "SWO-F7", "c": "THI-F7", "opts": [{"id": "mevcut", "label": "şu an", "icon": "assasin_golge_hucumu_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "THI-F3", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "SWO-F7", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "THI-F7", "tag": "", "col": 3}], "desc": "Görüşteki düşmanlara sırayla 15 kez çarpar.", "row": 21}, {"no": 21, "karakter": "Şovalye Adam", "yuva": "P", "yetenek": "Dirençli Duruş", "mevcut": "sovalye_passive_icon", "oneri": "BUF-E5", "b": "PAL-B7", "c": "PRI-E1", "opts": [{"id": "mevcut", "label": "şu an", "icon": "sovalye_passive_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "BUF-E5", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "PAL-B7", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "PRI-E1", "tag": "", "col": 3}, {"id": "a_renk", "label": "a yeşil ok yok", "icon": "BUF-E5+renk", "tag": "tint", "col": 4}], "desc": "Canı %40'ın altındayken %20 az hasar alır.", "row": 22}, {"no": 22, "karakter": "Şovalye Adam", "yuva": "Q", "yetenek": "Kışkırtma (kalkan yeniler)", "mevcut": "sovalye_kiskirtma_icon", "oneri": "PAL-D8", "b": "BUF-E2", "c": "PAL-C8", "opts": [{"id": "mevcut", "label": "şu an", "icon": "sovalye_kiskirtma_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "PAL-D8", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "BUF-E2", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "PAL-C8", "tag": "", "col": 3}, {"id": "d", "label": "d", "icon": "SWO-C5", "tag": "new", "col": 4}, {"id": "e", "label": "e", "icon": "PAL-B8", "tag": "new", "col": 5}, {"id": "f", "label": "f", "icon": "SPE-C5", "tag": "new", "col": 6}, {"id": "g", "label": "g", "icon": "PAL-D6", "tag": "new", "col": 7}, {"id": "h", "label": "h", "icon": "SWO-B2", "tag": "new", "col": 8}, {"id": "i", "label": "i", "icon": "BAR-B8", "tag": "new", "col": 9}], "desc": "6 sn boyunca kendi kalkanını yeniler.", "row": 23}, {"no": 23, "karakter": "Şovalye Adam", "yuva": "E", "yetenek": "Koruma Bariyeri", "mevcut": "sovalye_koruma_bariyeri_icon", "oneri": "PAL-E7", "b": "PAL-F1", "c": "PAL-E6", "opts": [{"id": "mevcut", "label": "şu an", "icon": "sovalye_koruma_bariyeri_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "PAL-E7", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "PAL-F1", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "PAL-E6", "tag": "", "col": 3}, {"id": "c_renk", "label": "c mavi", "icon": "PAL-E6+renk", "tag": "tint", "col": 4}], "desc": "Dostların etrafında, hasarlarını üstlenen bariyer.", "row": 24}, {"no": 24, "karakter": "Şovalye Adam", "yuva": "R", "yetenek": "Koruma Baloncuğu", "mevcut": "sovalye_ulti_koruma_baloncugu_icon", "oneri": "PAL-A8", "b": "PAL-D5", "c": "BUF-A6", "opts": [{"id": "mevcut", "label": "şu an", "icon": "sovalye_ulti_koruma_baloncugu_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "PAL-A8", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "PAL-D5", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "BUF-A6", "tag": "", "col": 3}, {"id": "a_ton1", "label": "a mavi", "icon": "PAL-A8+ton1", "tag": "tint", "col": 4}, {"id": "a_ton2", "label": "a lacivert-mavi", "icon": "PAL-A8+ton2", "tag": "tint", "col": 5}, {"id": "a_ton3", "label": "a lacivert, biraz koyu", "icon": "PAL-A8+ton3", "tag": "tint", "col": 6}], "desc": "İçine düşman giremeyen koruma kubbesi.", "row": 25}, {"no": 25, "karakter": "Elara", "yuva": "P", "yetenek": "Seviye başı saldırı hızı", "mevcut": "elara_passive_icon", "oneri": "BUF-D1", "b": "BUF-D3", "c": "ARC-C6", "opts": [{"id": "mevcut", "label": "şu an", "icon": "elara_passive_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "BUF-D1", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "BUF-D3", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "ARC-C6", "tag": "", "col": 3}], "desc": "Her seviyede saldırı hızı kazanır.", "row": 26}, {"no": 26, "karakter": "Elara", "yuva": "Q", "yetenek": "Sıvışma", "mevcut": "elara_sivisma_icon", "oneri": "ARC-C1", "b": "ARC-C2", "c": "CRS-D3", "opts": [{"id": "mevcut", "label": "şu an", "icon": "elara_sivisma_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "ARC-C1", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "ARC-C2", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "CRS-D3", "tag": "", "col": 3}, {"id": "d", "label": "d", "icon": "AER-E2", "tag": "new", "col": 4}, {"id": "e", "label": "e", "icon": "BUF-E8", "tag": "new", "col": 5}, {"id": "f", "label": "f", "icon": "THI-F6", "tag": "new", "col": 6}, {"id": "g", "label": "g", "icon": "SWO-E3", "tag": "new", "col": 7}, {"id": "h", "label": "h", "icon": "BUF-F2", "tag": "new", "col": 8}, {"id": "i", "label": "i", "icon": "THI-B5", "tag": "new", "col": 9}], "desc": "Hızlanır, yaratıkların içinden geçer.", "row": 27}, {"no": 27, "karakter": "Elara", "yuva": "E", "yetenek": "Gerçek Hasar", "mevcut": "elara_gercek_hasar_icon", "oneri": "ARC-B6", "b": "CRS-F8", "c": "ARC-F7", "opts": [{"id": "mevcut", "label": "şu an", "icon": "elara_gercek_hasar_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "ARC-B6", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "CRS-F8", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "ARC-F7", "tag": "", "col": 3}], "desc": "6 sn saldırı hızı artışı.", "row": 28}, {"no": 28, "karakter": "Elara", "yuva": "R", "yetenek": "Çift Tetik", "mevcut": "elara_cift_tetik_icon", "oneri": "CRS-D1", "b": "ARC-F3", "c": "CRS-B8", "opts": [{"id": "mevcut", "label": "şu an", "icon": "elara_cift_tetik_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "CRS-D1", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "ARC-F3", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "CRS-B8", "tag": "", "col": 3}], "desc": "Saldırılar iki kez tetiklenir.", "row": 29}, {"no": 29, "karakter": "Korsan", "yuva": "P", "yetenek": "Altın Avcısı", "mevcut": "korsan_papagan_icon", "oneri": "THI-B8", "b": "THI-E4", "c": "PIR-E8", "opts": [{"id": "mevcut", "label": "şu an", "icon": "korsan_papagan_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "THI-B8", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "THI-E4", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "PIR-E8", "tag": "", "col": 3}], "desc": "Öldürme başına altın; altın saldırı gücüne döner.", "row": 30}, {"no": 30, "karakter": "Korsan", "yuva": "Q", "yetenek": "Patlat", "mevcut": "korsan_patlat_icon", "oneri": "DM1-E8", "b": "ORC-D3", "c": "PIR-E3", "opts": [{"id": "mevcut", "label": "şu an", "icon": "korsan_patlat_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "DM1-E8", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "ORC-D3", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "PIR-E3", "tag": "", "col": 3}], "desc": "Görüşteki bütün saatli bombaları patlatır.", "row": 31}, {"no": 31, "karakter": "Korsan", "yuva": "E", "yetenek": "Saatli Bomba", "mevcut": "korsan_saatli_bomba_icon", "oneri": "PIR-C7", "b": "PIR-E1", "c": "ORC-E1", "opts": [{"id": "mevcut", "label": "şu an", "icon": "korsan_saatli_bomba_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "PIR-C7", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "PIR-E1", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "ORC-E1", "tag": "", "col": 3}], "desc": "Bulunduğu yere saatli bomba bırakır.", "row": 32}, {"no": 32, "karakter": "Korsan", "yuva": "R", "yetenek": "Bombardıman", "mevcut": "korsan_bombardiman_icon", "oneri": "PIR-C6", "b": "PIR-D5", "c": "PIR-D6", "opts": [{"id": "mevcut", "label": "şu an", "icon": "korsan_bombardiman_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "PIR-C6", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "PIR-D5", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "PIR-D6", "tag": "", "col": 3}], "desc": "Geniş bir alanı top ateşiyle döver.", "row": 33}, {"no": 33, "karakter": "Melek", "yuva": "P", "yetenek": "Kalkan aurası (pasif)", "mevcut": "melek_passive_icon", "oneri": "BUF-C8", "b": "PRI-F7", "c": "PRI-A2", "opts": [{"id": "mevcut", "label": "şu an", "icon": "melek_passive_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "BUF-C8", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "PRI-F7", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "PRI-A2", "tag": "", "col": 3}, {"id": "d", "label": "d", "icon": "PRI-D2", "tag": "new", "col": 4}, {"id": "e", "label": "e", "icon": "BUF-F8", "tag": "new", "col": 5}, {"id": "f", "label": "f", "icon": "PAL-B6", "tag": "new", "col": 6}, {"id": "g", "label": "g", "icon": "PRI-C4", "tag": "new", "col": 7}, {"id": "h", "label": "h", "icon": "PAL-A1", "tag": "new", "col": 8}, {"id": "i", "label": "i", "icon": "PAL-F6", "tag": "new", "col": 9}], "desc": "Kendisinin ve yakındaki dostların kalkanını yeniler.", "row": 34}, {"no": 34, "karakter": "Melek", "yuva": "Q", "yetenek": "Can Basma", "mevcut": "melek_can_basma_icon", "oneri": "BUF-D7", "b": "PRI-A6", "c": "FAI-D7", "opts": [{"id": "mevcut", "label": "şu an", "icon": "melek_can_basma_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "BUF-D7", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "PRI-A6", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "FAI-D7", "tag": "", "col": 3}, {"id": "b_ton1", "label": "b yeşil", "icon": "PRI-A6+ton1", "tag": "tint", "col": 4}, {"id": "b_ton2", "label": "b yumuşak yeşil", "icon": "PRI-A6+ton2", "tag": "tint", "col": 5}, {"id": "b_ton3", "label": "b yumuşak koyu yeşil", "icon": "PRI-A6+ton3", "tag": "tint", "col": 6}], "desc": "Kendine ve dostuna can basar.", "row": 35}, {"no": 35, "karakter": "Melek", "yuva": "E", "yetenek": "Kalkan Yenileme", "mevcut": "melek_kalkan_yenileme_icon", "oneri": "PRI-F2", "b": "BUF-E2", "c": "PAL-F1", "opts": [{"id": "mevcut", "label": "şu an", "icon": "melek_kalkan_yenileme_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "PRI-F2", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "BUF-E2", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "PAL-F1", "tag": "", "col": 3}, {"id": "d", "label": "d", "icon": "DM1-E2", "tag": "old", "col": 4}, {"id": "e", "label": "e", "icon": "BUF-E4", "tag": "old", "col": 5}, {"id": "f", "label": "f", "icon": "PRI-E2", "tag": "old", "col": 6}, {"id": "g", "label": "g", "icon": "PRI-F7", "tag": "old", "col": 7}, {"id": "h", "label": "h", "icon": "BUF-A6", "tag": "old", "col": 8}, {"id": "i", "label": "i", "icon": "BUF-C6", "tag": "old", "col": 9}, {"id": "j", "label": "j", "icon": "AER-F7", "tag": "old", "col": 10}, {"id": "k", "label": "k", "icon": "AER-B8", "tag": "old", "col": 11}, {"id": "l", "label": "l", "icon": "BUF-C8", "tag": "old", "col": 12}, {"id": "m", "label": "m", "icon": "WAR-F2", "tag": "old", "col": 13}, {"id": "n", "label": "n", "icon": "PAL-F6", "tag": "old", "col": 14}, {"id": "o", "label": "o", "icon": "AER-A5", "tag": "old", "col": 15}, {"id": "p", "label": "p", "icon": "PAL-D1", "tag": "old", "col": 16}, {"id": "q", "label": "q", "icon": "MON-F6", "tag": "old", "col": 17}, {"id": "r", "label": "r", "icon": "FAI-D2", "tag": "new", "col": 18}, {"id": "s", "label": "s", "icon": "SUM-E7", "tag": "new", "col": 19}, {"id": "t", "label": "t", "icon": "AER-A3", "tag": "new", "col": 20}, {"id": "u", "label": "u", "icon": "PRI-B1", "tag": "new", "col": 21}, {"id": "v", "label": "v", "icon": "PRI-A4", "tag": "new", "col": 22}, {"id": "w", "label": "w", "icon": "FAI-C6", "tag": "new", "col": 23}, {"id": "x", "label": "x", "icon": "SUM-D8", "tag": "new", "col": 24}, {"id": "y", "label": "y", "icon": "FAI-E2", "tag": "new", "col": 25}, {"id": "z", "label": "z", "icon": "PRI-C3", "tag": "new", "col": 26}], "desc": "Kendine ve dostuna kalkan basar.", "row": 36}, {"no": 36, "karakter": "Melek", "yuva": "R", "yetenek": "Kutsal Korku", "mevcut": "melek_kutsal_korku_icon", "oneri": "PRI-F1", "b": "PAL-E3", "c": "PRI-C1", "opts": [{"id": "mevcut", "label": "şu an", "icon": "melek_kutsal_korku_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "PRI-F1", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "PAL-E3", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "PRI-C1", "tag": "", "col": 3}], "desc": "Kanatlanıp parlar, yaratıkları itip korkutur.", "row": 37}, {"no": 37, "karakter": "Necromancer", "yuva": "P", "yetenek": "Ruh biriktirme", "mevcut": "necromancer_passive_icon", "oneri": "NEC-B4", "b": "NEC-B3", "c": "NEC-E6", "opts": [{"id": "mevcut", "label": "şu an", "icon": "necromancer_passive_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "NEC-B4", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "NEC-B3", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "NEC-E6", "tag": "", "col": 3}], "desc": "Ölen düşmanlardan ruh biriktirir.", "row": 38}, {"no": 38, "karakter": "Necromancer", "yuva": "Q", "yetenek": "İskelet Çağır", "mevcut": "necromancer_iskelet_cagir_icon", "oneri": "NEC-A5", "b": "NEC-A2", "c": "NEC-A4", "opts": [{"id": "mevcut", "label": "şu an", "icon": "necromancer_iskelet_cagir_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "NEC-A5", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "NEC-A2", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "NEC-A4", "tag": "", "col": 3}], "desc": "Ruh harcayıp iskelet çağırır.", "row": 39}, {"no": 39, "karakter": "Necromancer", "yuva": "E", "yetenek": "Golem Çağır", "mevcut": "necromancer_hortlak_cagir_icon", "oneri": "EAR-B3", "b": "NEC-C3", "c": "NEC-B8", "opts": [{"id": "mevcut", "label": "şu an", "icon": "necromancer_hortlak_cagir_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "EAR-B3", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "NEC-C3", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "NEC-B8", "tag": "", "col": 3}], "desc": "Ruh harcayıp golem çağırır.", "row": 40}, {"no": 40, "karakter": "Necromancer", "yuva": "R", "yetenek": "Lanetli Kafatası", "mevcut": "necromancer_lanetli_kafatasi_icon", "oneri": "NEC-F2", "b": "DM1-D3", "c": "UND-B2", "opts": [{"id": "mevcut", "label": "şu an", "icon": "necromancer_lanetli_kafatasi_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "NEC-F2", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "DM1-D3", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "UND-B2", "tag": "", "col": 3}], "desc": "Etrafında dönen lanetli kafatası, ultide büyür.", "row": 41}, {"no": 41, "karakter": "Shaman", "yuva": "P", "yetenek": "Totem Auraları", "mevcut": "shaman_passive_icon", "oneri": "DRU-E1", "b": "BUF-C5", "c": "PYR-D6", "opts": [{"id": "mevcut", "label": "şu an", "icon": "shaman_passive_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "DRU-E1", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "BUF-C5", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "PYR-D6", "tag": "", "col": 3}, {"id": "d", "label": "d", "icon": "PYR-C8", "tag": "new", "col": 4}, {"id": "e", "label": "e", "icon": "PYR-E7", "tag": "new", "col": 5}, {"id": "f", "label": "f", "icon": "PYR-F5", "tag": "new", "col": 6}, {"id": "g", "label": "g", "icon": "PYR-B4", "tag": "new", "col": 7}, {"id": "h", "label": "h", "icon": "DM2-F6", "tag": "new", "col": 8}, {"id": "i", "label": "i", "icon": "PYR-D2", "tag": "new", "col": 9}], "desc": "Totem yakınındaki dostların vuruşları yakar.", "row": 42}, {"no": 42, "karakter": "Shaman", "yuva": "Q", "yetenek": "Saldırı Totemi", "mevcut": "shaman_saldiri_totemi_icon", "oneri": "DRU-F1", "b": "EAR-E8", "c": "DRU-C6", "opts": [{"id": "mevcut", "label": "şu an", "icon": "shaman_saldiri_totemi_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "DRU-F1", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "EAR-E8", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "DRU-C6", "tag": "", "col": 3}], "desc": "Düşmana ateş eden saldırı totemi.", "row": 43}, {"no": 43, "karakter": "Shaman", "yuva": "E", "yetenek": "Kalkan Totemi", "mevcut": "shaman_kalkan_totemi_icon", "oneri": "EAR-D5", "b": "BUF-C4", "c": "EAR-D6", "opts": [{"id": "mevcut", "label": "şu an", "icon": "shaman_kalkan_totemi_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "EAR-D5", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "BUF-C4", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "EAR-D6", "tag": "", "col": 3}, {"id": "d", "label": "d", "icon": "EAR-E8", "tag": "new", "col": 4}, {"id": "e", "label": "e", "icon": "DRU-F8", "tag": "new", "col": 5}, {"id": "f", "label": "f", "icon": "SUM-B7", "tag": "new", "col": 6}, {"id": "g", "label": "g", "icon": "DRU-D7", "tag": "new", "col": 7}, {"id": "h", "label": "h", "icon": "BUF-E2", "tag": "new", "col": 8}], "desc": "Dostlara kalkan veren totem.", "row": 44}, {"no": 44, "karakter": "Shaman", "yuva": "R", "yetenek": "Elemental Golem", "mevcut": "shaman_elemental_golem_icon", "oneri": "EAR-C5", "b": "EAR-E3", "c": "EAR-B5", "opts": [{"id": "mevcut", "label": "şu an", "icon": "shaman_elemental_golem_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "EAR-C5", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "EAR-E3", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "EAR-B5", "tag": "", "col": 3}], "desc": "20 sn dev bir elemental goleme dönüşür.", "row": 45}, {"no": 59, "karakter": "Shaman", "yuva": "Q", "yetenek": "Sarsıcı Darbe (golem)", "mevcut": "shaman_sarsici_darbe_icon", "oneri": "EAR-C1", "b": "EAR-A2", "c": "EAR-B5", "opts": [{"id": "mevcut", "label": "şu an", "icon": "shaman_sarsici_darbe_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "EAR-C1", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "EAR-A2", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "EAR-B5", "tag": "", "col": 3}, {"id": "d", "label": "d", "icon": "EAR-C7", "tag": "new", "col": 4}, {"id": "e", "label": "e", "icon": "EAR-F3", "tag": "new", "col": 5}, {"id": "f", "label": "f", "icon": "EAR-E7", "tag": "new", "col": 6}, {"id": "g", "label": "g", "icon": "ORC-A2", "tag": "new", "col": 7}], "desc": "Golem formunda Q: yere darbe, sersemletir.", "row": 46}, {"no": 60, "karakter": "Shaman", "yuva": "E", "yetenek": "Golem Sıçrayışı (golem)", "mevcut": "shaman_golem_sicrayisi_icon", "oneri": "EAR-E1", "b": "EAR-D4", "c": "EAR-C3", "opts": [{"id": "mevcut", "label": "şu an", "icon": "shaman_golem_sicrayisi_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "EAR-E1", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "EAR-D4", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "EAR-C3", "tag": "", "col": 3}, {"id": "d", "label": "d", "icon": "EAR-B7", "tag": "new", "col": 4}, {"id": "e", "label": "e", "icon": "EAR-C8", "tag": "new", "col": 5}, {"id": "f", "label": "f", "icon": "EAR-F1", "tag": "new", "col": 6}, {"id": "g", "label": "g", "icon": "EAR-C4", "tag": "new", "col": 7}], "desc": "Golem formunda E: ileri sıçrar, düştüğü yerde yaratıkları çeker.", "row": 47}, {"no": 45, "karakter": "Vampir Çocuk", "yuva": "P", "yetenek": "Kan Emme (pasif)", "mevcut": "vampir_passive_icon", "oneri": "BLD-A4", "b": "BLD-F8", "c": "BUF-C1", "opts": [{"id": "mevcut", "label": "şu an", "icon": "vampir_passive_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "BLD-A4", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "BLD-F8", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "BUF-C1", "tag": "", "col": 3}, {"id": "d", "label": "d", "icon": "BLD-A7", "tag": "new", "col": 4}, {"id": "e", "label": "e", "icon": "BLD-D7", "tag": "new", "col": 5}, {"id": "f", "label": "f", "icon": "BLD-C5", "tag": "new", "col": 6}, {"id": "g", "label": "g", "icon": "BLD-C6", "tag": "new", "col": 7}, {"id": "h", "label": "h", "icon": "UND-F4", "tag": "new", "col": 8}, {"id": "i", "label": "i", "icon": "DEB-D7", "tag": "new", "col": 9}], "desc": "Can emme kazanır, saldırı gücü kadar azami can.", "row": 48}, {"no": 46, "karakter": "Vampir Çocuk", "yuva": "Q", "yetenek": "Kan Emme", "mevcut": "vampir_kan_emme_icon", "oneri": "BLD-D6", "b": "BLD-C6", "c": "BLD-A1", "opts": [{"id": "mevcut", "label": "şu an", "icon": "vampir_kan_emme_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "BLD-D6", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "BLD-C6", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "BLD-A1", "tag": "", "col": 3}, {"id": "d", "label": "d", "icon": "BLD-D2", "tag": "new", "col": 4}, {"id": "e", "label": "e", "icon": "BLD-C2", "tag": "new", "col": 5}, {"id": "f", "label": "f", "icon": "BLD-B5", "tag": "new", "col": 6}, {"id": "g", "label": "g", "icon": "BLD-E2", "tag": "new", "col": 7}, {"id": "h", "label": "h", "icon": "BLD-E4", "tag": "new", "col": 8}, {"id": "i", "label": "i", "icon": "BLD-C7", "tag": "new", "col": 9}], "desc": "En yakın 4 düşmanın kanını emer.", "row": 49}, {"no": 47, "karakter": "Vampir Çocuk", "yuva": "E", "yetenek": "Yarasa Formu", "mevcut": "vampir_yarasa_formu_icon", "oneri": "BLD-E3", "b": "UND-E5", "c": "DM2-A8", "opts": [{"id": "mevcut", "label": "şu an", "icon": "vampir_yarasa_formu_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "BLD-E3", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "UND-E5", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "DM2-A8", "tag": "", "col": 3}, {"id": "d", "label": "d", "icon": "UND-F4", "tag": "new", "col": 4}, {"id": "b_renk", "label": "b kırmızı zemin", "icon": "UND-E5+renk", "tag": "tint", "col": 5}], "desc": "Yarasaya dönüşüp hızlanır.", "row": 50}, {"no": 48, "karakter": "Vampir Çocuk", "yuva": "R", "yetenek": "Kan Yarasaları", "mevcut": "vampir_kan_yarasalari_icon", "oneri": "DM1-F5", "b": "DM1-B3", "c": "BLD-F3", "opts": [{"id": "mevcut", "label": "şu an", "icon": "vampir_kan_yarasalari_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "DM1-F5", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "DM1-B3", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "BLD-F3", "tag": "", "col": 3}], "desc": "Düşmanlara küçük kan yarasaları gönderir.", "row": 51}, {"no": 49, "karakter": "Hadime", "yuva": "P", "yetenek": "Ruh Göçü", "mevcut": "hadime_passive_icon", "oneri": "NEC-E5", "b": "CUR-C8", "c": "CUR-C3", "opts": [{"id": "mevcut", "label": "şu an", "icon": "hadime_passive_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "NEC-E5", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "CUR-C8", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "CUR-C3", "tag": "", "col": 3}], "desc": "Düşünce hayalet olarak savaşmaya devam eder.", "row": 52}, {"no": 50, "karakter": "Hadime", "yuva": "Q", "yetenek": "Lanet Kitabı", "mevcut": "hadime_lanet_kitabi_icon", "oneri": "UND-F8", "b": "NEC-D8", "c": "UND-B8", "opts": [{"id": "mevcut", "label": "şu an", "icon": "hadime_lanet_kitabi_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "UND-F8", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "NEC-D8", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "UND-B8", "tag": "", "col": 3}], "desc": "Kitap okuyup etrafa lanet fırlatır (aç/kapa).", "row": 53}, {"no": 51, "karakter": "Hadime", "yuva": "E", "yetenek": "Kara Delik", "mevcut": "hadime_kara_delik_icon", "oneri": "UND-A2", "b": "CUR-D2", "c": "NEC-E4", "opts": [{"id": "mevcut", "label": "şu an", "icon": "hadime_kara_delik_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "UND-A2", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "CUR-D2", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "NEC-E4", "tag": "", "col": 3}], "desc": "Yaratıkları içine çeken kara delik.", "row": 54}, {"no": 52, "karakter": "Hadime", "yuva": "R", "yetenek": "Karabasan", "mevcut": "hadime_karabasan_icon", "oneri": "CUR-E8", "b": "BLD-F4", "c": "UND-E1", "opts": [{"id": "mevcut", "label": "şu an", "icon": "hadime_karabasan_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "CUR-E8", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "BLD-F4", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "UND-E1", "tag": "", "col": 3}], "desc": "Korku saçan Karabasan formuna bürünür.", "row": 55}, {"no": 53, "karakter": "Cadı", "yuva": "P", "yetenek": "Şans Tılsımı", "mevcut": "cadi_passive_icon", "oneri": "FAI-F6", "b": "MON-F6", "c": "DEB-F7", "opts": [{"id": "mevcut", "label": "şu an", "icon": "cadi_passive_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "FAI-F6", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "MON-F6", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "DEB-F7", "tag": "", "col": 3}], "desc": "Eksik canı arttıkça şans kazanır.", "row": 56}, {"no": 54, "karakter": "Cadı", "yuva": "Q", "yetenek": "Zehirli Duman", "mevcut": "cadi_zehirli_duman_icon", "oneri": "NEC-A7", "b": "DEB-E8", "c": "UND-A5", "opts": [{"id": "mevcut", "label": "şu an", "icon": "cadi_zehirli_duman_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "NEC-A7", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "DEB-E8", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "UND-A5", "tag": "", "col": 3}], "desc": "Arkasında zehirli duman bırakır (aç/kapa).", "row": 57}, {"no": 55, "karakter": "Cadı", "yuva": "E", "yetenek": "Uçan Süpürge", "mevcut": "cadi_supurge_icon", "oneri": "PAL-E2", "b": "AER-E7", "c": "AER-E8", "opts": [{"id": "mevcut", "label": "şu an", "icon": "cadi_supurge_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "PAL-E2", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "AER-E7", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "AER-E8", "tag": "", "col": 3}], "desc": "Süpürgeye biner, dostlarını da taşır.", "row": 58}, {"no": 56, "karakter": "Cadı", "yuva": "R", "yetenek": "İksir Çantası", "mevcut": "cadi_iksir_icon", "oneri": "WAR-E5", "b": "DM1-C5", "c": "DEB-F8", "opts": [{"id": "mevcut", "label": "şu an", "icon": "cadi_iksir_icon", "tag": "cur", "col": 0}, {"id": "a", "label": "a", "icon": "WAR-E5", "tag": "rec", "col": 1}, {"id": "b", "label": "b", "icon": "DM1-C5", "tag": "", "col": 2}, {"id": "c", "label": "c", "icon": "DEB-F8", "tag": "", "col": 3}, {"id": "d", "label": "d", "icon": "THI-B7", "tag": "new", "col": 4}, {"id": "e", "label": "e", "icon": "DEB-E8", "tag": "new", "col": 5}, {"id": "f", "label": "f", "icon": "UND-A5", "tag": "new", "col": 6}, {"id": "g", "label": "g", "icon": "UND-E7", "tag": "new", "col": 7}, {"id": "h", "label": "h", "icon": "DM1-C8", "tag": "new", "col": 8}, {"id": "i", "label": "i", "icon": "PYR-D1", "tag": "new", "col": 9}], "desc": "Rastgele iksir fırlatır, 5 yük.", "row": 59}]};
+const ROWS = DATA.rows || [];
+const COLS = DATA.cols || 4;
+const N = ROWS.length;
+const state = {};            // no -> {pick, not}
+const cards = {};            // no -> element refs
+let db = null, coll = null, writable = true;
+const LS_KEY = "ikon_secim_v1_" + (DATA.coll || "secimler");
+
+const pad = n => String(n).padStart(2, "0");
+const optOf = (r, pick) => r.opts.find(o => o.id === pick);
+const iconKeyOf = (r, pick) => optOf(r, pick)?.icon || "";
+const decided = no => !!state[no]?.pick && state[no].pick !== "hicbiri";
+const isFresh = r => r.opts.some(o => o.tag === "new" || o.tag === "tint");
+
+function sprite(el, row, col) {
+  const s = el.getBoundingClientRect().width || 84;
+  el.style.backgroundSize = `${s * COLS}px ${s * N}px`;
+  el.style.backgroundPosition = `${-col * s}px ${-row * s}px`;
+}
+
+function build() {
+  const list = document.getElementById("list");
+  const chips = document.getElementById("chips");
+  const chars = [];
+  for (const r of ROWS) if (!chars.includes(r.karakter)) chars.push(r.karakter);
+  list.style.display = "flex"; list.style.flexDirection = "column"; list.style.gap = "28px";
+  chars.forEach((c, ci) => {
+    const id = "k" + ci;
+    const a = document.createElement("a");
+    a.className = "chip"; a.href = "#" + id; a.dataset.char = c;
+    a.innerHTML = `<span></span><span class="n"></span>`;
+    a.firstChild.textContent = c;
+    chips.appendChild(a);
+    const sec = document.createElement("section");
+    sec.className = "char"; sec.id = id;
+    const h = document.createElement("h2");
+    h.textContent = c;
+    const sm = document.createElement("small"); h.appendChild(sm);
+    sec.appendChild(h);
+    const grid = document.createElement("div"); grid.className = "grid";
+    sec.appendChild(grid);
+    list.appendChild(sec);
+    ROWS.filter(r => r.karakter === c).forEach(r => grid.appendChild(makeCard(r)));
+  });
+}
+
+function makeCard(r) {
+  const row = r.row ?? (r.no - 1);
+  const card = document.createElement("article");
+  card.className = "card";
+  card.innerHTML = `
+    <div class="head"><span class="key"></span><span class="sname"></span><span class="no"></span></div>
+    <p class="desc"></p>
+    <div class="opts" role="group"></div>
+    <div class="foot"><button type="button" class="none" aria-pressed="false">Hiçbiri, başka bak</button>
+      <input class="note" type="text" maxlength="200" placeholder="Not (isteğe bağlı)"></div>`;
+  const key = card.querySelector(".key");
+  key.textContent = r.yuva; if (r.yuva === "P") key.classList.add("p");
+  card.querySelector(".sname").textContent = r.yetenek;
+  card.querySelector(".no").textContent = "#" + r.no;
+  card.querySelector(".desc").textContent = r.desc;
+  const group = card.querySelector(".opts");
+  group.setAttribute("aria-label", r.karakter + " " + r.yuva + " " + r.yetenek);
+  const btns = {};
+  if (r.opts.length > 4) card.classList.add("wide");
+  if (isFresh(r)) {
+    const tag = document.createElement("span");
+    const hasNew = r.opts.some(o => o.tag === "new");
+    tag.className = "fresh" + (hasNew ? "" : " tint");
+    tag.textContent = hasNew ? "yeni adaylar" : "renk önizlemesi";
+    card.querySelector(".no").before(tag);
+  }
+  for (const o of r.opts) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "opt" + (o.tag === "cur" ? " cur" : "") + (o.tag ? " t-" + o.tag : "");
+    b.setAttribute("aria-pressed", "false");
+    b.title = o.tag === "cur" ? "Şu anki ikon kalsın" : o.icon;
+    const ic = document.createElement("span"); ic.className = "ic"; ic.dataset.row = row; ic.dataset.col = o.col;
+    const l = document.createElement("span"); l.className = "lbl";
+    l.textContent = o.label;
+    if (o.tag === "rec" || o.tag === "new" || o.tag === "old") {
+      const s = document.createElement("span"); s.className = "sub";
+      s.textContent = o.tag === "rec" ? " · önerim" : o.tag === "new" ? " · yeni" : " · önceki tur";
+      l.appendChild(s);
+    }
+    b.append(ic, l);
+    b.addEventListener("click", () => choose(r.no, state[r.no]?.pick === o.id ? "" : o.id));
+    group.appendChild(b); btns[o.id] = b;
+  }
+  const none = card.querySelector(".none");
+  none.addEventListener("click", () => choose(r.no, state[r.no]?.pick === "hicbiri" ? "" : "hicbiri"));
+  const note = card.querySelector(".note");
+  note.id = "not-" + r.no;
+  let t = null;
+  note.addEventListener("input", () => { clearTimeout(t); t = setTimeout(() => setNote(r.no, note.value.trim()), 700); });
+  note.addEventListener("blur", () => { clearTimeout(t); setNote(r.no, note.value.trim()); });
+  cards[r.no] = { card, btns, none, note, r };
+  return card;
+}
+
+function paint(no) {
+  const c = cards[no]; const s = state[no] || {};
+  for (const k in c.btns) c.btns[k].setAttribute("aria-pressed", String(s.pick === k));
+  c.none.setAttribute("aria-pressed", String(s.pick === "hicbiri"));
+  c.card.classList.toggle("decided", !!s.pick && s.pick !== "hicbiri");
+  c.card.classList.toggle("rejected", s.pick === "hicbiri");
+  if (document.activeElement !== c.note && (s.not || "") !== c.note.value) c.note.value = s.not || "";
+}
+
+function paintAll() {
+  for (const no in cards) paint(no);
+  const done = ROWS.filter(r => decided(r.no)).length;
+  document.getElementById("progTxt").textContent = `${done} / ${N} seçildi`;
+  document.getElementById("progFill").style.width = (100 * done / N) + "%";
+  for (const chip of document.querySelectorAll(".chip")) {
+    const rs = ROWS.filter(r => r.karakter === chip.dataset.char);
+    const d = rs.filter(r => decided(r.no)).length;
+    chip.querySelector(".n").textContent = `${d}/${rs.length}`;
+    chip.classList.toggle("done", d === rs.length);
+  }
+  document.querySelectorAll("section.char").forEach(sec => {
+    const name = sec.querySelector("h2").firstChild.textContent;
+    const rs = ROWS.filter(r => r.karakter === name);
+    sec.querySelector("small").textContent = `${rs.filter(r => decided(r.no)).length} / ${rs.length} seçildi`;
+  });
+  applyFilter();
+  if (!document.getElementById("copyWrap").hidden) document.getElementById("copyBox").value = summary();
+}
+
+function applyFilter() {
+  const only = document.getElementById("onlyOpen").getAttribute("aria-pressed") === "true";
+  const fresh = document.getElementById("onlyFresh").getAttribute("aria-pressed") === "true";
+  for (const no in cards) cards[no].card.classList.toggle("hide", (only && decided(no)) || (fresh && !isFresh(cards[no].r)));
+  document.querySelectorAll("section.char").forEach(sec => {
+    sec.hidden = !sec.querySelector(".card:not(.hide)");
+  });
+}
+
+function setStatus(txt, cls) {
+  const el = document.getElementById("saveState");
+  el.textContent = txt; el.className = "save" + (cls ? " " + cls : "");
+}
+
+const chains = {};
+function persist(no) {
+  const s = state[no] || {}; const r = cards[no].r;
+  saveLocal();
+  if (!coll || !writable) return;
+  const body = { no: r.no, karakter: r.karakter, yuva: r.yuva, yetenek: r.yetenek, secim: s.pick || "", ikon: iconKeyOf(r, s.pick), not: s.not || "", mevcut: r.mevcut };
+  setStatus("Kaydediliyor…");
+  chains[no] = (chains[no] || Promise.resolve()).then(() => coll.doc("s" + pad(no)).set(body)).then(
+    () => setStatus("Kaydedildi", "ok"),
+    e => {
+      if (e && (e.code === "invalid_argument" || e.code === "not_granted")) { writable = false; setStatus("Kayıt izni yok: Seçimleri kopyala ile gönder", "warn"); }
+      else setStatus("Kaydedilemedi, tekrar dene", "warn");
+    });
+}
+
+function choose(no, pick) {
+  state[no] = { ...(state[no] || {}), pick };
+  paint(no); paintAll(); persist(no);
+}
+function setNote(no, txt) {
+  if ((state[no]?.not || "") === txt) return;
+  state[no] = { ...(state[no] || {}), not: txt };
+  persist(no);
+}
+
+function saveLocal() { try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (e) {} }
+function loadLocal() { try { Object.assign(state, JSON.parse(localStorage.getItem(LS_KEY) || "{}")); } catch (e) {} }
+
+function summary() {
+  const lines = [];
+  for (const r of ROWS) {
+    const s = state[r.no] || {};
+    const o = optOf(r, s.pick);
+    const what = !s.pick ? "(seçilmedi)" : s.pick === "hicbiri" ? "hiçbiri, başka bak" : s.pick === "mevcut" ? "şu anki kalsın" : o ? `${o.label} (${o.icon})` : s.pick;
+    lines.push(`${r.no}. ${r.karakter} ${r.yuva} ${r.yetenek}: ${what}${s.not ? " - not: " + s.not : ""}`);
+  }
+  return lines.join("\n");
+}
+
+function layoutSprites() { document.querySelectorAll(".ic").forEach(el => sprite(el, +el.dataset.row, +el.dataset.col)); }
+
+async function connect() {
+  const timer = setTimeout(() => setStatus("Kayda ulaşılamadı; seçimler bu tarayıcıda tutuluyor", "warn"), 10000);
+  try {
+    db = window.claude?.use ? await window.claude.use("db") : null;
+  } catch (e) { db = null; }
+  if (!db) { clearTimeout(timer); setStatus("Kayıt kapalı: bitince Seçimleri kopyala ile gönder", "warn"); return; }
+  coll = db.collection(DATA.coll || "secimler");
+  coll.onSnapshot(snap => {
+    if (!snap.metadata.fromCache) clearTimeout(timer);
+    let changed = false;
+    for (const d of snap.docs) {
+      const v = d.data(); const no = Number(v.no);
+      if (!cards[no]) continue;
+      const cur = state[no] || {};
+      if (cur.pick !== (v.secim || "") || (cur.not || "") !== (v.not || "")) { state[no] = { pick: v.secim || "", not: v.not || "" }; changed = true; }
+    }
+    if (changed) { saveLocal(); paintAll(); }
+    if (!snap.metadata.fromCache && !/Kaydedil/.test(document.getElementById("saveState").textContent)) setStatus("Kayıt açık", "ok");
+  }, () => { clearTimeout(timer); setStatus("Kayıt bağlantısı koptu; seçimler bu tarayıcıda tutuluyor", "warn"); });
+}
+
+for (const id of ["onlyOpen", "onlyFresh"]) document.getElementById(id).addEventListener("click", e => {
+  const on = e.currentTarget.getAttribute("aria-pressed") !== "true";
+  e.currentTarget.setAttribute("aria-pressed", String(on)); e.currentTarget.classList.toggle("on", on);
+  applyFilter(); layoutSprites();
+});
+document.getElementById("onlyFresh").textContent = `Yenilenenler (${ROWS.filter(isFresh).length})`;
+document.getElementById("copyBtn").addEventListener("click", () => {
+  const txt = summary();
+  const wrap = document.getElementById("copyWrap"); const box = document.getElementById("copyBox");
+  wrap.hidden = false; box.value = txt;
+  const done = () => setStatus("Metin kopyalandı", "ok");
+  const fallback = () => { box.focus(); box.select(); setStatus("Metni seçtim, Ctrl+C ile kopyala", "warn"); };
+  try { navigator.clipboard.writeText(txt).then(done, fallback); } catch (e) { fallback(); }
+});
+
+if (DATA.mode) document.body.classList.add(DATA.mode);
+if (DATA.intro) document.querySelector(".intro").textContent = DATA.intro;
+build();
+loadLocal();
+paintAll();
+layoutSprites();
+new ResizeObserver(() => layoutSprites()).observe(document.getElementById("list"));
+connect();
+</script>

@@ -2,7 +2,7 @@ extends Node
 
 ## Kullanıcı isteği (2026-10-09): Kademe 5 bossu YERALTI CANAVARI (masaüstü "solucan boss" paketi): yeraltından dev solucan UZUVLARI çıkarır - oyuncunun yakınında rastgele
 ## konumlarda, hep yolunu keserek, arada dümdüz sıralanarak; bazıları asit atar (110), bazıları saldırır (130); oyuncular uzuvlara vurarak bossun kendi canını azaltır
-## (uzuvların hasar eşiği var: aşılınca parçalanır, bazıları deliğine geri döner); yeraltından korkutucu sesler; boss canı 50.000, kalkanı 60.000.
+## (uzuvların hasar eşiği var: aşılınca parçalanır, bazıları deliğine geri döner); yeraltından korkutucu sesler; boss canı 50.000, kalkanı 60.000 (madde 597: Kademe 5 yuvasında istisna 36.000 / 44.000, bkz. enemy_spawner.gd BOSS_SLOT_OVERRIDES).
 ## Kapsam: saf hesaplar (worm_boss_math.gd), sprite/sahne sözleşmesi, boss statları + vurulamazlık + havuz + ölüm, kademe kapısı, uzuv durum makinesi (savurma/asit/eşik/geri dönüş/ömür/
 ## ödülsüzlük), yönetmen (yol kesme, dümdüz sıra, üst sınır), pozlar, sert gövde bloğu, ses dosyaları.
 
@@ -204,7 +204,7 @@ func test_total_limb_damage_to_empty_the_pool_matches_health_plus_shield() -> vo
 		boss.absorb_limb_damage(1000.0)
 		total += 1000.0
 	assert(boss.is_dead, "havuz bitti")
-	assert(absf(total - 110000.0) < 2000.0, "toplam hasar ~can + kalkan = 110.000: %.0f" % total)
+	assert(absf(total - 80000.0) < 2000.0, "toplam hasar ~can + kalkan = 80.000 (K5 yuva istisnası 36.000 + 44.000): %.0f" % total)
 	_cleanup()
 
 
@@ -229,11 +229,11 @@ func test_sheets_scenes_ids_and_names_follow_the_project_conventions() -> void:
 	assert(SpawnerScript.SCENES.has("underground1") and SpawnerScript.SCENES.has("sandworm1"), "doğuş tablosunda")
 	assert(SpawnerScript.ID_FAMILY["underground1"] == "underground" and SpawnerScript.ID_FAMILY["sandworm1"] == "sandworm", "aileler")
 	assert(SpawnerScript.LIMB_IDS == ["sandworm1"], "uzuv kimlikleri")
-	assert(SpawnerScript.NEW_BOSS_TIERS[5] == ["underground1"], "Kademe 5 bossu")
+	assert(SpawnerScript.FIXED_BOSS_STATS.has("underground1") and SpawnerScript.BOSS_SLOT_OVERRIDES.has("underground1"), "nihai statlı boss + K5 yuva istisnası (ana haritada doğmaz; çöl haritasında K5 bossu, Aşama 3)")
 	assert(BossBarArtScript.display_name("underground1") == "YERALTI CANAVARI", "üst boss barı adı: %s" % BossBarArtScript.display_name("underground1"))
 	for tier: int in SpawnerScript.TIER_ROSTER.keys():
 		assert(not SpawnerScript.TIER_ROSTER[tier].has("sandworm1") and not SpawnerScript.TIER_ROSTER[tier].has("underground1"), "sıradan doğuşta çıkmaz")
-	assert(not SpawnerScript.ELITE_POOL.has("sandworm1") and not SpawnerScript.ELITE_POOL.has("underground1"), "elit havuzunda değil")
+	assert(not SpawnerScript.ELITE_BY_TIER.values().has("sandworm1") and not SpawnerScript.ELITE_BY_TIER.values().has("underground1"), "elit tablosunda değil")
 	_cleanup()
 
 
@@ -252,8 +252,8 @@ func test_boss_has_the_requested_pool_is_invisible_untargetable_and_immune_to_di
 	var r: Array = _rig()
 	var boss: Node = r[1]
 	assert(boss.is_boss and boss.is_in_group("boss"), "boss grubunda")
-	assert(boss.max_health == 50000.0 and boss.health == 50000.0, "can 50.000: %.0f" % boss.max_health)
-	assert(boss.item_shield_max == 60000.0 and boss.item_shield_hp == 60000.0, "kalkan 60.000: %.0f" % boss.item_shield_max)
+	assert(boss.max_health == 36000.0 and boss.health == 36000.0, "can 36.000 (K5 yuva istisnası): %.0f" % boss.max_health)
+	assert(boss.item_shield_max == 44000.0 and boss.item_shield_hp == 44000.0, "kalkan 44.000 (K5 yuva istisnası): %.0f" % boss.item_shield_max)
 	assert(is_equal_approx(boss.shield_protection, 0.9), "standart boss soğurması %%90: %.2f" % boss.shield_protection)
 	assert(boss._current_tier == 5, "Kademe 5 bossu")
 	assert(boss.has_meta(&"hide_on_minimap") and boss.has_meta(&"untargetable"), "minimapte yok, silahlar hedeflemez")
@@ -263,10 +263,10 @@ func test_boss_has_the_requested_pool_is_invisible_untargetable_and_immune_to_di
 	boss.take_damage(1.0e9)
 	boss.take_damage_host(1.0e9, true, 0.0, 0)
 	boss._take_dot_damage(1.0e9)
-	assert(boss.health == 50000.0 and boss.item_shield_hp == 60000.0 and not boss.is_dead, "doğrudan hasar boss'a işlemez")
+	assert(boss.health == 36000.0 and boss.item_shield_hp == 44000.0 and not boss.is_dead, "doğrudan hasar boss'a işlemez")
 	## Uzuvlardan gelen hasar kalkana %90, cana %10 işler.
 	boss.absorb_limb_damage(1000.0)
-	assert(absf(boss.item_shield_hp - 59100.0) < 0.5 and absf(boss.health - 49900.0) < 0.5, "havuzdan düşer: kalkan %.1f can %.1f" % [boss.item_shield_hp, boss.health])
+	assert(absf(boss.item_shield_hp - 43100.0) < 0.5 and absf(boss.health - 35900.0) < 0.5, "havuzdan düşer: kalkan %.1f can %.1f" % [boss.item_shield_hp, boss.health])
 	## Ödül, Kademe 5'in referans bossuyla (iskelet3) aynı.
 	var ref: Node = r[0]._spawn_creature("iskelet3", Vector2(900, 900), 999004)
 	ref.add_to_group("boss")
@@ -280,14 +280,11 @@ func test_the_tier_5_boss_spawns_on_time_holds_the_tier_clock_and_dies_with_all_
 	var sp: Node = r[0]
 	for b: Node in _boss_nodes():
 		b.free() ## _rig kendi bossunu doğurdu: kademe testi için temiz başla
-	sp._boss_tiers_spawned = {3: true}
-	GameManager.game_time = 470.0 ## tetik: 4 x 100 + 100 x 0,75 = 475
-	sp._check_boss_tiers()
-	assert(_boss_nodes().is_empty(), "tetikten önce yok")
+	sp._boss_tiers_spawned = {5: true} ## ana haritanın K5 bossu Minotaur (madde 597); Yeraltı Canavarı çöl haritasında K5 bossu olacak (Aşama 3) -> burada doğrudan doğurulur
 	GameManager.game_time = 480.0
-	sp._check_boss_tiers()
+	var spawned: Array = sp._spawn_boss_group(["underground1"], 5) ## kademe 5 yuvası: kademe saati boss ölene kadar K5 sonunda bekler
 	var bosses: Array = _boss_nodes()
-	assert(bosses.size() == 1 and str(bosses[0].get_meta("creature_id", "")) == "underground1", "Kademe 5'te Yeraltı Canavarı: %s" % str(bosses))
+	assert(bosses.size() == 1 and spawned.size() == 1 and str(bosses[0].get_meta("creature_id", "")) == "underground1", "Kademe 5 yuvasında Yeraltı Canavarı: %s" % str(bosses))
 	GameManager.game_time = 560.0
 	assert(sp._tier_time() < 500.0 and sp._tier_time() > 499.9 and sp.is_tier_held_by_boss(), "boss ölmeden Kademe 6 açılmaz: %.3f" % sp._tier_time())
 	## Uzuvlar + ölüm: havuz bitince hepsi dağılır.

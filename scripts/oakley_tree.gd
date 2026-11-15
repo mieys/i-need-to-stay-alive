@@ -13,6 +13,9 @@ class_name OakleyTree
 ## kök dalgaları "oakley_tree_root" ile gelir (sadece yer altı izi - yaratığın dibindeki kök sarılması enemy.gd root_start
 ## style ROOT_STYLE ile herkeste kurulur), elmalar her kopyada yerel kuralla (o an alandaki oyuncular) uçar.
 ## Sanat: tools/gen_hayat_agaci_fx.py -> assets/fx/oakley/hayat_agaci/ (ağaçlar haritanın kendi tileseti, efektler 1 dünya px).
+## Gölge alanı (madde 704, kullanıcı seçimi prototip B "Yaprak Halkası"): shaders/oakley_agac_aura.gdshader çizer - kenarda düz alfa bantlı
+## yumuşak halka + dönen yapraklar (zemin/ön dörtgen) + açılış halkası; eski alan/ışık/halka dokuları x2,07 büyütülüyordu (kaldırıldı).
+## Elma YOK (kullanıcı: "ağaç elma fırlatmasın"): can tiki doğrudan dostun üstünde artı + pırıltı; ağacın tacında sihirli pırıltılar.
 
 const BalanceLogScript: GDScript = preload("res://scripts/balance_log.gd")
 const EnemyQueryScript := preload("res://scripts/enemy_world/enemy_query.gd")
@@ -26,12 +29,8 @@ const TEX_TREE: Array[Texture2D] = [
 	preload("res://assets/fx/oakley/hayat_agaci/agac_buyuk.png"),
 ]
 const TEX_SMALL_PLAIN := preload("res://assets/fx/oakley/hayat_agaci/agac_kucuk_golgesiz.png")
-const TEX_ZONE := preload("res://assets/fx/oakley/hayat_agaci/alan.png")
-const TEX_RAYS_BACK := preload("res://assets/fx/oakley/hayat_agaci/isik_arka.png")
-const TEX_RAYS_FRONT := preload("res://assets/fx/oakley/hayat_agaci/isik_on.png")
-const TEX_RING := preload("res://assets/fx/oakley/hayat_agaci/halka.png")
+const AuraShader := preload("res://shaders/oakley_agac_aura.gdshader")
 const TEX_MOUND := preload("res://assets/fx/oakley/hayat_agaci/tumsek.png")
-const TEX_FRUIT := preload("res://assets/fx/oakley/hayat_agaci/meyve.png")
 const TEX_PLUS := preload("res://assets/fx/oakley/hayat_agaci/arti.png")
 const TEX_SEED := preload("res://assets/fx/oakley/hayat_agaci/tohum.png")
 const TEX_SPARK: Array[Texture2D] = [
@@ -52,7 +51,7 @@ const RISE := 0.28
 const T_MED := 0.82
 const T_LARGE := 1.1
 ## Ağacın ayakta kaldığı süre; player.gd SKILL3_TIMING[39]["duration"] bunu okur, characters.gd metni "12sn".
-const DURATION := 12.0
+const DURATION := 20.0
 const END_MED := 0.15
 const END_SMALL := 0.32
 const END_SINK := 0.3
@@ -60,38 +59,54 @@ const LIFE := DURATION + END_SMALL + END_SINK + 0.1
 const FLOWER_DELAY := 0.4 ## DURATION'dan sonra çiçeklerin düştüğü an (küçük ağaç toprağa girerken)
 
 ## ---- alan + etkiler (ÖNERİ değerleri, madde 266; denge değişirse characters.gd DEFS[2] skill3_desc + BALANCE_REV) ----
-const ZONE_RX := 169.0 ## 130 x 1,3 (Şovalye kubbesi gibi 2:1 elips)
-const ZONE_RY := 84.5
+## Gölge alanı = bir oyuncunun görüş genişliği (vision_fog.gd VISION_RADIUS 250 x VISION_WIDTH_SCALE 1,4 = 350), 2:1 elips.
+## Görseli shader dünya pikselinde çizer (büyütme yok) - madde 704.
+const ZONE_RX := 350.0
+const ZONE_RY := 175.0
 const HEAL_INTERVAL := 1.0
 const HEAL_FIRST := T_LARGE + 0.6
 const HEAL_AP_RATIO := 0.15 ## tik başına saldırı gücünün %15'i can
 const HEAL_MAX_HP_PERCENT := 0.01 ## + azami canın %1'i
 const SHIELD_AP_RATIO := 0.08 ## + saldırı gücünün %8'i mana kalkanı
-const FRUIT_FLIGHT := 0.5
-const ROOT_FIRST := 2.0
-const ROOT_INTERVAL := 2.0
-const ROOT_TARGETS := 3
-const ROOT_RANGE := 260.0
-const ROOT_DURATION := 4.0
+const ROOT_FIRST := 1.0
+const ROOT_INTERVAL := 1.0
+const ROOT_TARGETS := 4
+const ROOT_RANGE := 390.0 ## alanın (350) biraz ötesi
+const ROOT_DURATION := 6.0
 const ROOT_SPEED := 330.0
 const ROOT_DAMAGE_RATIO := 0.40
 const BOSS_SLOW_PERCENT := 0.30 ## Sarmaşıklar (E) ile aynı: bosslar sabitlenmez, yavaşlar
 const ROOT_STYLE := 1 ## enemy.gd apply_root stil: 0 = E sarmaşığı (entangle), 1 = bu ağacın kökleri (fx_oakley_tree_root.gd)
 const OPEN_PUSH_DISTANCE := 42.0
-const OPEN_PUSH_RADIUS := 234.0 ## 2:1 ölçüde (alanın 1,4 katı)
+const OPEN_PUSH_RADIUS := 490.0 ## 2:1 ölçüde (alanın 1,4 katı)
 ## Oyuncu kökü gövde ortası; ayak hizası (alan içi sayılırken) - mission_tree.gd _update_depth ile aynı ofset.
 const PLAYER_FEET_OFFSET := 12.75
 const FLOWER_OFFSETS: Array[Vector2] = [Vector2(-57.0, 18.0), Vector2(60.0, 10.0), Vector2(5.0, 44.0)]
 ## Bereketli Meyve evrimi (madde 348): 6 çiçek - ilk 3 yukarıdakiler, sonraki 3 ağacın etrafında biraz daha açıkta.
 const FLOWER_OFFSETS_EXTRA: Array[Vector2] = [Vector2(-92.0, 40.0), Vector2(94.0, 34.0), Vector2(-40.0, 62.0)]
 
-## ---- sayfa geometrisi (gen_hayat_agaci_fx.py) ----
-const RAY_FRAMES := 14
-const RAY_FPS := 12.0
-const RAY_W := 344.0
-const RAY_TOP_PAD := 46.0
+## ---- gölge alanı çizimi (shaders/oakley_agac_aura.gdshader) ----
 const RING_FRAMES := 6
 const RING_FPS := 14.0
+const RING_SCALE := 1.3 ## açılış halkası alanın 1,3 katına açılır (shader ring())
+## Yapraklar yer noktalarının en çok 21 px üstüne çıkar (salınım 10 + yaprak 6 + pırıltı 5) - dörtgenler bu payla kurulur.
+const LEAF_TOP_PAD := 24.0
+## Yaprak atlası 8 x 18: 3 çeşit (koyu yeşil / açık yeşil / altın), 8x6 hücre, alta hizalı - shader texelFetch(x, satır + çeşit*6).
+const LEAF_ROWS: Array[String] = [
+	"...aaa..", "..accca.", ".acbbba.", "acbbba..", "abbba...", ".aaa....",
+	"........", "..dddd..", ".dffffd.", "dfeeeefd", ".deeeed.", "..dddd..",
+	"........", "...gg...", "..giig..", ".gihhg..", ".ghhg...", "..gg....",
+]
+const LEAF_PAL: Dictionary = {
+	"a": Color8(40, 86, 38), "b": Color8(110, 170, 64), "c": Color8(178, 218, 98),
+	"d": Color8(46, 96, 44), "e": Color8(150, 198, 84), "f": Color8(222, 240, 170),
+	"g": Color8(96, 70, 20), "h": Color8(222, 180, 64), "i": Color8(252, 230, 140),
+}
+## Tacın sihirli pırıltıları (kullanıcı: "biraz parıltılı sihirli görünsün"): gövde dibine göre taç elipsi (büyük ağaç, x1,3 dahil).
+const CANOPY_CENTER := Vector2(0.0, -60.0)
+const CANOPY_RADII := Vector2(30.0, 24.0)
+const TWINKLE_EVERY := 0.16
+const MOTE_EVERY := 0.35
 const BOSS_GROUP := &"bosses"
 
 var caster: Node = null ## null = kozmetik kopya
@@ -107,10 +122,17 @@ var _tree: Sprite2D = null
 var _seed: Sprite2D = null
 var _seed_mound: Sprite2D = null
 var _seed_spark: Sprite2D = null
-var _zone: Sprite2D = null
-var _rays_back: Sprite2D = null
-var _rays_front: Sprite2D = null
+var _c: Vector2 = Vector2.ZERO ## alan çiziminin merkezi = konum tam sayıya yuvarlanmış (piksel ızgarası)
+var _zone: Sprite2D = null ## zemin dörtgeni: bantlı halka + gölgeler + arka yapraklar
+var _zone_mat: ShaderMaterial = null
+var _front: Sprite2D = null ## ön yarı yaprakları (z 2)
+var _front_mat: ShaderMaterial = null
 var _ring: Sprite2D = null
+var _ring_mat: ShaderMaterial = null
+var _next_twinkle: float = 0.0
+var _next_mote: float = 0.0
+static var _leaf_tex: Texture2D = null
+static var _layer_tex: Array[Texture2D] = []
 var _last_size: int = -1
 var _opened: bool = false
 var _flowers_done: bool = false
@@ -159,19 +181,14 @@ func _ready() -> void:
 	_seed.visible = false
 	_seed_spark = _top_sprite(root, TEX_SPARK[0], 3)
 	_seed_spark.visible = false
-	_zone = _ground_sprite(root, TEX_ZONE, 1)
-	_zone.scale = Vector2.ONE * _zone_mult
-	_zone.modulate.a = 0.0
-	_rays_back = _top_sprite(root, TEX_RAYS_BACK, 0, RAY_FRAMES)
-	_rays_back.centered = false
-	_rays_back.offset = -Vector2(RAY_W * 0.5, RAY_TOP_PAD + ZONE_RY)
-	_rays_back.scale = Vector2.ONE * _zone_mult
-	_rays_back.modulate.a = 0.0
-	_rays_front = _top_sprite(root, TEX_RAYS_FRONT, 2, RAY_FRAMES)
-	_rays_front.centered = false
-	_rays_front.offset = -Vector2(RAY_W * 0.5, RAY_TOP_PAD)
-	_rays_front.scale = Vector2.ONE * _zone_mult
-	_rays_front.modulate.a = 0.0
+	_c = global_position.round()
+	var rx: float = ZONE_RX * _zone_mult
+	var ry: float = ZONE_RY * _zone_mult
+	var hw: float = ceilf(rx) + 6.0
+	_zone_mat = _aura_material(rx, ry)
+	_zone = _aura_quad(root, _zone_mat, 0, Rect2(-hw, -ceilf(ry) - LEAF_TOP_PAD, 2.0 * hw, 2.0 * ceilf(ry) + LEAF_TOP_PAD + 3.0), true)
+	_front_mat = _aura_material(rx, ry)
+	_front = _aura_quad(root, _front_mat, 1, Rect2(-hw, -LEAF_TOP_PAD, 2.0 * hw, ceilf(ry) + LEAF_TOP_PAD + 3.0), false)
 	_update_visuals()
 
 
@@ -182,6 +199,57 @@ func _ground_sprite(root: Node, tex: Texture2D, hframes: int) -> Sprite2D:
 	EnemyAbilitiesScript.place_on_ground(get_tree(), s)
 	s.global_position = global_position
 	return s
+
+
+## Alan dörtgeni (madde 704): 1x1 katman dokusu dörtgen boyuna ölçeklenir, shader dünya pikselini floor(UV * size) + origin'den bulur.
+func _aura_quad(root: Node, mat: ShaderMaterial, layer: int, r: Rect2, on_ground: bool) -> Sprite2D:
+	var s := Sprite2D.new()
+	s.texture = _layer_texture(layer)
+	s.centered = false
+	s.scale = r.size
+	s.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	s.material = mat
+	s.visible = false
+	mat.set_shader_parameter("origin", r.position)
+	mat.set_shader_parameter("size", r.size)
+	root.add_child(s)
+	if on_ground:
+		EnemyAbilitiesScript.place_on_ground(get_tree(), s)
+	else:
+		s.z_index = 2
+	s.global_position = _c + r.position
+	return s
+
+
+static func _aura_material(rx: float, ry: float) -> ShaderMaterial:
+	var m := ShaderMaterial.new()
+	m.shader = AuraShader
+	m.set_shader_parameter("leaf_tex", leaf_texture())
+	m.set_shader_parameter("rx", rx)
+	m.set_shader_parameter("ry", ry)
+	return m
+
+
+static func leaf_texture() -> Texture2D:
+	if _leaf_tex == null:
+		var img := Image.create(8, LEAF_ROWS.size(), false, Image.FORMAT_RGBA8)
+		for y in LEAF_ROWS.size():
+			var row: String = LEAF_ROWS[y]
+			for x in row.length():
+				if LEAF_PAL.has(row[x]):
+					img.set_pixel(x, y, LEAF_PAL[row[x]])
+		_leaf_tex = ImageTexture.create_from_image(img)
+	return _leaf_tex
+
+
+## Katman kimliği dörtgenin 1x1 dokusunun kırmızısında (0 zemin, 0,5 ön, 1 halka) - oakley_flower_fx.gd ile aynı desen.
+static func _layer_texture(layer: int) -> Texture2D:
+	if _layer_tex.is_empty():
+		for l in 3:
+			var img := Image.create(1, 1, false, Image.FORMAT_RGBA8)
+			img.set_pixel(0, 0, Color(float(l) * 0.5, 0.0, 0.0, 1.0))
+			_layer_tex.append(ImageTexture.create_from_image(img))
+	return _layer_tex[layer]
 
 
 func _top_sprite(root: Node, tex: Texture2D, z: int, hframes: int = 1) -> Sprite2D:
@@ -201,7 +269,7 @@ static func _make_sprite(tex: Texture2D, hframes: int) -> Sprite2D:
 
 
 func _exit_tree() -> void:
-	for n in [_seed, _seed_mound, _seed_spark, _zone, _rays_back, _rays_front, _ring]:
+	for n in [_seed, _seed_mound, _seed_spark, _zone, _front, _ring]:
 		if is_instance_valid(n):
 			(n as Node).queue_free()
 
@@ -213,6 +281,7 @@ func _process(delta: float) -> void:
 		_opened = true
 		_on_open()
 	if _t < _duration:
+		_magic_sparkles()
 		while _t >= _next_heal and _next_heal < _duration:
 			_heal_tick()
 			_next_heal += HEAL_INTERVAL
@@ -308,15 +377,14 @@ func _update_visuals() -> void:
 		_seed.global_position = global_position + Vector2(0.0, -2.0 - 2.0 * q)
 		_seed_spark.texture = TEX_SPARK[clampi(int(q * 3.0), 0, 2)]
 		_seed_spark.global_position = global_position + Vector2(0.0, -6.0 - 3.0 * q)
-	## alan + kenar ışıkları
-	var za: float = zone_alpha(_t, _duration)
-	_zone.modulate.a = za
-	_rays_back.modulate.a = za
-	_rays_front.modulate.a = za
+	## gölge alanı: yaprak halkası (shader) - görünmezken hiç çizilmez
+	var za: float = band(zone_alpha(_t, _duration), 5)
+	_zone.visible = za > 0.0
+	_front.visible = za > 0.0
 	if za > 0.0:
-		var rf: int = int(_t * RAY_FPS) % RAY_FRAMES
-		_rays_back.frame = rf
-		_rays_front.frame = rf
+		for m: ShaderMaterial in [_zone_mat, _front_mat]:
+			m.set_shader_parameter("t", _t - T_LARGE)
+			m.set_shader_parameter("za", za)
 	## açılış halkası
 	if _ring != null and is_instance_valid(_ring):
 		var f: int = int((_t - T_LARGE) * RING_FPS)
@@ -324,7 +392,7 @@ func _update_visuals() -> void:
 			_ring.queue_free()
 			_ring = null
 		else:
-			_ring.frame = maxi(0, f)
+			_ring_mat.set_shader_parameter("ring_f", float(maxi(0, f)))
 
 
 ## mission_tree.gd _update_depth ile aynı kural: bir oyuncunun ayağı kökün yukarısında ve ağacın genişliğindeyse ağaç onun üstünde.
@@ -355,8 +423,12 @@ func _spark_burst(big: bool) -> void:
 
 
 func _on_open() -> void:
-	_ring = _ground_sprite(get_tree().current_scene, TEX_RING, RING_FRAMES)
-	_ring.scale = Vector2.ONE * _zone_mult
+	var rr: float = ceilf(ZONE_RX * _zone_mult * RING_SCALE) + 4.0
+	var rh: float = ceilf(rr * 0.5) + 2.0
+	_ring_mat = _aura_material(ZONE_RX * _zone_mult, ZONE_RY * _zone_mult)
+	_ring_mat.set_shader_parameter("ring_f", 0.0)
+	_ring = _aura_quad(get_tree().current_scene, _ring_mat, 2, Rect2(-rr, -rh, 2.0 * rr, 2.0 * rh), true)
+	_ring.visible = true
 	if is_cosmetic():
 		return
 	## Açılış darbesi: alandaki (2:1 ölçüde OPEN_PUSH_RADIUS) yaratıklar ağaçtan dışarı itilir (host'a apply_knockback_distance yolu).
@@ -379,7 +451,7 @@ static func _targetable(e: Variant) -> bool:
 ## Bu kopyada o an alandaki oyuncular (yerel oyuncu + kuklalar); ölü/yerde olanlar hariç.
 func _players_in_zone() -> Array[Node2D]:
 	var out: Array[Node2D] = []
-	for group_name in ["player", "remote_players"]:
+	for group_name in ["player", "remote_allies"]:
 		for p: Node in get_tree().get_nodes_in_group(group_name):
 			if not (p is Node2D) or not is_instance_valid(p):
 				continue
@@ -390,20 +462,49 @@ func _players_in_zone() -> Array[Node2D]:
 	return out
 
 
+## Can tiki: alandaki her dost (elma YOK, kullanıcı isteği 2026-11-15) - can/kalkan sadece gerçek kopyada, artı + pırıltı her kopyada
+## (o an alandaki oyunculara, yerel kuralla).
 func _heal_tick() -> void:
-	var targets: Array[Node2D] = _players_in_zone()
-	for i in range(targets.size()):
-		var f := Fruit.new()
-		f.target = targets[i]
-		f.delay = float(i) * 0.12
+	for target in _players_in_zone():
 		if not is_cosmetic():
-			f.on_arrive = _heal_target.bind(targets[i])
-		get_tree().current_scene.add_child(f)
-		f.global_position = global_position + Vector2(randf_range(-18.0, 18.0), -randf_range(48.0, 74.0))
+			_heal_target(target)
+		_heal_sparkle(target)
 
 
-## Elma düştüğü an (sadece gerçek kopya): can + mana kalkanı. Kendisi -> doğrudan; dost -> _apply_heal_to_ally (RPC ile kendi
-## istemcisine, asist sayılır).
+func _heal_sparkle(target: Node2D) -> void:
+	var at: Vector2 = target.global_position + Vector2(0.0, -6.0)
+	var plus := Rising.new()
+	plus.texture = TEX_PLUS
+	get_tree().current_scene.add_child(plus)
+	plus.global_position = at + Vector2(9.0, -22.0)
+	for off in [Vector2(-8.0, -12.0), Vector2(7.0, -20.0)]:
+		var sp := Spark.new()
+		sp.life = 0.45
+		get_tree().current_scene.add_child(sp)
+		sp.global_position = at + off
+
+
+## Büyük ağacın tacında sihirli pırıltılar (4 uçlu yıldız büyüyüp küçülür) + taçtan yükselen altın zerreler. Sadece görsel, her kopyada.
+func _magic_sparkles() -> void:
+	if _last_size != 2:
+		return
+	var crown: Vector2 = global_position + CANOPY_CENTER
+	if _t >= _next_twinkle:
+		_next_twinkle = _t + TWINKLE_EVERY * randf_range(0.7, 1.3)
+		var a: float = randf() * TAU
+		var r: float = sqrt(randf())
+		var tw := Twinkle.new()
+		get_tree().current_scene.add_child(tw)
+		tw.global_position = (crown + Vector2(cos(a) * CANOPY_RADII.x, sin(a) * CANOPY_RADII.y) * r).round()
+	if _t >= _next_mote:
+		_next_mote = _t + MOTE_EVERY * randf_range(0.7, 1.3)
+		var mo := Twinkle.new()
+		mo.mote = true
+		get_tree().current_scene.add_child(mo)
+		mo.global_position = (crown + Vector2(randf_range(-1.0, 1.0) * CANOPY_RADII.x, randf_range(-0.3, 0.6) * CANOPY_RADII.y)).round()
+
+
+## Can + mana kalkanı (sadece gerçek kopya). Kendisi -> doğrudan; dost -> _apply_heal_to_ally (RPC ile kendi istemcisine, asist sayılır).
 func _heal_target(target: Node2D) -> void:
 	if not is_instance_valid(caster) or not is_instance_valid(target):
 		return
@@ -492,9 +593,11 @@ func _on_root_arrive(e: Node2D) -> void:
 ## Kadim Diriliş (madde 348, sadece gerçek kopya): gölge alanında yerde yatan (is_downed) ilk dost kaldırılır, ağaç başına bir kez.
 ## Oakley'nin kendisi kaldırılmaz (kendini diriltme yok). Yayın player.gd oakley_tree_revive_ally.
 func _try_revive() -> void:
+	if preload("res://scripts/pvp/game_mode.gd").is_pvp():
+		return ## 2v2 PvP: cesette diriltme yok (madde 617, plan 2.1)
 	if not is_instance_valid(caster) or not caster.has_method("oakley_tree_revive_ally"):
 		return
-	for p: Node in get_tree().get_nodes_in_group("remote_players"):
+	for p: Node in get_tree().get_nodes_in_group("remote_allies"):
 		if not (p is Node2D) or not is_instance_valid(p) or p.get("is_downed") != true:
 			continue
 		if not in_zone((p as Node2D).global_position + Vector2(0.0, PLAYER_FEET_OFFSET)):
@@ -543,50 +646,30 @@ class Spark extends Sprite2D:
 		modulate.a = 1.0 if q < 0.5 else OakleyTree.band(1.0 - (q - 0.5) / 0.5, 3)
 
 
-## Can tiki: ağacın tacından dosta kavisle uçan elma; düşünce altın artı + iki pırıltı. on_arrive sadece gerçek kopyada dolu.
-class Fruit extends Sprite2D:
-	var target: Node2D = null
-	var delay: float = 0.0
-	var on_arrive: Callable = Callable()
-	var _start: Vector2 = Vector2.ZERO
+## Taç pırıltısı (mote = false): yerinde 1 -> 3 -> 1 büyüyüp sönen 4 uçlu yıldız. Zerre (mote = true): küçük artı, yavaşça yükselip
+## bantlı söner. İkisi de tam glif (tek sönük piksel yok - kullanıcı "parazit" kuralı).
+class Twinkle extends Sprite2D:
+	var mote: bool = false
 	var _age: float = 0.0
-	var _end: Vector2 = Vector2.ZERO
-	var _started: bool = false
+	var _life: float = 0.7
 
 	func _ready() -> void:
 		texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		texture = OakleyTree.TEX_FRUIT
 		z_index = 3
-		visible = false
+		_life = 1.4 if mote else 0.7
+		texture = OakleyTree.TEX_SPARK[0]
 
 	func _process(delta: float) -> void:
-		if delay > 0.0:
-			delay -= delta
-			if delay > 0.0:
-				return
-		if not _started: ## konum add_child'dan SONRA atanıyor - başlangıç ilk karede alınır
-			_started = true
-			_start = global_position
-			_end = (target.global_position + Vector2(0.0, -6.0)) if is_instance_valid(target) else _start
-			visible = true
 		_age += delta
-		if is_instance_valid(target):
-			_end = target.global_position + Vector2(0.0, -6.0)
-		var q: float = minf(1.0, _age / OakleyTree.FRUIT_FLIGHT)
-		global_position = _start.lerp(_end, q) + Vector2(0.0, -26.0 * 4.0 * q * (1.0 - q))
+		var q: float = _age / _life
 		if q >= 1.0:
-			if on_arrive.is_valid():
-				on_arrive.call()
-			var plus := Rising.new()
-			plus.texture = OakleyTree.TEX_PLUS
-			get_tree().current_scene.add_child(plus)
-			plus.global_position = _end + Vector2(9.0, -22.0)
-			for off in [Vector2(-8.0, -12.0), Vector2(7.0, -20.0)]:
-				var sp := Spark.new()
-				sp.life = 0.45
-				get_tree().current_scene.add_child(sp)
-				sp.global_position = _end + off
 			queue_free()
+			return
+		if mote:
+			position.y -= 16.0 * delta
+			modulate.a = 1.0 if q < 0.55 else OakleyTree.band(1.0 - (q - 0.55) / 0.45, 3)
+		else:
+			texture = OakleyTree.TEX_SPARK[[0, 1, 2, 1, 0][mini(4, int(q * 5.0))]]
 
 
 ## Yükselip bantlı solan küçük işaret (can artısı).

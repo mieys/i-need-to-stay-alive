@@ -87,13 +87,13 @@ func test_pellet_projectile_loads_and_has_no_trail() -> void:
 
 func test_shotgun_has_pump_magazine_and_red_shell() -> void:
 	var GunMagMath := preload("res://scripts/gun_mag_math.gd")
-	assert(GunMagMath.has_mag("pompali") and GunMagMath.mag_size("pompali") == 5, "5 fişeklik pompa")
+	assert(GunMagMath.has_mag("pompali") and GunMagMath.mag_size("pompali") == 7, "7 fişeklik pompa (2026-11-14: 5 -> 7)")
 	var c: Dictionary = GunMagMath.cfg("pompali")
-	assert(int(c["casing_row"]) == 4 and int(c["mag_row"]) < 0, "kırmızı fişek kovanı, düşen şarjör yok")
+	assert(int(c["casing_row"]) == 4 and preload("res://scripts/gun_reload_math.gd").drop_u("pompali") < 0.0, "kırmızı fişek kovanı, düşen şarjör yok")
 	var tex: Texture2D = load("res://assets/fx/gun/casings.png")
 	assert(tex.get_height() == 12 * 5, "kovan sayfası 5 satır")
 	var w: Node2D = WeaponScene.instantiate()
-	assert(float(w.get("attack_range")) >= 330.0 and is_equal_approx(float(w.get("card_damage_bonus_ratio")), 0.34), "menzil 330, saçma %34")
+	assert(float(w.get("attack_range")) >= 330.0 and is_equal_approx(float(w.get("card_damage_bonus_ratio")), 0.42), "menzil 330, saçma %42 (2026-11-14: 0,34 -> 0,38 -> 0,42)")
 	assert(str((w.get("muzzle_flash_scene") as PackedScene).resource_path).ends_with("fx_pompali_muzzle.tscn"), "kendi namlu patlaması")
 	w.free()
 

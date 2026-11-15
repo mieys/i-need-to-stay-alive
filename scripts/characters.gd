@@ -34,9 +34,9 @@ const DEFS := {
 		## Kullanıcı isteği (YENİ KİT - eski Devleşme/Yer Sarsıntısı kitinin
 		## TAMAMEN yerine geldi): "Talon yeni skilleri" - silah temalı 3 aktif
 		## yetenek + yığılan bir pasif (bkz. player.gd _skill_talon_weapon_
-		## salvo/_skill_talon_dash/_skill_talon_mirror_form). İkon dosyaları
-		## HENÜZ YOK - geçici olarak eski Talon ikonları yeniden kullanılıyor,
-		## gerçek sanat geldiğinde değiştirilmeli.
+		## salvo/_skill_talon_dash/_skill_talon_mirror_form). İkonlar bu kitin
+		## kendi ikonları (kullanıcı 2026-11-15 doğruladı; eski "geçici ikon"
+		## notu bayattı).
 		## DÜZELTME (kullanıcı isteği: "R ile Q'nun yerini değiştir") - id
 		## NUMARALARI (38=Q/ULTİ, 37=skill3/R) AYNI kaldı, sadece HANGİ
 		## fonksiyonun hangi id'ye bağlı olduğu player.gd'de swap edildi (bkz.
@@ -52,15 +52,21 @@ const DEFS := {
 		## (R, 120sn bekleme, gerçekten ulti hissi veren yetenek) artık AĞIR/
 		## ULTİ bedelini ödüyor - metin etiketleri de buna göre aşağıda swap
 		## edildi.
-		"skill": 38,
-		"skill_name": "Hamle Vuruşu",
+		## ===== DASH YETENEKLERİ E'DE (kullanıcı kararı 2026-11-12, KALICI) =====
+		## "dash atma ile ilgili tüm yetenekler E ile değişsin (Elara Q, Assasin Q, Talon Q) - Q'ya basıp dash atmak E'ye göre çok zor. Bu kalıcı bir
+		## değişim: ilerde 'E yeteneğini güçlendir' denince E = DASH yeteneğidir." Talon: E = Hamle Vuruşu (id 38, atılış), Q = Silah Salvosu (id 36).
+		## Slot değişimi TAM yapıldı: DEFS skill/skill2, player.gd _activate_skill/_activate_skill2 + SKILL_TIMING/SKILL2_TIMING + bitiş fonksiyonları, evrim
+		## yuvaları VE kimlikleri (talon_e* = Hamle Vuruşu, talon_q* = Silah Salvosu), damage_stats.gd SLOT tablosu. Açılış seviyesi yuvaya bağlı: Q 1., E 5.
+		## seviye (dash artık 5'te açılır). Aşağıdaki eski notlardaki "Q/E" harfleri 2026-11-12 öncesini anlatır.
+		"skill": 36,
+		"skill_name": "Silah Salvosu",
 		## 2026-09-28 yetenek evrimleri: kalkan yenileme "Kalkan Hamlesi" evrimine geçti, bekleme 4 -> 10 sn.
-		"skill_desc": "YETENEK: İleri kısa bir hamle yapar, isabet ettiği düşmanlara saldırı gücünün %60'ı kadar hasar verir; hamle bitince tüm silahlar 3 atışı üst üste ateşler. (10sn bekleme)",
-		"skill_icon": "res://assets/skills/talon_devlesme_icon.png",
-		"skill2": 36,
-		"skill2_name": "Silah Salvosu",
-		"skill2_desc": "TEMEL: 3sn boyunca tüm silahların dışa dönük olarak etrafında 2 tur atıp sürekli saldırır, bu esnada %400 saldırı hızı kazanırlar ancak hasarları %25 azalır. (20sn bekleme)",
-		"skill2_icon": "res://assets/skills/talon_yer_sarsintisi_icon.png",
+		"skill_desc": "YETENEK: 3sn boyunca tüm silahların dışa dönük olarak etrafında 2 tur atıp sürekli saldırır, bu esnada %400 saldırı hızı kazanırlar ancak hasarları %25 azalır. (20sn bekleme)",
+		"skill_icon": "res://assets/skills/talon_yer_sarsintisi_icon.png",
+		"skill2": 38,
+		"skill2_name": "Hamle Vuruşu",
+		"skill2_desc": "TEMEL: İleri kısa bir hamle yapar, isabet ettiği düşmanlara saldırı gücünün %60'ı kadar hasar verir; hamle bitince tüm silahlar 3 atışı üst üste ateşler. (10sn bekleme)",
+		"skill2_icon": "res://assets/skills/talon_devlesme_icon.png",
 		"skill3": 37,
 		"skill3_name": "Ayna Formu",
 		"skill3_desc": "ULTİ: 15sn boyunca her silahının bir aynalı kopyası belirir (silah sayısı 2 katına çıkar, hepsi eşit aralıklarla etrafını sarar) - her kopya bağımsız ateş eder. Kopya başına saldırı gücü %4 azalır. (120sn bekleme)",
@@ -131,7 +137,7 @@ const DEFS := {
 		"skill3": 39,
 		"skill3_name": "Hayat Ağacı",
 		"skill3_icon": "res://assets/skills/oakley_passive_icon.png",
-		"skill3_desc": "ULTİ: Önüne bir tohum eker, tohum 12sn ayakta kalan bir Hayat Ağacı'na dönüşür ve büyüdüğü an çevresindeki yaratıkları geri iter. Gölgesindeki dostlara (kendisi dahil) her saniye ağaçtan bir meyve düşer: saldırı gücünün %15'i + azami canın %1'i kadar can ve saldırı gücünün %8'i kadar mana kalkanı yeniler. Her 2sn'de kökleri en yakın 3 yaratığa uzanır, saldırı gücünün %40'ı kadar hasar verip 4sn yere sabitler (bosslar sabitlenmez, %30 yavaşlar). Ağaç solarken etrafına 3 çiçek bırakır. (60sn bekleme)",
+		"skill3_desc": "ULTİ: Önüne bir tohum eker, tohum 20sn ayakta kalan bir Hayat Ağacı'na dönüşür ve büyüdüğü an çevresindeki yaratıkları geri iter. Bir oyuncunun görüş alanı kadar geniş gölgesindeki dostlar (kendisi dahil) her saniye saldırı gücünün %15'i + azami canın %1'i kadar can ve saldırı gücünün %8'i kadar mana kalkanı yeniler. Her 1sn'de kökleri en yakın 4 yaratığa uzanır, saldırı gücünün %40'ı kadar hasar verip 6sn yere sabitler (bosslar sabitlenmez, %30 yavaşlar). Ağaç solarken etrafına 3 çiçek bırakır. (60sn bekleme)",
 		## DÜZELTME (kullanıcı isteği: "Oakleyin pasifi silinecek ve Q su
 		## bundan sonra pasifi olacak, ve otomatik olarak yakınlarına çiçek
 		## bırakacak... 2 yük olayı falan yok bunda dolduğu anda oakleyin
@@ -180,7 +186,7 @@ const DEFS := {
 		"skill2_icon": "res://assets/skills/matthew_elektrik_topu_icon.png",
 		"skill3": 9,
 		"skill3_name": "Yıldırım Kalkanı",
-		"skill3_desc": "ULTİ: 15sn süren yıldırımdan bir mana kalkanı çemberi kurar. Kalkan saldırı gücünün %1000'i kadar hasarı emer. Kırılınca ya da süre dolunca patlar: çevresindeki yaratıklara saldırı gücünün %400'ü + kalkanın emdiği hasarın %50'si kadar hasar verip onları iter. Kalkan açıkken Şimşek Hücumu ve pasifin çalışmaya devam eder. (120sn bekleme)",
+		"skill3_desc": "ULTİ: 15sn süren yıldırımdan bir mana kalkanı çemberi kurar. Kalkan saldırı gücünün %1000'i kadar hasarı emer. Kırılınca ya da süre dolunca patlar: çevresindeki yaratıklara saldırı gücünün %400'ü + kalkanın emdiği hasarın %25'i kadar hasar verip onları iter. Kalkan açıkken Şimşek Hücumu ve pasifin çalışmaya devam eder. (120sn bekleme)",
 		"skill3_icon": "res://assets/skills/matthew_yildirim_kalkani_icon.png",
 		"passive": "Yıldırım Hızı: hareket ettiğin her saniye %1 hareket hızı kazanırsın (en fazla %15); durunca bonus 5 saniyede söner. Her kaynaktan kazandığın toplam hareket hızının her %1'i sana %0,5 saldırı hızı verir (toplam saldırı hızı sınırı %600). Arkanda 1 saniye süren bir yıldırım izi bırakırsın. Tam hızda iz güçlenir: değdiği yaratığı 1 saniye sersemletir ve saldırı gücünün %80'i kadar hasar verir.",
 		"passive_icon": "res://assets/skills/matthew_yildirim_hizi_icon.png",
@@ -207,7 +213,8 @@ const DEFS := {
 		"run_speed_ratio": 1.15,
 	},
 	4: {
-		"name": "Büyücü Kız",
+		"name": "Lyra",
+		"title_name": "Yıldız Çağıran", ## lakap: seçim ekranında adın altında (madde 623; eski unvan "Büyücü Kız")
 		## Kullanıcı isteği (rework #2): "artık 3 skill sistemine geçtiğimiz
 		## için büyücü kızın ultisi diğer 2 skilin varyasyonunu değiştirecek.
 		## diğer 2 skill de varolan 4 varyasyonlu temel yeteneği ile 2 parçaya
@@ -295,7 +302,8 @@ const DEFS := {
 		"projectile_rotation_offset": -2.3999243,
 	},
 	5: {
-		"name": "Assasin Çocuk",
+		"name": "Kestrel",
+		"title_name": "Gölge Şahin", ## lakap: seçim ekranında adın altında (madde 623; eski unvan "Assasin Çocuk")
 		## DÜZELTME (kullanıcı isteği: "Assasin çocuğun R si ile Q skillinin
 		## yerini değiştir") - Talon'un "R ile Q'nun yerini değiştir" isteğiyle
 		## AYNI desen (bkz. o karakterin DEFS'indeki üstteki not): id NUMARALARI
@@ -317,21 +325,23 @@ const DEFS := {
 		## DÜZELTME (kullanıcı isteği: yeni temel yetenek) - Görünmezlik'in
 		## yerine 8 yönlü, 3 yüklü bir hamle geldi (bkz. player.gd
 		## ASSASIN_DASH2_*/_try_assasin_dash2 üstündeki not).
-		"skill": 5,
-		"skill_name": "Şahin Hamlesi",
+		## ===== DASH YETENEKLERİ E'DE (2026-11-12, KALICI - bkz. Talon notu): Assasin E = Şahin Hamlesi (id 5, yük tabanlı hamle), Q = Gölge Adımı (id 30).
+		## Evrimler: assasin_e* = Şahin Hamlesi, assasin_q* = Gölge Adımı. Aşağıdaki eski notlardaki "Q/E" harfleri 2026-11-12 öncesini anlatır.
+		"skill": 30,
+		"skill_name": "Gölge Adımı",
 		## 2026-09-30 (yetenek evrimleri): "artık 3 yük yerine 2 yüke sahip çünkü geliştirmelere eklenecek" (evrim "Üçüncü Hamle").
 		## Aynı gün: "dash yeteneğinin bekleme süresini de 10 saniyeye düşür" - yük başına 12 -> 10 sn; 2026-10-08: 10 -> 8 sn (ASSASIN_DASH2_RECHARGE_TIME).
-		"skill_desc": "YETENEK: Yürüdüğü yöne (8 yön) hızla hamle yapıp içinden geçtiği düşmanlara saldırı gücünün %150'si kadar hasar verir. 2 yükü vardır, her yük ayrı ayrı 8sn'de yenilenir.",
-		"skill_icon": "res://assets/skills/assasin_sahin_hamlesi_icon.png",
-		"skill2": 30,
-		"skill2_name": "Gölge Adımı",
+		"skill_desc": "YETENEK: 2 saniye odaklanıp yavaşça kaybolur, sonra 6 saniye boyunca görünmez olur ve yaratıkların içinden geçebilir. (60sn bekleme)",
+		"skill_icon": "res://assets/skills/assasin_golge_adimi_icon.png",
+		"skill2": 5,
+		"skill2_name": "Şahin Hamlesi",
 		## Kullanıcı isteği (2026-09-30, yetenek evrimleri): "görünmezlik artık saldırı gücünü arttırmıyor çünkü geliştirmelere
 		## eklenecek" - eski "+%30 saldırı gücü" temelden çıktı (evrim "Pusu": +%25, bkz. skill_evolutions.gd DEFS[5]).
-		"skill2_desc": "TEMEL: 2 saniye odaklanıp yavaşça kaybolur, sonra 6 saniye boyunca görünmez olur ve yaratıkların içinden geçebilir. (60sn bekleme)",
+		"skill2_desc": "TEMEL: Yürüdüğü yöne (8 yön) hızla hamle yapıp içinden geçtiği düşmanlara saldırı gücünün %150'si kadar hasar verir. 2 yükü vardır, her yük ayrı ayrı 8sn'de yenilenir.",
 		## DÜZELTME (kullanıcı isteği: gerçek sanat eseri ikonlar) - eskiden
 		## E ile AYNI geçici "assasin_gorunmezlik_icon.png" dosyasını
 		## paylaşıyordu, artık kendi özel ikonu var.
-		"skill2_icon": "res://assets/skills/assasin_golge_adimi_icon.png",
+		"skill2_icon": "res://assets/skills/assasin_sahin_hamlesi_icon.png",
 		## Kullanıcı isteği: Assasin Çocuk'un eski ULTİ'si (Gölge Hücumu) -
 		## yakındaki yaratıklara sırayla hızla çarpar (bkz. player.gd
 		## _skill_assasin_dash, skill id 16) - artık 3. yetenek/R'de.
@@ -356,7 +366,8 @@ const DEFS := {
 		"run_speed_ratio": 1.15,
 	},
 	7: {
-		"name": "Şovalye Adam",
+		"name": "Aldric",
+		"title_name": "Sarsılmaz", ## lakap: seçim ekranında adın altında (madde 623; eski unvan "Şovalye Adam")
 		## Kullanıcı isteği (2026-09-25): "şovalye adamın Q su R olacak. E si yeni Q olacak R si de E olacak" - Matthew'in
 		## Q/R değişimiyle AYNI desen: id'ler yuvalar arasında taşındı (player.gd _activate_skill/_activate_skill2/
 		## _activate_skill3 + SKILL*_TIMING eşleşen "2026-09-25 slot değişimi" notları). Eski E (Kalkan Yenileme, skill2
@@ -415,22 +426,24 @@ const DEFS := {
 		## azalarak kaybolacak şekilde 3sn boyunca %60 hareket hızı, %50 sıvışma ve birimlerin içinden
 		## geçebilme kazandırır (sıvışma sınırını aşabilir), 10sn bekleme" - Kalkan Sıçraması (dash) TAMAMEN
 		## kaldırıldı, id 12 AYNI kaldı (bkz. player.gd _skill_elara_evasion).
-		"skill": 12,
-		"skill_name": "Sıvışma",
+		## ===== DASH YETENEKLERİ E'DE (2026-11-12, KALICI - bkz. Talon notu): Elara E = Sıvışma (id 12), Q = Gerçek Hasar (id 11). Evrimler:
+		## elara_e* = Sıvışma, elara_q* = Gerçek Hasar. Aşağıdaki eski notlardaki "Q/E" harfleri 2026-11-12 öncesini anlatır.
+		"skill": 11,
+		"skill_name": "Gerçek Hasar",
 		## 2026-09-25: hız %100 (azalan) -> %50 SABİT; sıvışma hâlâ azalarak (bkz. player.gd ELARA_EVASION_SPEED_PERCENT).
 		## 2026-09-28 yetenek evrimleri: sıvışma "Rüzgar Adımı" evrimine geçti, hız %50 -> %30.
-		"skill_desc": "YETENEK: 3 saniye boyunca %30 hareket hızı kazandırır ve yaratıkların içinden geçebilmeni sağlar. Kalkan harcamaz. (10sn bekleme)",
+		"skill_desc": "YETENEK: 6 saniye boyunca saldırı hızın, normal saldırı hızının %30'u kadar artar. (20sn bekleme)",
 		## Kullanıcı isteği (2026-09-24): Elara + Korsan'ın TÜM yetenek ikonları 48x48 piksel sanat olarak yeniden
 		## çizildi (tools/gen_elara_korsan_icons.py) - Q'nun (Sıvışma) daha önce hiç ikonu yoktu (vektör yedeğine
 		## düşüyordu), artık kanatlı çizme ikonu var.
-		"skill_icon": "res://assets/skills/elara_sivisma_icon.png",
-		"skill2": 11,
-		"skill2_name": "Gerçek Hasar",
+		"skill_icon": "res://assets/skills/elara_gercek_hasar_icon.png",
+		"skill2": 12,
+		"skill2_name": "Sıvışma",
 		## 2026-09-25: 6 saldırı -> 6 saniye, +%50 hasar kaldırıldı, saldırı hızı TOPLAMIN %30'u, bekleme 35 -> 25 sn.
 		## 2026-09-28 yetenek evrimleri: gerçek hasar kaldırıldı ("Delici Oklar" evrimi ek %15 gerçek hasar), saldırı hızı artık
 		## TOPLAM değil normal (taban) saldırı hızının %30'u ("Tam Odak" evrimi toplama çevirir) - bkz. weapon.gd _effective_fire_wait.
-		"skill2_desc": "TEMEL: 6 saniye boyunca saldırı hızın, normal saldırı hızının %30'u kadar artar. (20sn bekleme)",
-		"skill2_icon": "res://assets/skills/elara_gercek_hasar_icon.png",
+		"skill2_desc": "TEMEL: 3 saniye boyunca %30 hareket hızı kazandırır ve yaratıkların içinden geçebilmeni sağlar. Kalkan harcamaz. (10sn bekleme)",
+		"skill2_icon": "res://assets/skills/elara_sivisma_icon.png",
 		"skill3": 31,
 		"skill3_name": "Çift Tetik",
 		"skill3_desc": "ULTİ: 15 saniye boyunca saldırılar 2 kez tetiklenir ama %60 hasar verir. (100sn bekleme)",
@@ -452,7 +465,8 @@ const DEFS := {
 		"run_speed_ratio": 1.15,
 	},
 	9: {
-		"name": "Korsan",
+		"name": "Flint",
+		"title_name": "Kara Fitil", ## lakap: seçim ekranında adın altında (madde 623; eski unvan "Korsan")
 		## Kullanıcı isteği (beni oku.txt): Temel yetenek saatli bomba bırakır
 		## (2 yük, yükü başına 20sn yenilenme - bkz. player.gd
 		## _korsan_bomb_charges/KORSAN_BOMB_RECHARGE_TIME), ULTİ bırakılmış TÜM
@@ -468,7 +482,7 @@ const DEFS := {
 		"skill2_name": "Saatli Bomba",
 		## 2026-09-28: metin koddaki güncel değerlere (10 sn yenilenme, %100 - bkz. player.gd KORSAN_*) çekildi + yeni kural "yerde en
 		## fazla 6 bomba" (kullanıcı; "Barut Deposu" evrimi kaldırır).
-		"skill2_desc": "TEMEL: Bulunduğu konuma saatli bomba bırakır (3 yük, yük başına 10sn yenilenir, yerde aynı anda en fazla 6 bomba olabilir). Patladığında 32 + saldırı gücünün %100'ü kadar hasar verir.",
+		"skill2_desc": "TEMEL: Bulunduğu konuma saatli bomba bırakır (3 yük, yük başına 7sn yenilenir, yerde aynı anda en fazla 6 bomba olabilir). Patladığında 32 + saldırı gücünün %100'ü kadar hasar verir.",
 		"skill2_icon": "res://assets/skills/korsan_saatli_bomba_icon.png",
 		## Kullanıcı isteği (2026-09-26): "korsanın e yeteneği de 1 levelde açık olsun 5 level yerine" - Büyücü Kız'daki
 		## AYNI istisna (bkz. skill_unlock_level). Q (Patlat) bombasız işe yaramadığı için E baştan açık.
@@ -517,7 +531,8 @@ const DEFS := {
 		## (eski "always_walk" kaldırıldı: yeni sayfalarda gerçek "run" klibi var)
 	},
 	10: {
-		"name": "Melek",
+		"name": "Seraphine",
+		"title_name": "Işık Kanadı", ## lakap: seçim ekranında adın altında (madde 623; eski unvan "Melek")
 		## Kullanıcı isteği (beni oku.txt): "Oakley adlı karakterin bütün
 		## yetenekleri ve pasifi Melek'e olduğu gibi geçecek" - bu yüzden
 		## skill/skill2 id'leri BİREBİR Oakley'ninkiyle (char 2) aynı bırakıldı,
@@ -588,7 +603,8 @@ const DEFS := {
 		## (eski "always_walk" kaldırıldı: yeni sayfalarda gerçek "run" klibi var)
 	},
 	11: {
-		"name": "Necromancer",
+		"name": "Corvina",
+		"title_name": "Kemik Kraliçesi", ## lakap: seçim ekranında adın altında (madde 623; eski unvan "Necromancer")
 		## Kullanıcı isteği (beni oku.txt): Pasif yakında ölen her düşmandan
 		## ruh biriktirir (bkz. player.gd on_enemy_killed/_necro_gain_soul).
 		## DÜZELTME (kullanıcı isteği: "Necromancer in Q skillini iskelet
@@ -652,7 +668,8 @@ const DEFS := {
 		"run_speed_ratio": 1.15,
 	},
 	12: {
-		"name": "Shaman",
+		"name": "Ulric",
+		"title_name": "Taşların Sesi", ## lakap: seçim ekranında adın altında (madde 623; eski unvan "Shaman")
 		## Kullanıcı isteği: yeni karakter Shaman, 3 BAĞIMSIZ totem yeteneği
 		## (hepsi 60sn bekleme, aynı anda aktif olabilir) - bu yüzden ilk kez
 		## üçüncü bir aktif slot ("skill3", R tuşu, bkz. player.gd SKILL3_TIMING/
@@ -708,7 +725,8 @@ const DEFS := {
 		"run_speed_ratio": 1.15,
 	},
 	13: {
-		"name": "Vampir Çocuk",
+		"name": "Nox",
+		"title_name": "Gece Yavrusu", ## lakap: seçim ekranında adın altında (madde 623; eski unvan "Vampir Çocuk")
 		## Kullanıcı isteği: yeni karakter Vampir Çocuk - yetenekleri kalkan YERİNE CAN harcar
 		## (2026-10-01: Q diğer karakterler gibi KALKAN harcıyordu, 2026-10-06'dan beri Q hiçbir bedel ödemez; E maksimum canın %4'ü,
 		## R aktifken her saniye %2,5'i, bkz. player.gd VAMPIR_*). Skill id'leri: Q=40 (Kan Emme, SKILL_TIMING[40]), E=41 (Yarasa
@@ -770,8 +788,8 @@ const DEFS := {
 		"skill2": 47,
 		## Kullanıcı isteği (2026-09-25, ikinci tur): "hadimenin E sini kara delik yeteneğiyle değiştiriyoruz" - eski Kara Büyü
 		## tamamen kaldırıldı, id 47 aynı kaldı (bkz. player.gd _skill_hadime_black_hole, scripts/hadime_black_hole.gd).
-		"skill2_name": "Kara Delik",
-		"skill2_desc": "TEMEL: Bulunduğu konuma 6 saniye süren bir kara delik bırakır. Kara delik yakınındaki yaratıkları hafifçe içine doğru çeker ve her saniye saldırı gücünün %80'i kadar hasar verir (bosslar çekilmez). Lanet Kitabı basılıyken de kullanılabilir. (18sn bekleme)",
+		"skill2_name": "Lanet Çukuru",
+		"skill2_desc": "TEMEL: Bulunduğu yerde zemini çökertip 6 saniye süren lanetli bir çukur açar. Çukur yakınındaki yaratıkları hafifçe içine doğru çeker ve her saniye saldırı gücünün %80'i kadar hasar verir (bosslar çekilmez). Lanet Kitabı basılıyken de kullanılabilir. (18sn bekleme)",
 		"skill2_icon": "res://assets/skills/hadime_kara_delik_icon.png",
 		"skill3": 48,
 		"skill3_name": "Karabasan",
@@ -793,14 +811,15 @@ const DEFS := {
 	## Cadı (kullanıcı isteği 2026-10-13, masaüstü "cadı" klasörü). Yetenek kodu player.gd Cadı bloğu, sabitler/formüller
 	## scripts/cadi_math.gd (TEK kaynak - buradaki sayılar oradaki sabitlerle aynı olmalı), evrimler skill_evolutions.gd DEFS[15].
 	15: {
-		"name": "Cadı",
+		"name": "Hazel",
+		"title_name": "Kazan Anası", ## lakap: seçim ekranında adın altında (madde 623; eski unvan "Cadı")
 		"skill": 51,
 		"skill_name": "Zehirli Duman",
 		"skill_desc": "YETENEK (AÇ/KAPA): Arkasında uçan zehir şişesi dumanını yere döker; bulut 6 saniye yerde kalır. Dumana değen yaratıklar her saniye saldırı gücünün %120'si kadar hasar alır. Açık kaldığı sürece her saniye azami mana kalkanın %0,5'i + 5 mana kalkanı harcar. Tekrar basınca (ya da mana kalkanı yetmeyince) kapanır ve 8sn bekleme süresine girer.",
 		"skill_icon": "res://assets/skills/cadi_zehirli_duman_icon.png",
 		"skill2": 52,
 		"skill2_name": "Uçan Süpürge",
-		"skill2_desc": "TEMEL: Süpürgesine atlar; 8 saniye boyunca %20 hareket hızı kazanır ve her saniye saldırı gücünün %10'u kadar can ve mana kalkanı yeniler. Değdiği takım arkadaşları da süpürgeye biner: aynı bonusları kazanır, silah ve yetenek kullanabilir, ilk 1 saniyeden sonra hareket ederek inebilirler. Süpürgeyi yalnızca Cadı sürer. (20sn bekleme)",
+		"skill2_desc": "TEMEL: Süpürgesine atlar; 8 saniye boyunca %20 hareket hızı kazanır ve her saniye saldırı gücünün %10'u kadar can ve mana kalkanı yeniler. Değdiği takım arkadaşları da süpürgeye biner: aynı bonusları kazanır, silah ve yetenek kullanabilir, ilk 1 saniyeden sonra hareket ederek inebilirler. Süpürgeyi yalnızca Hazel sürer. (20sn bekleme)",
 		"skill2_icon": "res://assets/skills/cadi_supurge_icon.png",
 		"skill3": 53,
 		"skill3_name": "İksir Çantası",
@@ -859,29 +878,64 @@ const MAIN_WEAPON := {
 
 
 ## Karakter başına BAŞLANGIÇ statları (2026-10-13, kullanıcı onaylı liste - madde 123). hp = Can, speed = Hız (BASE_MOVE_SPEED ile aynı ölçek),
-## ap = Saldırı Gücü (player.gd damage_bonus tabanı), atk = Saldırı Hızı bonusu (puan, negatif olabilir; player.gd fire_rate_mult = 1/(1+atk/100)).
+## ap = Saldırı Gücü (player.gd damage_bonus tabanı). Karakter başına Saldırı Hızı bonusu (eski "atk", ±%10) 2026-11-14 kaldırıldı: yüzde stat yok, herkes fire_rate_mult 1,0 ile başlar (madde 123 ek).
 ## Tek kaynak: player.gd _ready (oyun) + MenuKit.make_stats_grid (seçim ekranı) ikisi de buradan okur. Listede olmayan id -> ortak taban.
-const BASE_STATS_DEFAULT := {"hp": 100.0, "speed": BASE_MOVE_SPEED, "ap": 10.0, "atk": 0.0}
+const BASE_STATS_DEFAULT := {"hp": 100.0, "speed": BASE_MOVE_SPEED, "ap": 10.0}
 const BASE_STATS := {
-	1: {"hp": 110.0, "speed": 252.0, "ap": 16.0, "atk": 0.0},  ## Talon
-	2: {"hp": 100.0, "speed": 252.0, "ap": 11.0, "atk": 0.0},  ## Oakley
-	3: {"hp": 90.0, "speed": 265.0, "ap": 10.0, "atk": 0.0},   ## Matthew
-	4: {"hp": 80.0, "speed": 245.0, "ap": 12.0, "atk": -10.0}, ## Büyücü Kız
-	5: {"hp": 95.0, "speed": 260.0, "ap": 14.0, "atk": 10.0},  ## Assasin Çocuk
-	7: {"hp": 150.0, "speed": 238.0, "ap": 8.0, "atk": 0.0},   ## Şovalye Adam
-	8: {"hp": 85.0, "speed": 252.0, "ap": 10.0, "atk": 10.0},  ## Elara
-	9: {"hp": 110.0, "speed": 252.0, "ap": 12.0, "atk": 0.0},  ## Korsan
-	10: {"hp": 90.0, "speed": 252.0, "ap": 12.0, "atk": 0.0},  ## Melek
-	11: {"hp": 85.0, "speed": 248.0, "ap": 12.0, "atk": 0.0},  ## Necromancer
-	12: {"hp": 100.0, "speed": 245.0, "ap": 11.0, "atk": 0.0}, ## Shaman
-	13: {"hp": 80.0, "speed": 258.0, "ap": 12.0, "atk": 0.0},  ## Vampir Çocuk (pasif: 1 SG = 1 maks can)
-	14: {"hp": 90.0, "speed": 245.0, "ap": 12.0, "atk": -5.0}, ## Suriyeli Hadime
-	15: {"hp": 95.0, "speed": 258.0, "ap": 10.0, "atk": 0.0},  ## Cadı
+	1: {"hp": 110.0, "speed": 252.0, "ap": 16.0},  ## Talon
+	2: {"hp": 100.0, "speed": 252.0, "ap": 11.0},  ## Oakley
+	3: {"hp": 90.0, "speed": 265.0, "ap": 10.0},   ## Matthew
+	4: {"hp": 80.0, "speed": 245.0, "ap": 12.0}, ## Büyücü Kız
+	5: {"hp": 95.0, "speed": 260.0, "ap": 14.0},  ## Assasin Çocuk
+	7: {"hp": 150.0, "speed": 238.0, "ap": 8.0},   ## Şovalye Adam
+	8: {"hp": 85.0, "speed": 252.0, "ap": 10.0},  ## Elara
+	9: {"hp": 110.0, "speed": 252.0, "ap": 12.0},  ## Korsan
+	10: {"hp": 90.0, "speed": 252.0, "ap": 12.0},  ## Melek
+	11: {"hp": 85.0, "speed": 248.0, "ap": 12.0},  ## Necromancer
+	12: {"hp": 100.0, "speed": 245.0, "ap": 11.0}, ## Shaman
+	13: {"hp": 80.0, "speed": 258.0, "ap": 12.0},  ## Vampir Çocuk (pasif: 1 SG = 1 maks can)
+	14: {"hp": 90.0, "speed": 245.0, "ap": 12.0}, ## Suriyeli Hadime
+	15: {"hp": 95.0, "speed": 258.0, "ap": 10.0},  ## Cadı
 }
 
 
 static func get_base_stats(char_id: int) -> Dictionary:
 	return BASE_STATS.get(char_id, BASE_STATS_DEFAULT)
+
+
+## KARAKTERE ÖZEL BAŞLANGIÇ STATI (2026-11-14, kullanıcı seçimi - docs/balans/karakter_ozel_stat_secimi.html, madde 677): her karakter
+## koşuya Ruh Mağazası statlarından BİRİNİN sabit bir miktarıyla başlar. "stat" = meta_upgrades.gd kimliği (ad/ikon/biçim oradan),
+## "value" = o geliştirmenin "per" birimiyle (PCT kesir, FLAT/COUNT düz). Ruh Mağazası geliştirmesiyle TOPLANIR.
+## Uygulama: oyuncu statları player.gd _apply_signature_stat; discount / free_reroll / evo_reroll / revive GameManager'da (koşu sıfırlaması +
+## shop_discount_fraction). Seçim ekranları (MenuKit.make_stats_grid, lobby_select_desktop, soul_shop_screen) 4. hücrede gösterir.
+const SIGNATURE_STATS := {
+	1: {"stat": "free_reroll", "value": 1.0},     ## Talon: Ücretsiz Karıştırma
+	2: {"stat": "pickup", "value": 0.40},         ## Oakley: Toplama Mesafesi +%40
+	3: {"stat": "crit_chance", "value": 0.05},    ## Matthew: Kritik Oran +%5
+	4: {"stat": "shield_regen", "value": 1.8},    ## Büyücü Kız: Kalkan Yenilenmesi +1,8/sn
+	5: {"stat": "crit_damage", "value": 0.12},    ## Assasin Çocuk: Kritik Hasar +%12
+	7: {"stat": "shield_amount", "value": 0.12},  ## Şovalye Adam: Kalkan Miktarı +%12
+	8: {"stat": "atk_speed", "value": 0.10},      ## Elara: Saldırı Hızı +%10
+	9: {"stat": "discount", "value": 0.05},       ## Korsan: Fiyat İndirimi %5
+	10: {"stat": "heal_power", "value": 0.08},    ## Melek: İyileştirme ve Kalkan Gücü +%8
+	11: {"stat": "shield_pen", "value": 0.06},    ## Necromancer: Kalkan Delme +%6
+	12: {"stat": "evo_reroll", "value": 1.0},     ## Shaman: Evrim Karıştırma +1
+	13: {"stat": "lifesteal", "value": 0.06},     ## Vampir Çocuk: Can Çalma +%6 (pasifin %1'ine eklenir)
+	14: {"stat": "revive", "value": 1.0},         ## Hadime: Dirilme Hakkı +1
+	15: {"stat": "luck", "value": 8.0},           ## Cadı: Şans +8
+}
+## Karaktere özel statın verebileceği en fazla ek dirilme hakkı (host'un kabul sınırı ve kalp HUD'u bunu hesaba katar).
+const SIGNATURE_MAX_REVIVES := 1
+
+
+static func get_signature(char_id: int) -> Dictionary:
+	return SIGNATURE_STATS.get(char_id, {})
+
+
+## Karakterin özel statı `stat` ise miktarı, değilse 0.
+static func signature_value(char_id: int, stat: String) -> float:
+	var s: Dictionary = SIGNATURE_STATS.get(char_id, {})
+	return float(s.get("value", 0.0)) if str(s.get("stat", "")) == stat else 0.0
 
 
 ## Ekrana giden ad/yetenek metinleri seçili dilde (Localization.localized, madde 446). Kayıt/ağ için Türkçe: get_def_raw.

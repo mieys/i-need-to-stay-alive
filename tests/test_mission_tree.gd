@@ -163,6 +163,19 @@ func test_escort_speeds_up_noticeably_with_more_pushers() -> void:
 	var v: Node2D = _track(VanScript.new()) as Node2D
 	add_child(v)
 	assert(v.is_in_group("move_blockers") and v.has_method("block_center"), "konvoy arabası da engel")
+	## 2026-11-13 (madde 650): at + satıcı arabası - at ayrı engel, sağa giden rotada sayfa aynalanır, at arabanın önünde (gidiş yönünde).
+	var blockers: Array = get_tree().get_nodes_in_group("move_blockers").filter(func(n: Node) -> bool: return n == v or v.is_ancestor_of(n))
+	assert(blockers.size() == 2, "araba + at engeli: %d" % blockers.size())
+	var horse: Node2D = blockers[0] if blockers[0] != v else blockers[1]
+	v.call("setup", PackedVector2Array([Vector2(0, 0), Vector2(400, 0), Vector2(400, 300)]), 130.0)
+	var anim: AnimatedSprite2D = v.get("_anim")
+	assert(anim.flip_h and horse.call("block_center").x > (v.call("block_center") as Vector2).x, "sağa: aynalı, at sağda")
+	v.call("setup", PackedVector2Array([Vector2(0, 0), Vector2(0, 300), Vector2(-400, 300)]), 130.0)
+	assert(not anim.flip_h and horse.call("block_center").x < (v.call("block_center") as Vector2).x, "dikey başlangıç + sola: sola bakar")
+	v.call("set_progress", 50.0, 700.0, true)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	assert(anim.animation == &"walk" and anim.is_playing(), "itilirken at yürür: %s" % anim.animation)
 	_cleanup()
 
 

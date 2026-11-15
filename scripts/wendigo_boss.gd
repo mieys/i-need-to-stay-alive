@@ -130,6 +130,8 @@ func _alive_in_group(group: String) -> int:
 
 
 func _spawn_fx(kind: String, pos: Vector2, data: Dictionary, dmg: float) -> Node2D:
+	## Sabit hasarlar (VINE_DAMAGE/ROCK_DAMAGE) eski kademe (12) için yazılı: kademe yuvasına göre çarpan (enemy_spawner.gd BOSS_HOME_TIER, madde 597).
+	dmg *= float(e.get_meta("boss_damage_mult", 1.0))
 	var node: Node2D = AbilitiesScript.spawn_world_fx(e.get_tree(), kind, pos, data, true, e, dmg)
 	AbilitiesScript._broadcast_world_fx(kind, pos, data)
 	return node

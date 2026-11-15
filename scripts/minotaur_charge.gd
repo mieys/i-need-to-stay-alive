@@ -31,6 +31,7 @@ var _speed: float = 0.0
 var _planned_length: float = 0.0 ## uyarı şeridinin (duvara kısaltılmış) uzunluğu
 var _travel_left: float = 0.0
 var _lane_shown: bool = false
+var _lane_clipped: bool = false
 var _recover_time: float = MathScript.RECOVER_TIME
 var _hit_ids: Dictionary = {} ## bu hücumda vurulan oyuncuların instance id'leri (hücum başına BİR kez)
 var _hit_count: int = 0
@@ -121,8 +122,10 @@ func _show_lane(player: Node2D) -> void:
 		var dist_to: float = e.global_position.distance_to(player.global_position) if _valid_target(player) else MathScript.HORN_MIN_LEN
 		length = MathScript.horn_length(dist_to)
 	else:
-		length = MathScript.STAMPEDE_PREVIEW_LEN
-	length = MathScript.clip_travel(e.global_position, _dir, length, _blocked_cb())
+		length = MathScript.STAMPEDE_RUN_LEN
+	var clipped: float = MathScript.clip_travel(e.global_position, _dir, length, _blocked_cb())
+	_lane_clipped = clipped < length - 0.5 ## şerit duvara kısaldı: şeridin sonu = duvara çarpma
+	length = clipped
 	_planned_length = length
 	var warn: float = MathScript.WINDUP_TIME - MathScript.AIM_LOCK_AT
 	var data: Dictionary = {"dir": _dir, "length": length, "width": MathScript.LANE_WIDTH if horn else MathScript.STAMPEDE_LANE_WIDTH,
@@ -133,7 +136,7 @@ func _show_lane(player: Node2D) -> void:
 # ---------------------------------------------------------------------------------------------------- hücum
 func _begin_charge() -> void:
 	var horn: bool = mode == MathScript.MODE_HORN
-	if horn and _planned_length < 60.0:
+	if _planned_length < 60.0:
 		_end_charge(true) ## önü hemen duvar: atılacak yer yok, boynuzu duvara vurup sersemler
 		return
 	phase = Phase.CHARGE
@@ -156,9 +159,7 @@ func _process_charge(delta: float, player: Node2D) -> void:
 	else:
 		_speed = MathScript.stampede_speed(_speed, delta)
 		_dir = MathScript.turn_toward(_dir, toward, deg_to_rad(MathScript.STAMPEDE_TURN_DEG) * delta)
-	var step: float = _speed * delta
-	if horn:
-		step = minf(step, _travel_left)
+	var step: float = minf(_speed * delta, _travel_left) ## iki hücum da çizilen şeridin sonunda durur
 	var from: Vector2 = e.global_position
 	var to: Vector2 = from + _dir * step
 	if MathScript.step_blocked(from, to, _blocked_cb()):
@@ -168,14 +169,16 @@ func _process_charge(delta: float, player: Node2D) -> void:
 	e.call("_update_facing", _dir)
 	_lock(0.25)
 	_check_hits(from, to)
+	_travel_left -= step
 	if horn:
-		_travel_left -= step
 		if _travel_left <= 0.5:
 			_end_charge(false)
 	else:
 		if _first_hit_t < 0.0 and _hit_count > 0:
 			_first_hit_t = _t
-		if _t >= MathScript.STAMPEDE_MAX_TIME or (_first_hit_t >= 0.0 and _t - _first_hit_t >= MathScript.STAMPEDE_AFTER_HIT):
+		if _travel_left <= 0.5:
+			_end_charge(_lane_clipped) ## şerit duvarda bittiyse koşu duvara çarpmış sayılır (toz + uzun sersemleme)
+		elif _t >= MathScript.STAMPEDE_MAX_TIME or (_first_hit_t >= 0.0 and _t - _first_hit_t >= MathScript.STAMPEDE_AFTER_HIT):
 			_end_charge(false)
 
 

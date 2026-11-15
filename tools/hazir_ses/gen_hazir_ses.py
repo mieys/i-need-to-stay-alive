@@ -9,8 +9,9 @@ Her ses için:
      + outro'nun 4. karesi / 16 fps, kıvılcım + şok halkası) otursun diye ortadaki uğultu iki yerden uzatılır (SPLICES): aynı
      uğultunun bir parçası korelasyonla hizalanmış çapraz geçişle bir kez daha çalar (perde/hız DEĞİŞMEZ). Baş 0,50 sn kırpılır
      -> sesin girişi delik doğduktan ~0,12 sn sonra (intro 0,4 sn içinde).
-  3. Don Nova: baştaki çok sessiz 0,30 sn atılır -> sesin patlaması (dosyada ~1,30 sn) odaklanmanın bittiği ana (oyunda 1,0 sn)
-     düşer; sesin bitişi (tepeden -38 dB, dosyada ~3,60 sn) oyunda 3,30 sn -> dalga süresi 2,3 sn (player.gd BUYUCU_NOVA_WAVE_TIME).
+  3. Don Nova: baştaki 0,80 sn atılır -> sesin patlaması (dosyada ~1,30 sn) odaklanmanın bittiği ana (oyunda 0,5 sn) düşer
+     (2026-11-09: kullanıcı yeteneği hızlandırdı, odak 1,0 -> 0,5, dalga 2,3 -> 1,3 sn). Sesin sönen kuyruğu (dosyada ~3,60 sn)
+     dalgadan ~1 sn uzun sürer - perde/hız değişmesin diye sıkıştırılmadı.
   4. Seviye: dosyanın tepesi -1 dBFS'e getirilir; oyundaki seviye volume_db ile. Hedef = değiştirilen eski
      sesin oyun içi gürlüğü (400 ms RMS + volume_db; tablo docs/notlar madde 533). Betik her ses için önerilen volume_db'yi yazar.
 Çıktı: assets/audio/... (16 bit, 44,1 kHz, stereo wav).
@@ -38,7 +39,7 @@ SOUNDS = {
 	"shaman_golem_q": ("assets/audio/skills/shaman_golem_q.wav", -13.8, {"end_db": -40.0, "fade_out": 0.08}),
 	"shaman_golem_e": ("assets/audio/skills/shaman_golem_e.wav", -14.5, {"end_db": -40.0, "fade_out": 0.08}),
 	"shaman_golem_oto": ("assets/audio/skills/shaman_golem_oto.wav", -24.0, {"end_db": -40.0, "fade_out": 0.08}),
-	"buyucu_don_nova": ("assets/audio/skills/buyucu_don_nova.wav", -21.0, {"start": 0.30, "fade_in": 0.05}),
+	"buyucu_don_nova": ("assets/audio/skills/buyucu_don_nova.wav", -21.0, {"start": 0.80, "fade_in": 0.05}),
 	"hadime_kara_delik": ("assets/audio/skills/hadime_kara_delik.wav", -15.0, {"start": 0.50, "fade_in": 0.03, "hadime": True}),
 	## Assasin E odak sesi (kullanıcı klasör dışında verdi): 2,03 sn yükselen ses + sonuna kadar -45 dB taban -> taban kesilir;
 	## sesin keskin bitişi dosyada 2,027 sn = oyunda ~2,01 sn = odak sonu (player.gd ASSASIN_INVIS_FOCUS_TIME 2,0), görünmez olunan an

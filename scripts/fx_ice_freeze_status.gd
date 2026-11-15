@@ -51,12 +51,23 @@ var _intro_time: float = INTRO_TIME
 var _outro_time: float = OUTRO_TIME
 var _variant: String = "freeze1"
 
+const BottomShader := preload("res://shaders/buz_donma_dip.gdshader")
+static var _shared_material: ShaderMaterial = null
+
+static func _bottom_material() -> ShaderMaterial:
+	if _shared_material == null:
+		_shared_material = ShaderMaterial.new()
+		_shared_material.shader = BottomShader
+	return _shared_material
+
 
 func _ready() -> void:
 	position = Vector2.ZERO
 	_variant = VARIANT_NAMES[randi() % VARIANT_NAMES.size()]
 	animation = _variant
 	frame = 0
+	## Doğal dip (madde 544, kullanıcı B seçti): düzensiz kırılıp basamaklı sönen taban; kırağı lekesi denendi, seçilmedi.
+	material = _bottom_material()
 
 	var sound: AudioStreamPlayer2D = get_node_or_null("Sound")
 	if sound:
@@ -90,8 +101,127 @@ func setup(duration: float, body_radius: float = REFERENCE_RADIUS) -> void:
 	_intro_time = min(INTRO_TIME, budget * 0.5)
 	_outro_time = min(OUTRO_TIME, budget * 0.5)
 
-	var s: float = clamp(body_radius / REFERENCE_RADIUS, MIN_SCALE, MAX_SCALE) * SIZE_MULT
-	scale = Vector2(s, s)
+	var body: Rect2 = body_rect(get_parent() as Node2D)
+	if body.size.x > 1.0 and body.size.y > 1.0:
+		_fit_to_rect(body)
+	else:
+		## Görünen sınır okunamadıysa (headless/dummy sürücü) eski yarıçap kuralı.
+		var s: float = clamp(body_radius / REFERENCE_RADIUS, MIN_SCALE, MAX_SCALE) * SIZE_MULT
+		scale = Vector2(s, s)
+
+
+## DÜZELTME (kullanıcı isteği 2026-11-09: "buz donma efekti gereksiz büyük çıkıyor, yaratığın bedenini hafif
+## dışına taşacak, bedeni kaplayacak şekilde olmalıydı"): yarıçap x 1,6 kuralı yaratığın GÖRÜNEN bedenini
+## temsil etmiyordu (16x30 dikey buz sütunu: slime 24x22 bedene 18x34, ağaç 53x67'ye 50x94). Artık buz
+## yaratık sprite'ının o anki satırının opak sınırına (`body_rect`) oturur: yükseklik bedenin FIT_PAD katı,
+## taban ayakların biraz altında, genişlik dar kalırsa yatayda en çok MAX_X_STRETCH kat açılır.
+const ICE_ART_W := 16.0 ## buz karesinin opak genişliği (sanat pikseli)
+const ICE_ART_H := 30.0 ## tut karesinin (3) opak yüksekliği; kare 32, opak kısım y 2..32
+const ICE_ART_BOTTOM := 16.0 ## ortalı karede opak tabanın yerel y'si
+const FIT_PAD := 1.12 ## bedenden ne kadar taşsın (yükseklik)
+const FIT_PAD_X := 1.08 ## genişlikte taşma
+const FIT_FOOT_PAD := 2.0 ## taban ayakların bu kadar altında (yaratık yerel birimi)
+const MAX_X_STRETCH := 1.5 ## geniş yaratıkta yatay açılma sınırı (piksel bozulması az kalsın)
+
+func _fit_to_rect(body: Rect2) -> void:
+	var s: float = body.size.y * FIT_PAD / ICE_ART_H
+	var sx: float = clampf(body.size.x * FIT_PAD_X / ICE_ART_W, s, s * MAX_X_STRETCH)
+	scale = Vector2(sx, s)
+	position = Vector2(body.get_center().x, body.end.y + FIT_FOOT_PAD - ICE_ART_BOTTOM * s)
+
+
+## Sprite satırı başına opak sınır önbelleği (doku okuma tek sefer; anahtar doku + satır).
+static var _rect_cache: Dictionary = {}
+
+## Yaratığın görünen bedeni, yaratığın YEREL koordinatında (Sprite2D ya da AnimatedSprite2D).
+## Okunamazsa boş Rect2.
+static func body_rect(enemy: Node2D) -> Rect2:
+	if enemy == null:
+		return Rect2()
+	var spr: Sprite2D = enemy.get_node_or_null("Sprite2D") as Sprite2D
+	if spr and spr.visible and spr.texture:
+		return _sprite_rect(spr)
+	var anim: AnimatedSprite2D = enemy.get_node_or_null("AnimatedSprite2D") as AnimatedSprite2D
+	if anim and anim.sprite_frames:
+		return _anim_rect(anim)
+	return Rect2()
+
+
+static func _sprite_rect(spr: Sprite2D) -> Rect2:
+	var tex: Texture2D = spr.texture
+	var hf: int = maxi(spr.hframes, 1)
+	var vf: int = maxi(spr.vframes, 1)
+	var row: int = clampi(spr.frame_coords.y, 0, vf - 1)
+	var key: String = "%s|%d|%d|%d" % [tex.resource_path if tex.resource_path != "" else str(tex.get_rid()), hf, vf, row]
+	var cell_rect: Rect2
+	if _rect_cache.has(key):
+		cell_rect = _rect_cache[key]
+	else:
+		cell_rect = Rect2()
+		var img: Image = tex.get_image()
+		if img:
+			if img.is_compressed():
+				img.decompress()
+			var cw: int = floori(img.get_width() / float(hf))
+			var ch: int = floori(img.get_height() / float(vf))
+			var found := false
+			for i in hf:
+				var r: Rect2i = img.get_region(Rect2i(i * cw, row * ch, cw, ch)).get_used_rect()
+				if r.size.x <= 0:
+					continue
+				cell_rect = Rect2(r) if not found else cell_rect.merge(Rect2(r))
+				found = true
+			if found:
+				cell_rect.position -= Vector2(cw, ch) * 0.5 ## ortalı karede yerel
+		_rect_cache[key] = cell_rect
+	return _to_parent(cell_rect, spr.centered, Vector2(tex.get_size()) / Vector2(hf, vf), spr.offset, spr.flip_h, spr.flip_v, spr)
+
+
+static func _anim_rect(anim: AnimatedSprite2D) -> Rect2:
+	var sf: SpriteFrames = anim.sprite_frames
+	var a: StringName = anim.animation
+	if not sf.has_animation(a) or sf.get_frame_count(a) == 0:
+		return Rect2()
+	var first: Texture2D = sf.get_frame_texture(a, 0)
+	if first == null:
+		return Rect2()
+	var key: String = "%s|%s" % [str(sf.get_instance_id()) if sf.resource_path == "" else sf.resource_path, a]
+	var cell_rect: Rect2
+	if _rect_cache.has(key):
+		cell_rect = _rect_cache[key]
+	else:
+		cell_rect = Rect2()
+		var found := false
+		for i in mini(sf.get_frame_count(a), 8):
+			var t: Texture2D = sf.get_frame_texture(a, i)
+			var img: Image = t.get_image() if t else null
+			if img == null:
+				continue
+			if img.is_compressed():
+				img.decompress()
+			var r: Rect2i = img.get_used_rect()
+			if r.size.x <= 0:
+				continue
+			var rr := Rect2(Vector2(r.position) - Vector2(img.get_size()) * 0.5, Vector2(r.size))
+			cell_rect = rr if not found else cell_rect.merge(rr)
+			found = true
+		_rect_cache[key] = cell_rect
+	return _to_parent(cell_rect, anim.centered, first.get_size(), anim.offset, anim.flip_h, anim.flip_v, anim)
+
+
+## Ortalı kare yerelindeki dikdörtgeni sprite düğümünün ebeveyn (yaratık) koordinatına taşır.
+static func _to_parent(r: Rect2, centered: bool, cell: Vector2, offset: Vector2, flip_h: bool, flip_v: bool, node: Node2D) -> Rect2:
+	if r.size.x <= 0.0:
+		return Rect2()
+	if flip_h:
+		r.position.x = -r.end.x
+	if flip_v:
+		r.position.y = -r.end.y
+	r.position += offset
+	if not centered:
+		r.position += cell * 0.5
+	var sc: Vector2 = node.scale.abs()
+	return Rect2(node.position + r.position * sc, r.size * sc)
 
 
 func _process(delta: float) -> void:

@@ -1,0 +1,156 @@
+[gd_resource type="SpriteFrames" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/fx/hadime/cukur/cukur_on_giris.png" id="1"]
+[ext_resource type="Texture2D" path="res://assets/fx/hadime/cukur/cukur_on_dongu.png" id="2"]
+[ext_resource type="Texture2D" path="res://assets/fx/hadime/cukur/cukur_on_cikis.png" id="3"]
+
+[sub_resource type="AtlasTexture" id="AT_0"]
+atlas = ExtResource("1")
+region = Rect2(0, 0, 168, 96)
+
+[sub_resource type="AtlasTexture" id="AT_1"]
+atlas = ExtResource("1")
+region = Rect2(168, 0, 168, 96)
+
+[sub_resource type="AtlasTexture" id="AT_2"]
+atlas = ExtResource("1")
+region = Rect2(336, 0, 168, 96)
+
+[sub_resource type="AtlasTexture" id="AT_3"]
+atlas = ExtResource("1")
+region = Rect2(504, 0, 168, 96)
+
+[sub_resource type="AtlasTexture" id="AT_4"]
+atlas = ExtResource("1")
+region = Rect2(672, 0, 168, 96)
+
+[sub_resource type="AtlasTexture" id="AT_5"]
+atlas = ExtResource("1")
+region = Rect2(840, 0, 168, 96)
+
+[sub_resource type="AtlasTexture" id="AT_6"]
+atlas = ExtResource("1")
+region = Rect2(1008, 0, 168, 96)
+
+[sub_resource type="AtlasTexture" id="AT_7"]
+atlas = ExtResource("1")
+region = Rect2(1176, 0, 168, 96)
+
+[sub_resource type="AtlasTexture" id="AT_8"]
+atlas = ExtResource("2")
+region = Rect2(0, 0, 168, 96)
+
+[sub_resource type="AtlasTexture" id="AT_9"]
+atlas = ExtResource("3")
+region = Rect2(0, 0, 168, 96)
+
+[sub_resource type="AtlasTexture" id="AT_10"]
+atlas = ExtResource("3")
+region = Rect2(168, 0, 168, 96)
+
+[sub_resource type="AtlasTexture" id="AT_11"]
+atlas = ExtResource("3")
+region = Rect2(336, 0, 168, 96)
+
+[sub_resource type="AtlasTexture" id="AT_12"]
+atlas = ExtResource("3")
+region = Rect2(504, 0, 168, 96)
+
+[sub_resource type="AtlasTexture" id="AT_13"]
+atlas = ExtResource("3")
+region = Rect2(672, 0, 168, 96)
+
+[sub_resource type="AtlasTexture" id="AT_14"]
+atlas = ExtResource("3")
+region = Rect2(840, 0, 168, 96)
+
+[sub_resource type="AtlasTexture" id="AT_15"]
+atlas = ExtResource("3")
+region = Rect2(1008, 0, 168, 96)
+
+[sub_resource type="AtlasTexture" id="AT_16"]
+atlas = ExtResource("3")
+region = Rect2(1176, 0, 168, 96)
+
+[resource]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AT_0")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_1")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_2")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_3")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_4")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_5")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_6")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_7")
+}],
+"loop": false,
+"name": &"intro",
+"speed": 20.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AT_8")
+}],
+"loop": true,
+"name": &"loop",
+"speed": 12.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AT_9")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_10")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_11")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_12")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_13")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_14")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_15")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_16")
+}],
+"loop": false,
+"name": &"outro",
+"speed": 16.0
+}]

@@ -93,9 +93,20 @@ def ghost(img):
 
 
 def main():
+    os.makedirs(FX_OUT, exist_ok=True)
+    ## 2026-11-13: kalkan sanatı artık kullanıcının seçtiği YUVARLAK kalkan -> ikon/görünüş/hayalet tools/gen_kalkan_yuvarlak.py'de.
+    ## Eski "Şövalye" görünüşleri yalnız --eski ile yazılır (yoksa yeni sanatı ezerdi).
+    if "--eski" in sys.argv:
+        write_old_views()
+    ## prototip D_fx: np_ring(foot, 3, 1.5 -> 12, 6, w 2, ömür 0,3 sn, 5 kırık, brk 0,5)
+    save_sheet(ring_frames(3.0, 1.5, 12.0, 6.0, 2.0, 0.3, 5, 0.5), "ring")
+    ## Final: karakterin çevresinde (140 birimlik darbe alanını göstermez, sadece duvar hissi) 0,4 sn
+    save_sheet(ring_frames(10.0, 5.0, 70.0, 35.0, 4.0, 0.4, 7, 0.4), "wall")
+
+
+def write_old_views():
     views = KY.build()
     os.makedirs(VIEW_OUT, exist_ok=True)
-    os.makedirs(FX_OUT, exist_ok=True)
     for lv in range(1, 6):
         views[(lv, 0)].save(os.path.join(ART_OUT, "kalkan_L%d.png" % lv))
         vs = Image.new("RGBA", (N * len(KY.ANGLES), N), (0, 0, 0, 0))
@@ -105,11 +116,7 @@ def main():
             gs.paste(ghost(views[(lv, yaw)]), (i * N, 0))
         vs.save(os.path.join(VIEW_OUT, "views_L%d.png" % lv))
         gs.save(os.path.join(FX_OUT, "ghost_L%d.png" % lv))
-    print("görünüşler + hayaletler yazıldı", KY.ANGLES)
-    ## prototip D_fx: np_ring(foot, 3, 1.5 -> 12, 6, w 2, ömür 0,3 sn, 5 kırık, brk 0,5)
-    save_sheet(ring_frames(3.0, 1.5, 12.0, 6.0, 2.0, 0.3, 5, 0.5), "ring")
-    ## Final: karakterin çevresinde (140 birimlik darbe alanını göstermez, sadece duvar hissi) 0,4 sn
-    save_sheet(ring_frames(10.0, 5.0, 70.0, 35.0, 4.0, 0.4, 7, 0.4), "wall")
+    print("ESKİ görünüşler + hayaletler yazıldı", KY.ANGLES)
 
 
 if __name__ == "__main__":

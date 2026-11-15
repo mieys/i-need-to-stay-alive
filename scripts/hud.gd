@@ -77,6 +77,7 @@ const SPIRIT_FRAME_TINT := Color(1, 1, 1, 1) ## artık tint yok: mor-altın çer
 const SpiritualSkillsScript: GDScript = preload("res://scripts/spiritual_skills.gd")
 const HudTheme := preload("res://scripts/hud_theme.gd") ## HUD teması "Kısık Ahşap" renkleri (madde 207)
 const HudTrayKit := preload("res://scripts/hud_tray_kit.gd") ## madde 483: Gömme Tepsi kiti (sol üst konsol, grup paneli, görev/bildirim)
+const UiHideScript := preload("res://scripts/ui_hide.gd") ## madde 612: F3 arayüzü gizle (HUD + sohbet + grup paneli katmanları kayıtlı)
 ## Kullanıcı isteği (2026-09-22): "skill kutucuklarının olduğu yere arkasını kaplayacak bir çerçeve" - SkillBar'ın
 ## İLK çocuğu olarak eklenen, o anki GÖRÜNÜR ikonların (P/Q/E/R/F) etrafını saran tek bir "çukur" panel (bkz.
 ## _create_ability_bar_frame/_update_ability_bar_frame). Ayrı bir sahne/asset değil, UIKit.panel_style("inset")
@@ -139,6 +140,7 @@ func _connect_once(sig: Signal, callable: Callable) -> void:
 
 
 func _ready() -> void:
+	UiHideScript.mark_layer(self) ## F3: HUD katmanı (iç içe grup paneli + sohbet katmanları kendi yaratılırken kaydolur)
 	UISound.connect_all_buttons(self)
 	UISound.apply_wood_buttons(self) ## bkz. ui_sound.gd - tüm butonları ahşap stile çevirir
 	_setup_debug_mode()
@@ -177,6 +179,7 @@ func _ready() -> void:
 	_layout_shop_inventory_buttons()
 	_style_envanter_and_gold_buttons()
 	_create_gold_gain_popup()
+	_setup_key_label_sync()
 	## DÜZELTME (kullanıcı bildirimi: "grup paneli görünmüyor, dostların
 	## canları kalkanları avatarları görünmeliydi, oradan altın
 	## gönderebilmeliydik") - kök neden: party_panel.gd'nin TÜM mantığı
@@ -208,6 +211,7 @@ func _ready() -> void:
 		party_layer.name = "PartyPanelLayer"
 		party_layer.layer = 96
 		party_layer.process_mode = Node.PROCESS_MODE_ALWAYS
+		UiHideScript.mark_layer(party_layer) ## F3: iç içe katman kendi `visible`ı ile gizlenir
 		add_child(party_layer)
 		var party_panel := Control.new()
 		party_panel.name = "PartyPanel"
@@ -307,7 +311,7 @@ func _ensure_shard_indicator() -> void:
 	box.add_child(icon)
 	_shard_label = Label.new()
 	_shard_label.add_theme_font_size_override("font_size", 40)
-	_shard_label.add_theme_color_override("font_color", HudTheme.SHARD) ## koyu levhada açık zümrüt yeşili
+	_shard_label.add_theme_color_override("font_color", HudTheme.SHARD) ## koyu levhada simgenin kor turuncusu
 	_shard_label.text = "0"
 	box.add_child(_shard_label)
 	add_child(_shard_indicator)
@@ -447,7 +451,7 @@ func _layout_shop_inventory_buttons() -> void:
 
 
 ## ---------- SOL ÜST KONSOL (madde 483, masaüstü; kullanıcı madde 480 prototiplerinden "B yi beğendim") ----------
-## Tek Gömme Tepsi (paneldeki yan kutu): üstte kabarık ahşap ENVANTER düğmesi (renkli çanta + "Envanter"), ayraç, altta yan yana iki koyu
+## Tek Gömme Tepsi (paneldeki yan kutu): üstte kabarık ahşap ENVANTER düğmesi (kullanıcının çanta çizimi 32x32 x1 + "Envanter"), ayraç, altta yan yana iki koyu
 ## kuyu = GERÇEK altın göstergesi (GoldIndicator) ve parçacık sayacı (ShardIndicator) - altın uçuşu/nabzı (gold_reward_fx.gd) ve sayaçlar
 ## eskisi gibi o düğümleri kullanır; "+N" yazısı konsolun sağında (gold_gain_popup anchor). Yerleşim prototipteki gibi 3 px ızgarada
 ## (tools/proto_20261108/sol_grup/sol_grup_proto.gd _front_b_console). Oyunda envanter kısayolu olmadığı için prototipteki "I" tuşu YOK.
@@ -722,6 +726,30 @@ func _create_skill3_icon() -> void:
 
 	bar.add_child(icon)
 	skill3_icon = icon
+
+
+## Yetenek ikonlarının köşe tuş yazıları (Q/E/R/F): gerçek atamaya göre, kumandayla oynanırken kumanda düğmesi (Y/X/RB/R3). Kumanda denetimi
+## 547: yazılar sabit klavye harfleriydi (kumandada yanlış, yeniden atanınca da yanlış). Girdi türü değişince GamepadUi sinyaliyle yenilenir.
+func _setup_key_label_sync() -> void:
+	_refresh_key_labels()
+	var g: Node = GameManager.get_node_or_null("GamepadUi")
+	if g != null and not g.input_mode_changed.is_connected(_on_input_mode_changed):
+		g.input_mode_changed.connect(_on_input_mode_changed)
+
+
+func _on_input_mode_changed(_joypad: bool) -> void:
+	_refresh_key_labels()
+
+
+func _refresh_key_labels() -> void:
+	for pair: Array in [[skill_icon, "skill"], [skill2_icon, "skill2"], [skill3_icon, "skill3"], [spirit_icon, "skill4"]]:
+		var icon: Node = pair[0] as Node
+		if icon == null or not is_instance_valid(icon):
+			continue
+		var lbl: Label = icon.get_node_or_null("KeyLabel") as Label
+		if lbl:
+			lbl.grow_horizontal = Control.GROW_DIRECTION_BOTH ## "RB" / "L3" gibi iki harfli adlar ikonun dışına taşmasın (kodla kurulanlar zaten böyle)
+			lbl.text = GameManager.get_action_hint_label(str(pair[1]))
 
 
 ## Ruhani Yetenek ikonu (F) - _create_skill3_icon ile AYNI düğüm yapısı (BG/Cooldown/KeyLabel/StackBadge, önce çocuklar sonra ikon
@@ -1104,6 +1132,11 @@ func _create_player_dock() -> void:
 		dock_pet.set_script(PetSlotScript)
 		add_child(dock_pet)
 		move_child(dock_pet, dock_frame.get_index() + 1)
+		## CharacterCluster (portre + çubuklar) _dock_place ile TÜM paneli kaplar ve fareyi durdurur (STOP): yuva onun ARKASINDA kalınca
+		## fare hiç ulaşmıyor, ipucu açılmıyordu (madde 585, kullanıcı: "pet simgesinin üstüne götürünce faydalar gösterilmiyor").
+		## Yuva kümenin hemen önüne (görsel çakışma yok: yuva yetenek sırasında, küme portre + çubuk sütununda).
+		if cluster:
+			move_child(dock_pet, cluster.get_index() + 1)
 		## Mini stat paneli de ana panelin ARKASINDA (sağ 12 px'i örtülür); aç/kapa düğmesi portrenin üstünde (en son çizilir).
 		dock_stats = Control.new()
 		dock_stats.name = "DockStats"
@@ -1630,7 +1663,7 @@ func _ph_build_frames() -> void:
 	if envanter_toggle_button.get_node_or_null("Icon") == null:
 		var bi := TextureRect.new()
 		bi.name = "Icon"
-		bi.texture = _pixel_icon_texture(BAG_ICON_MAP)
+		bi.texture = HudTrayKit.BAG_ICON ## kullanıcının renkli envanter çantası (madde 557), masaüstü ENVANTER düğmesiyle aynı çizim
 		bi.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		bi.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		bi.stretch_mode = TextureRect.STRETCH_SCALE
@@ -2983,7 +3016,12 @@ func _on_item_shield_changed(current: float, max_value: float) -> void:
 ## "handled" işaretler (bkz. _on_chat_input_submitted, LineEdit'in kendi
 ## text_submitted sinyaline bağlı), yani iki taraf asla çakışmaz.
 func _unhandled_input(event: InputEvent) -> void:
+	## F3 arayüz gizliyken (madde 612) görünmeyen sohbet kutusu / envanter AÇILMAZ (açılırsa hareketi + yetenekleri görünmez kilitlerdi);
+	## zaten açık envanter yine geri/I ile kapanır.
+	var ui_hidden: bool = UiHideScript.hidden
 	if event.is_action_pressed("chat") and _chat_input and not _chat_input.visible:
+		if ui_hidden:
+			return
 		_open_chat_input()
 		get_viewport().set_input_as_handled()
 		return
@@ -2993,7 +3031,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if inventory_panel_instance == null or (_chat_input and _chat_input.visible):
 		return
 	var inv_open: bool = inventory_panel_instance.visible
-	if event.is_action_pressed("inventory") and (inv_open or not (get_tree().paused or GameManager.is_any_blocking_panel_open())):
+	if event.is_action_pressed("inventory") and (inv_open or not (ui_hidden or get_tree().paused or GameManager.is_any_blocking_panel_open())):
 		_on_envanter_toggle()
 		get_viewport().set_input_as_handled()
 	elif inv_open and event.is_action_pressed("ui_cancel"):
@@ -3054,6 +3092,7 @@ func _create_chat_ui() -> void:
 	_chat_layer = CanvasLayer.new()
 	_chat_layer.name = "ChatLayer"
 	_chat_layer.layer = 40 ## HUD'un üstünde, modal ekranların (90+) altında
+	UiHideScript.mark_layer(_chat_layer) ## F3: sohbet penceresi de gizlenir
 	add_child(_chat_layer)
 
 	var panel := Control.new()
@@ -3206,7 +3245,7 @@ func _on_chat_input_submitted(text: String) -> void:
 	## Debug modu (kullanıcı isteği: chate "baykusseverim" yazılınca debug butonu belirsin) -
 	## GERÇEK bir sohbet mesajı olarak GÖNDERİLMİYOR (bkz. aşağıdaki return), sadece bu
 	## istemcide bir komut olarak tüketiliyor - bkz. GameManager.debug_mode_unlocked notu.
-	if trimmed.to_lower() == "baykusseverim":
+	if trimmed.to_lower() == "baykusseverim" and GameManager.debug_allowed(): ## exportta kod yok: sıradan sohbet mesajı olarak gider
 		_unlock_debug_mode()
 		return
 	_send_chat_message(trimmed)
@@ -3455,9 +3494,7 @@ func _process(delta: float) -> void:
 		## Shaman Q (Saldırı Totemi) yük sistemi (2026-09-30): yük varken hazır, yoksa sıradaki yükün dolumu + boncuklar
 		## (Korsan/Assasin E'siyle aynı set_charges görünümü). Golem formunda (q_override) boncuklar gizli.
 		var q_charges: Dictionary = player.get_shaman_q_charge_state() if q_override.is_empty() and player.has_method("get_shaman_q_charge_state") else {}
-		## Assasin Çocuk Q = Şahin Hamlesi (2026-09-30 Q/E değişimiyle E ikonundan buraya) - aynı yük sözlüğü.
-		if q_charges.is_empty() and q_override.is_empty() and player.has_method("get_assasin_dash_charge_state"):
-			q_charges = player.get_assasin_dash_charge_state()
+		## (Assasin Çocuk'un Şahin Hamlesi 2026-11-12'de - dash yetenekleri E'ye taşındı - Q'dan E'ye geçti: yük sözlüğü e_charges, E ikonunda.)
 		if not q_override.is_empty():
 			skill_icon.update_state(float(q_override["progress"]), false, float(q_override["remaining"]), 0.0)
 		elif not q_charges.is_empty():
@@ -3470,6 +3507,8 @@ func _process(delta: float) -> void:
 				skill_icon.set_charges(-1, 0, 0.0)
 			else:
 				skill_icon.set_charges(int(q_charges["charges"]), int(q_charges["max"]), float(q_charges["fraction"]))
+		## Assasin Çocuk E = Şahin Hamlesi (2026-11-12 DASH yetenekleri E'ye taşındı; eskiden Q ikonunda) - Shaman Q / Korsan E ile aynı yük sözlüğü.
+		var e_charges: Dictionary = player.get_assasin_dash_charge_state() if player.has_method("get_assasin_dash_charge_state") else {}
 		if skill2_icon.visible and player.has_method("get_skill2_progress"):
 			## Büyücü Kız'ın TEMEL yeteneği artık 4 varyasyonlu ve standart
 			## skill2_state/skill2_timer makinesini KULLANMIYOR (bkz. player.gd
@@ -3482,6 +3521,9 @@ func _process(delta: float) -> void:
 			_apply_hud_skill_override(skill2_icon, e_override, "skill2")
 			if not e_override.is_empty():
 				skill2_icon.update_state(float(e_override["progress"]), false, float(e_override["remaining"]), 0.0)
+			elif not e_charges.is_empty():
+				var e_has_charge: bool = int(e_charges["charges"]) > 0
+				skill2_icon.update_state(1.0 if e_has_charge else float(e_charges["fraction"]), false, 0.0 if e_has_charge else float(e_charges["remaining"]), 0.0)
 			elif GameManager.selected_char_id == 4 and player.has_method("get_buyucu_variation_cooldown_remaining"):
 				skill2_icon.skill_id = player.get_skill2_id()
 				skill2_icon.name_override = player.get_buyucu_variation_name()
@@ -3507,7 +3549,8 @@ func _process(delta: float) -> void:
 			skill2_icon.set_stack_count(-1) ## eski sayı rozeti bu yuvada artık kullanılmıyor
 			if "korsan_bomb_charges" in player and player.get_skill2_id() == 17:
 				skill2_icon.set_charges(player.korsan_bomb_charges, player.get_korsan_max_bomb_charges(), player.get_korsan_bomb_charge_fraction()) ## evrimle 3 -> 5
-			## (Assasin Çocuk'un Şahin Hamlesi yük boncukları 2026-09-30'dan beri Q ikonunda - bkz. yukarıdaki q_charges.)
+			elif not e_charges.is_empty():
+				skill2_icon.set_charges(int(e_charges["charges"]), int(e_charges["max"]), float(e_charges["fraction"])) ## Assasin Şahin Hamlesi (2 yük, evrimle 3)
 			else:
 				skill2_icon.set_charges(-1, 0, 0.0)
 		if passive_icon.has_method("set_stack_count"):

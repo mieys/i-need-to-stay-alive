@@ -230,6 +230,8 @@ func _process(delta: float) -> void:
 	for rp: Node in get_tree().get_nodes_in_group("remote_players"):
 		if not is_instance_valid(rp) or not ("global_position" in rp):
 			continue
+		if rp.has_meta(&"pvp_fog_hidden"):
+			continue ## rakip takımın oyuncusu takım görüşümün dışında (PvPvE, madde 615): minimapte de yok
 		## Yerde yatan uzak oyuncu ağa is_dead=false (+ is_downed=true) olarak bildirilir (bkz. main.gd state_snapshot) - ikisi de ölü sayılır.
 		var remote_dead: bool = rp.get("is_dead") == true or rp.get("is_downed") == true
 		var remote_char_id: int = 1

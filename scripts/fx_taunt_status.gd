@@ -9,6 +9,8 @@ class_name TauntStatusFx
 
 const TEXEL := 1.212 ## 1 sanat pikseli = bu kadar dünya birimi (ebeveyn ölçeğinden bağımsız tutulur)
 const HEAD_RATIO := 0.45 ## bkz. fx_fear_status.gd AYNI not
+## Kullanıcı 2026-11-14: "çok dikkat çekiyorlar" -> işaret dikkat çekmeyecek kadar küçük (eski boyutun %55'i).
+const SIZE_MUL := 0.55
 
 var _timer: float = 0.0
 var _parent_body: Node2D = null
@@ -19,7 +21,7 @@ func _ready() -> void:
 	_parent_body = get_parent() as Node2D
 	if _parent_body:
 		var ps: float = absf(_parent_body.global_scale.x)
-		scale = Vector2.ONE * (TEXEL / (ps if ps > 0.01 else 1.0))
+		scale = Vector2.ONE * (TEXEL * SIZE_MUL / (ps if ps > 0.01 else 1.0))
 	_update_position()
 	play(&"loop")
 

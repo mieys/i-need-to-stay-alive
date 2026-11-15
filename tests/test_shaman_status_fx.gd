@@ -77,12 +77,17 @@ func test_burn_status_fx_is_pixel_art_loop() -> void:
 		assert(spr.sprite_frames.has_animation("burn"), "%s 'burn' animasyonunu taşımalı" % spr.name)
 		## Ateş: TEK 9 karelik fx_burn_fire_v2 sayfası (kullanıcı isteğiyle eski 14'er karelik 4 varyantın yerine, bkz.
 		## fx_burn_status.gd başı); duman varyantları hâlâ 14 kare. (2026-10-03 test güncellemesi)
-		var want: int = 9 if spr == fire else 14
+		## Madde 551 (2026-11-10): ateş = yer alevi sayfası (yer_alevi), döngüsü 5 kare + ayrı 2 karelik "ignite" tutuşması.
+		## 2026-11-13: ateş = kullanıcının yanma GIF'i (yanma_gif, 10 kare döngü).
+		var want: int = 10 if spr == fire else 14
 		assert(spr.sprite_frames.get_frame_count("burn") == want,
 			"%s %d kare olmalı, bulunan: %s" % [spr.name, want, spr.sprite_frames.get_frame_count("burn")])
 		assert(spr.sprite_frames.get_animation_loop("burn"), "%s DÖNGÜLÜ olmalı" % spr.name)
 	## Kullanıcı isteği: "layer sıralamaları düşman bedeni-duman-ateş olacak" -
 	## duman arkada, ateş önde.
+	assert(fire.sprite_frames.has_animation("ignite") and not fire.sprite_frames.get_animation_loop("ignite"), "Ateş tek seferlik 'ignite' tutuşmasını taşımalı")
+	## Yer alevi karakter pikselinde çizilir: efektin/yaratığın ölçeği ne olursa olsun dünya ölçeği 0,903 (iki eksende aynı).
+	assert(absf(fire.global_scale.x - 0.903) < 0.01 and absf(fire.global_scale.y - 0.903) < 0.01, "yer alevi dünya ölçeği 0,903 olmalı: %s" % fire.global_scale)
 	assert(fire.z_index > smoke.z_index,
 		"Ateş dumanın ÖNÜNDE olmalı (z_index), bulunan fire=%s smoke=%s" % [fire.z_index, smoke.z_index])
 	inst.queue_free()

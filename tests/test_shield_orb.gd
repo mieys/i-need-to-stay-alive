@@ -55,7 +55,13 @@ func test_percent_by_tier_and_icons() -> void:
 		orb.free()
 	var small: Area2D = _make_orb(1)
 	var large: Area2D = _make_orb(2)
-	assert((small.get_node("Sprite2D") as Sprite2D).texture.get_width() < (large.get_node("Sprite2D") as Sprite2D).texture.get_width(), "buyuk orb daha iri")
+	## Mana Kalkanı İksiri (2026-11-11): iki kademe kullanıcının 32x32 şişe çizimleri (yiyecekle aynı boy, tam 1x), kademe başına AYRI doku.
+	var small_tex: Texture2D = (small.get_node("Sprite2D") as Sprite2D).texture
+	var large_tex: Texture2D = (large.get_node("Sprite2D") as Sprite2D).texture
+	assert(small_tex != large_tex, "iki kademe ayni dokuyu gosteriyor")
+	assert(small_tex.get_width() == 32 and small_tex.get_height() == 32, "kademe 1 sisesi 32x32 olmali")
+	assert(large_tex.get_width() == 32 and large_tex.get_height() == 32, "kademe 2 sisesi 32x32 olmali")
+	assert(not small.has_node("Sparkle") and not large.has_node("Sparkle"), "sise uzerinde eski orb parlamasi olmamali")
 	_cleanup()
 
 

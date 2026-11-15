@@ -491,7 +491,9 @@ def main():
     db = strip(debris_frames())
     rb = strip([rise_frame(i, 'back') for i in range(RISE_FRAMES)])
     rf = strip([rise_frame(i, 'front') for i in range(RISE_FRAMES)])
-    for name, arr in (('disc', ds), ('break_back', bb), ('break_front', bf), ('ground', gs), ('rise_back', rb), ('rise_front', rf), ('debris', db)):
+    ## disc.png artık yazılmaz: darbe mührü oyundan kalktı (madde 572, darbe = baloncuk yüzeyi shaders/kalkan_darbe.gdshader);
+    ## disc_sheet önizleme/kenar taraması için duruyor.
+    for name, arr in (('break_back', bb), ('break_front', bf), ('ground', gs), ('rise_back', rb), ('rise_front', rf), ('debris', db)):
         # kenar taraması: hiçbir kare tuvalin kenarına değmemeli
         Image.fromarray(arr, 'RGBA').save(os.path.join(OUT, name + '.png'))
         print('  assets/fx/mana_shield/%s.png %dx%d' % (name, arr.shape[1], arr.shape[0]))

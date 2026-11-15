@@ -66,6 +66,7 @@ func _sample(player: Node2D) -> void:
 		var on: bool = fx != null and is_instance_valid(fx)
 		_edge("own.isin", on)
 		_edge("own.delme", on and (w.get("_beam_extra_targets") as Array).size() > 0)
+		_edge("own.sacilma", on and (fx.get("_scatter") as CanvasItem).visible)
 		var beh: Node = w.get("enchant_behavior")
 		var tgt: Node = w.get("_beam_target")
 		_edge("own.kamasma", on and beh != null and is_instance_valid(tgt) and float(beh.call("beam_glow", tgt)) >= 2.0)
@@ -75,6 +76,9 @@ func _sample(player: Node2D) -> void:
 			var on: bool = fx != null and is_instance_valid(fx)
 			_edge("pup.isin", on)
 			_edge("pup.delme", on and fx.get("pierce") == true)
+			## madde 551: kuklada ışık saçılması (temelde ışın ucunda, finalde ağdan gelen "sp") + finalde rengarenk halkalar
+			_edge("pup.sacilma", on and (fx.get("_scatter") as CanvasItem).visible)
+			_rise("pup.halka_takimi", (fx.get("_ring_sets") as Array).size() if on else 0)
 			var vis: int = 0
 			if on:
 				for rec in (fx.get("_impacts") as Array):

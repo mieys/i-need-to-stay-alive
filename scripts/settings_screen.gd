@@ -22,6 +22,7 @@ const SunCloudsScript := preload("res://scripts/sun_clouds.gd")
 const COL_X := 660.0
 const COL_Y := 150.0
 const COL_W := 840.0
+const ROWS_BOTTOM := 940.0 ## satır kaydırma alanının alt kenarı: altındaki 952'de klavye ipucu satırları var
 const ROW_H := 64.0
 const SLIDER_W := 300.0
 const VALUE_W := 90.0
@@ -241,6 +242,7 @@ var _cat_btns: Array[Button] = []
 var _cats: Array = [Cat.GENEL, Cat.GRAFIK, Cat.TUSLAR]
 var _phone: bool = false
 var _col: VBoxContainer = null
+var _rows_scroll: ScrollContainer = null ## yalnız masaüstü kabuğunda (telefonun kendi "Scroll"u var)
 var _hint_holder: Control = null
 var _rows: Array[Dictionary] = []
 var _focus: int = 0
@@ -303,8 +305,17 @@ func _ready() -> void:
 	_col = DK.v(0)
 	_col.name = "Rows"
 	_col.custom_minimum_size.x = COL_W
-	add_child(_col)
-	_col.position = Vector2(COL_X, COL_Y)
+	## Satırlar ekrana sığmayınca (GENEL ~1300 px, tuval 1080) kaydırılır: eskiden sabit VBox'tı, OYUN bölümü ekranın altında
+	## kalıp erişilemiyordu (2026-11-10 oyuncu bildirimi). Fare tekeri kendiliğinden, W/S odağı `_move_focus` kaydırır.
+	_rows_scroll = ScrollContainer.new()
+	_rows_scroll.name = "RowsScroll"
+	_rows_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_rows_scroll.mouse_filter = Control.MOUSE_FILTER_PASS
+	add_child(_rows_scroll)
+	_rows_scroll.position = Vector2(COL_X, COL_Y)
+	_rows_scroll.size = Vector2(COL_W, ROWS_BOTTOM - COL_Y)
+	_rows_scroll.custom_minimum_size = _rows_scroll.size
+	_rows_scroll.add_child(_col)
 	_hint_holder = Control.new()
 	_hint_holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_hint_holder)
@@ -326,6 +337,8 @@ func _set_category(c: int, with_sound: bool) -> void:
 		_col.remove_child(ch)
 		ch.queue_free()
 	_rows.clear()
+	if _rows_scroll:
+		_rows_scroll.scroll_vertical = 0 ## yeni sekme hep en üstten başlar
 	match _cat:
 		Cat.GENEL:
 			_build_genel()
@@ -799,13 +812,42 @@ func _move_focus(d: int) -> void:
 	if n != _focus:
 		_focus = n
 		_update_focus()
+		_scroll_focus_into_view()
+
+
+## W/S ile odaklanan satırı kaydırma alanında görünür tutar. Yalnız klavye/kumanda hareketinde (fare üstünde gezerken
+## `_focus_row` kaydırmaz: kenardaki yarım satıra gelince liste kaçıp fareyi başka satıra düşürürdü). Düzen bir kare sonra
+## oturduğu için bir kare beklenir.
+func _scroll_focus_into_view() -> void:
+	if _rows_scroll == null or not is_inside_tree():
+		return
+	await get_tree().process_frame
+	if not is_instance_valid(_rows_scroll) or _focus < 0 or _focus >= _rows.size():
+		return
+	var panel: Control = _rows[_focus]["panel"]
+	if is_instance_valid(panel) and panel.is_inside_tree():
+		_rows_scroll.ensure_control_visible(panel)
 
 
 ## ------------------------------------------------------------------ tuş atama dinleme (eski keybind_menu.gd mantığı)
+## Kumanda sütunu dinlerken iptal tuşu yok (basılan HER düğme atanır - B / Start dahil; klavyede ESC iptal eder). Kumanda denetimi 547:
+## yanlışlıkla dinlemeye geçen kumandalı oyuncu bir düğmeyi istemeden atamasın diye 5 sn içinde basış gelmezse dinleme kendiliğinden biter.
+const LISTEN_PAD_TIMEOUT_MS := 5000
+var _listen_deadline_ms: int = 0
+
+
+func _process(_delta: float) -> void:
+	if _listen_deadline_ms > 0 and Time.get_ticks_msec() >= _listen_deadline_ms:
+		_listen_deadline_ms = 0
+		if _listen_action != "" and _listen_cell == 1:
+			_cancel_listen()
+
+
 func _start_listen(r: Dictionary, cell: int) -> void:
 	_cancel_listen()
 	_listen_action = r["action"]
 	_listen_cell = cell
+	_listen_deadline_ms = Time.get_ticks_msec() + LISTEN_PAD_TIMEOUT_MS if cell == 1 else 0
 	_listen_row = r
 	(r["ctrl"] as KeyCells).listening = cell
 	(r["ctrl"] as KeyCells).queue_redraw()
@@ -821,6 +863,7 @@ func _cancel_listen() -> void:
 	_listen_action = ""
 	_listen_cell = -1
 	_listen_row = {}
+	_listen_deadline_ms = 0
 
 
 func _finish_listen() -> void:

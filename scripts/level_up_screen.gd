@@ -87,7 +87,7 @@ const UPGRADES = [
 	## 2026-10-10 (kullanıcı: "level atlama kartlarından gelen kalkan delme statlarını kaldır"): "shield_pen_percent" kartı havuzdan çıktı; stat eşya/ruhani yetenekten gelir
 	## (player.gd apply_upgrade dalı duruyor, kayıtlı eski kartlar bozulmasın).
 	{"id": "exp_gain", "title": "Tecrübe Kazanımı", "desc": "+%5", "cat": "Yardımcı", "color": CAT_UTILITY},
-	{"id": "luck", "title": "Şans", "desc": "+1", "cat": "Yardımcı", "color": CAT_UTILITY},
+	{"id": "luck", "title": "Şans", "desc": "+3", "cat": "Yardımcı", "color": CAT_UTILITY},
 	{"id": "dodge", "title": "Sıvışma", "desc": "+%2.5", "cat": "Savunma", "color": CAT_DEFENSE},
 	{"id": "shield_amount", "title": "Mana Kalkanı Miktarı", "desc": "+%5", "cat": "Savunma", "color": CAT_DEFENSE},
 	{"id": "cooldown_reduction", "title": "Bekleme Süresi Azaltma", "desc": "-%4", "cat": "Yardımcı", "color": CAT_UTILITY},
@@ -208,9 +208,8 @@ func _ready() -> void:
 	_wire_card_hover_feedback()
 	reroll_button.pressed.connect(_on_reroll_pressed)
 	_refresh_reroll_button()
-	## Kullanıcı isteği (2026-09-28): "pardon reroll olmasın" - evrim kartlarında karıştırma yok.
+	## Evrim kartlarında karıştırma: yalnız koşu başına ücretsiz hak (2026-11-13; eskiden 2026-09-28 "pardon reroll olmasın" ile kapalıydı).
 	if _evo_mode:
-		reroll_button.visible = false
 		## Üç geniş kart ekranın sağına kadar uzanır - sağ sütundaki görev satırları (katman 40) üçüncü kartın üstüne
 		## binmesin diye ekran onların üstüne alınır (ipucu/geri sayım katmanları 50/90+ yine üstte).
 		layer = EVO_LAYER
@@ -434,7 +433,11 @@ func _animate_cards_in() -> void:
 ## ağırlıklı bir dağılım sağlıyor.
 const ATTACK_CATEGORY_WEIGHT_BONUS := 0.5
 
-func _weighted_sample(pool: Array, count: int) -> Array:
+## Madde 637: kart ağırlığı ayrıca OYNAYIŞ PROFİLİYLE çarpılır (build_affinity.gd: abanılan statın kartı en çok x1,6); son
+## Affinity.EXPLORE_PICKS kart profilsiz (keşif). prof boşsa eski davranış.
+const BuildAffinityScript := preload("res://scripts/build_affinity.gd")
+
+func _weighted_sample(pool: Array, count: int, prof: Dictionary = {}) -> Array:
 	var working: Array = pool.duplicate()
 	var result: Array = []
 	for i in range(count):
@@ -442,8 +445,11 @@ func _weighted_sample(pool: Array, count: int) -> Array:
 			break
 		var weights: Array = []
 		var total: float = 0.0
+		var use_prof: bool = not prof.is_empty() and i < count - BuildAffinityScript.EXPLORE_PICKS
 		for item in working:
 			var w: float = 1.0 + ATTACK_CATEGORY_WEIGHT_BONUS if item["cat"] == "Saldırı" else 1.0
+			if use_prof:
+				w *= BuildAffinityScript.card_weight(prof, str(item["id"]))
 			weights.append(w)
 			total += w
 		var r: float = randf() * total
@@ -485,9 +491,11 @@ func _populate_cards() -> void:
 		if available.size() < stat_need:
 			available = UPGRADES.duplicate() ## neredeyse hiçbir bedel ödenemiyor: kart yine çıkar, bedel zeminde yutulur (_trade_apply_stat)
 		special_avail = special_ids.duplicate()
-	var pool: Array = _weighted_sample(available, stat_need)
+	var prof: Dictionary = BuildAffinityScript.profile(player)
+	var pool: Array = _weighted_sample(available, stat_need, prof)
 	if not special_avail.is_empty():
-		var sc: Dictionary = LevelSpecialCardsScript.as_card(str(special_avail[randi() % special_avail.size()]))
+		var si: int = BuildAffinityScript.pick_index(special_avail.map(func(id) -> float: return BuildAffinityScript.card_weight(prof, str(id))))
+		var sc: Dictionary = LevelSpecialCardsScript.as_card(str(special_avail[si]))
 		sc["color"] = CAT_ATTACK if str(sc["kind"]) == "class" else CAT_UTILITY
 		pool.append(sc)
 		pool.shuffle() ## özel kart hep aynı sırada olmasın
@@ -1227,6 +1235,8 @@ func _scaled_desc_value(raw_desc: String, tier: int, id: String = "") -> String:
 		scaled = TierSystem.shield_regen_card_for_tier(tier) ## 0,8/1,2/1,6/2,0 (madde 380)
 	elif id == "heal_power":
 		scaled = TierSystem.heal_power_card_for_tier(tier) * 100.0 ## %2/3/4/5 (madde 380)
+	elif id == "luck":
+		scaled = TierSystem.luck_card_for_tier(tier) ## 3/3,9/4,8/5,7 (madde 595; player.gd ile tek kaynak - eskiden kart +1 yazıp 1,5 veriyordu)
 	else:
 		scaled = rest.to_float() * (1.0 + float(tier - 1) * 0.3)
 	var formatted: String
@@ -1282,9 +1292,15 @@ var _rerolls_this_screen: int = 0
 ## Kalıcı "Ücretsiz Karıştırma" geliştirmesi KART BAŞINA geçerli: bu ekranda harcanan bedava karıştırma. Ekran her level atlamada
 ## yeniden oluşturulduğu için sayaç her kartta sıfırdan başlar (eskiden hak koşu boyunca tek seferdi, GameManager.free_rerolls_left).
 var _free_rerolls_used: int = 0
+## EVRİM kartları (5 levelde bir; 2026-11-13, kullanıcı: "oyun başına en fazla 2" - normal level kartları DEĞİL): hak KOŞU BAŞINA,
+## havuz GameManager.free_evo_rerolls_left'te (1 + kalıcı "Evrim Karıştırma" geliştirmesi). Altınla karıştırma YOK, hak bitince düğme pasif.
+## Karıştırmalarda daha önce gösterilen evrimler (_shown_evo_ids) havuz yettiği sürece tekrar gelmez.
+var _shown_evo_ids: Array = []
 
 
 func _free_rerolls_left() -> int:
+	if _evo_mode:
+		return maxi(GameManager.free_evo_rerolls_left, 0)
 	return maxi(GameManager.free_rerolls_per_card - _free_rerolls_used, 0)
 
 
@@ -1402,6 +1418,12 @@ func _apply_kit_style() -> void:
 func _refresh_reroll_button() -> void:
 	## Kalıcı "Ücretsiz Karıştırma" geliştirmesi (Ruh Mağazası): her level atlama kartında bir kez bedava.
 	## Madde 456: kart sütununda da satırlarınki gibi "Yeniden Karıştır (...)" (eski "KARIŞTIR · ..." - "·" ayırıcı yapay zekâ tadı listesinde).
+	if _evo_mode:
+		## Kalan hak sayısı sonda (" x2"): msgid'ler değişmesin diye mevcut metin tr() ile alınıp sayı eklenir.
+		reroll_button.text = "%s x%d" % [tr("Karıştır\nÜCRETSİZ" if MobileUIScript.enabled else "Yeniden Karıştır (ÜCRETSİZ)"),
+			_free_rerolls_left()]
+		reroll_button.disabled = _has_chosen or _free_rerolls_left() <= 0 or not _evo_reroll_possible()
+		return
 	if _free_rerolls_left() > 0:
 		reroll_button.text = "Karıştır\nÜCRETSİZ" if MobileUIScript.enabled else "Yeniden Karıştır (ÜCRETSİZ)"
 		reroll_button.disabled = _has_chosen
@@ -1411,14 +1433,51 @@ func _refresh_reroll_button() -> void:
 	reroll_button.disabled = GameManager.gold < cost or _has_chosen
 
 
+## Evrim havuzunda şu an gösterilenlerden başka evrim var mı (yoksa karıştırmak aynı kartları getirir, hak harcanmasın).
+func _evo_reroll_possible() -> bool:
+	var player := get_tree().get_first_node_in_group("player")
+	if player == null or not ("skill_evolutions" in player):
+		return false
+	var shown: Array = _evo_offers.map(func(e: Dictionary) -> String: return str(e["id"]))
+	return SkillEvolutions.available(GameManager.selected_char_id, player.skill_evolutions, screen_level).any(
+		func(e: Dictionary) -> bool: return not shown.has(str(e["id"])))
+
+
+## Evrim kartlarını yeniden çeker: önce hiç gösterilmemişler, havuz yetmezse eskiler (karışık sırayla).
+func _reroll_evolution_offers() -> void:
+	var player := get_tree().get_first_node_in_group("player")
+	if player == null or not ("skill_evolutions" in player):
+		return
+	for e: Dictionary in _evo_offers:
+		if not _shown_evo_ids.has(str(e["id"])):
+			_shown_evo_ids.append(str(e["id"]))
+	var pool: Array = SkillEvolutions.available(GameManager.selected_char_id, player.skill_evolutions, screen_level)
+	pool.shuffle()
+	var fresh: Array = pool.filter(func(e: Dictionary) -> bool: return not _shown_evo_ids.has(str(e["id"])))
+	var stale: Array = pool.filter(func(e: Dictionary) -> bool: return _shown_evo_ids.has(str(e["id"])))
+	var n: int = _evo_offers.size()
+	_evo_offers = (fresh + stale).slice(0, n)
+
+
 func _on_reroll_pressed() -> void:
+	if _has_chosen:
+		return
+	if _evo_mode:
+		if _free_rerolls_left() <= 0 or not _evo_reroll_possible():
+			return
+		GameManager.free_evo_rerolls_left -= 1
+		_reroll_evolution_offers()
+		_populate_evolution_rows()
+		_refresh_reroll_button()
+		_animate_cards_in()
+		return
 	if _free_rerolls_left() > 0:
 		_free_rerolls_used += 1
 	else:
 		var cost: int = _reroll_cost()
 		if GameManager.gold < cost:
 			return
-		GameManager.gold -= cost
+		GameManager.spend_shop_gold(cost)
 		_rerolls_this_screen += 1
 	_populate_cards()
 	_refresh_reroll_button()
@@ -1446,16 +1505,17 @@ func _on_reroll_pressed() -> void:
 func _on_card_pressed(id: String, tier: int, card: Button) -> void:
 	if _has_chosen:
 		return
-	if _market_view:
-		_market_pick(id, tier, card)
-		return
-	_has_chosen = true
 	## Seçme sesi (madde 533, kullanıcının sesleri; 2026-11-06'da kaldırılan card_pick.wav'ın yerine): level kartı / evrim kartı ayrı.
 	## Kökte çalar - ekran seçimden kısa süre sonra kapanır, ses kesilmesin.
+	## Masaüstünde kartlar pazar sütunundan seçilir (_market_view -> _market_pick): ses o dalın ÖNÜNDE olmalı, yoksa hiç çalmaz.
 	if _evo_mode:
 		_play_root_sfx("pick", EVO_PICK_STREAM, EVO_PICK_DB)
 	else:
 		_play_root_sfx("pick", CARD_PICK_STREAM, CARD_PICK_DB)
+	if _market_view:
+		_market_pick(id, tier, card)
+		return
+	_has_chosen = true
 	if is_instance_valid(reroll_button):
 		reroll_button.disabled = true
 	for i in range(cards.size()):
@@ -2114,7 +2174,13 @@ func _size_evolution_boxes() -> void:
 	var row: Control = get_node_or_null("EvoCards") as Control
 	if row:
 		row.offset_bottom = row.offset_top + h
+	## Karıştır düğmesi kartların hemen altında, geri sayım onun da altında (kartlar uzunsa sabit REROLL_TOP kartlara binerdi).
+	var mid: float = get_viewport().get_visible_rect().size.y * 0.5
+	var below: float = EVO_BOX_TOP + h + EVO_COUNTDOWN_GAP - mid
+	if is_instance_valid(reroll_button) and reroll_button.visible:
+		reroll_button.offset_top = below
+		reroll_button.offset_bottom = below + REROLL_SIZE.y
+		below += REROLL_SIZE.y + 12.0
 	if countdown_panel:
-		var mid: float = get_viewport().get_visible_rect().size.y * 0.5
-		countdown_panel.offset_top = EVO_BOX_TOP + h + EVO_COUNTDOWN_GAP - mid
-		countdown_panel.offset_bottom = countdown_panel.offset_top + 74.0
+		countdown_panel.offset_top = below
+		countdown_panel.offset_bottom = below + 74.0

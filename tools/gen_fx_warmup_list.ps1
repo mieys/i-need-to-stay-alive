@@ -63,10 +63,18 @@ $partial = ($Chars -ne "" -or $Weapons -ne "")
 if ($NoWrite -or $marks -eq 0) { $sorted; return }
 if ($Replace -and $partial) { Write-Host "-Replace kismi kosuyla kullanilmaz (listeyi ezer)"; $sorted; return }
 $dst = Join-Path $proj "scripts\fx_warmup_list.gd"
+$notes = @{}
 if (-not $Replace -and (Test-Path $dst)) {
 	$union = New-Object System.Collections.Generic.HashSet[string]
 	foreach ($r in $sorted) { [void]$union.Add($r) }
-	foreach ($l in (Get-Content $dst -Encoding UTF8)) { if ($l -match '^\s*"(res://[^"]+)",?\s*$') { [void]$union.Add($Matches[1]) } }
+	## Elle eklenmiş AÇIKLAMALI satırlar ("...", ## elle: toplayıcı yakalamaz) da korunur: eskiden desen yalnız çıplak satırı tanıyor, açıklamalı
+	## satırı birleştirmede DÜŞÜRÜYORDU (madde 550: Matthew nova + Pompalı gövde kaybolmuştu).
+	foreach ($l in (Get-Content $dst -Encoding UTF8)) {
+		if ($l -match '^\s*"(res://[^"]+)",?\s*(##.*)?$') {
+			[void]$union.Add($Matches[1])
+			if ($Matches[2]) { $notes[$Matches[1]] = $Matches[2].TrimEnd() }
+		}
+	}
 	$sorted = @($union) | Sort-Object
 	Write-Host ("mevcut listeyle birlestirildi: {0} kaynak" -f $sorted.Count)
 }
@@ -78,7 +86,7 @@ $sb = New-Object System.Text.StringBuilder
 [void]$sb.AppendLine("## scripts/fx_warmup.gd bunları oyun açılırken kare başına kısa bir bütçeyle yükleyip TUTAR; ilk kullanımda ~10-40 ms'lik takılma olmaz.")
 [void]$sb.AppendLine("")
 [void]$sb.AppendLine("const PATHS: Array[String] = [")
-foreach ($r in $sorted) { [void]$sb.AppendLine("`t`"$r`",") }
+foreach ($r in $sorted) { if ($notes.ContainsKey($r)) { [void]$sb.AppendLine("`t`"$r`", $($notes[$r])") } else { [void]$sb.AppendLine("`t`"$r`",") } }
 [void]$sb.AppendLine("]")
 [System.IO.File]::WriteAllText($dst, $sb.ToString().Replace("`r`n", "`n"), (New-Object System.Text.UTF8Encoding($false)))
 Write-Host "yazildi: $dst"

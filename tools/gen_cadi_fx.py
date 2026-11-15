@@ -269,16 +269,16 @@ def q_stream_frames(pose='side'):
     Yerdeki bulut bu akışın indiği noktada doğar - duman şişeden çıkıyor görünür."""
     (mx, my), (fx_, fy) = ST_POSES[pose]
     frames = []
-    n = 5
+    n = 4
     for f in range(8):
         t = f / 8
-        cv = Canvas(ST_W, ST_H)
-        puffs = []
-        for k in range(n):
+        img = Image.new('RGBA', (ST_W, ST_H), (0, 0, 0, 0))
+        for k in range(n):  # 2026-11-15: duman topları yerine ağızdan yere akan minik baloncuk dizisi
             s = (k + t) / n
-            puffs.append((mx + fx_ * s + math.sin(TAU * (s + t)) * 0.8, my + fy * s ** 1.15, (1.5 + 3.6 * s) * min(1.0, (1.0 - s) / 0.2 + 0.3)))
-        clean_cloud(cv, puffs, SMKF, under=1, shade=3, min_r=1.0, rim=(1, 1))  # ince akışta kalın ışık bandı her şeyi beyazlatıyordu
-        frames.append(cv.rgba.copy())
+            x = int(round(mx + fx_ * s + math.sin(TAU * (s + t)) * 0.8))
+            y = int(round(my + fy * s ** 1.15))
+            bub_ring(img, x, y, 3 if s < 0.6 else 4, ('sari', 'nane')[k % 2])
+        frames.append(np.array(img))
     return frames
 
 
@@ -331,11 +331,50 @@ def _smoke_puffs_v(g, t, e):
     return out
 
 
+# 2026-11-15 (kullanıcı: "zehirle alakalı şeylerin duman efektini kaldır, sadece minik baloncuk efekti çıksın"): bulut artık DUMAN
+# değil, hasar elipsinin içinde yükselip patlayan MİNİK BALONCUKLAR (yaratıktaki zehir göstergesiyle - gen_zehir_baloncuk.py - aynı
+# halka çizimi + palet). _smoke_puffs / _smoke_puffs_v / clean_cloud eski duman düzeni; artık bulut/akış tarafından çağrılmıyor.
+from gen_zehir_baloncuk import RINGS as BUB_RINGS, FAMILIES as BUB_FAM, POP1 as BUB_POP1, POP2 as BUB_POP2, draw_ring as bub_ring, draw_pop as bub_pop  # noqa: E402
+
+BUB_SIZES = [3, 3, 4, 4, 5, 5, 5]  # ömür kare kare çap; sonraki kare patlama (döngü = SMOKE_LOOP = 8 kare, dikişsiz)
+BUB_RISE = 8
+BUB_MIN_DIST = 8.0
+BUB_COUNT = {False: 16, True: 13}  # yatay / dikey bulut
+
+
+def _bubble_field(vert):
+    """Elips içinde birbirinden BUB_MIN_DIST uzakta sabit baloncuk doğuş noktaları (önek alt kümesi de dağınık kalır: büyüme/sönüş)."""
+    ox, oy, rx, ry = (SMOKE_VOX, SMOKE_VOY, 23.0, 20.0) if vert else (SMOKE_OX, SMOKE_OY, 31.0, 15.0)
+    rng = random.Random(21 if vert else 17)
+    pts = []
+    for _ in range(6000):
+        if len(pts) == BUB_COUNT[vert]:
+            break
+        x, y = rng.uniform(-1, 1), rng.uniform(-1, 1)
+        if x * x + y * y > 1.0:
+            continue
+        px, py = int(round(ox + x * rx)), int(round(oy + y * ry))
+        if all((px - qx) ** 2 + (py - qy) ** 2 >= BUB_MIN_DIST ** 2 for qx, qy, _s, _f in pts):
+            pts.append((px, py, rng.randrange(SMOKE_LOOP), rng.choice(('sari', 'nane'))))
+    assert len(pts) == BUB_COUNT[vert], len(pts)
+    return pts
+
+
 def smoke_frame(g, t, e, vert=False):
-    """g büyüme (0..1), t döngü evresi, e sönüş (0..1)."""
-    cv = Canvas(SMOKE_W, SMOKE_H)
-    clean_cloud(cv, (_smoke_puffs_v if vert else _smoke_puffs)(g, t, e), SMKF, scallop=True)
-    return cv.rgba.copy()
+    """g büyüme (0..1: baloncuk sayısı), t döngü evresi (0..1), e sönüş (0..1)."""
+    pts = _bubble_field(vert)
+    n = max(1, int(round(len(pts) * g * (1.0 - e))))
+    phase = int(round(t * SMOKE_LOOP)) % SMOKE_LOOP
+    img = Image.new('RGBA', (SMOKE_W, SMOKE_H), (0, 0, 0, 0))
+    life = len(BUB_SIZES)
+    for (x, y, start, fam) in pts[:n]:
+        age = (phase - start) % SMOKE_LOOP
+        if age < life:
+            cx = x + ((0, 0, 1, 1, 0, 0, -1, -1)[age % 8] if age > 2 else 0)
+            bub_ring(img, cx, y - int(round(BUB_RISE * age / (life - 1))), BUB_SIZES[age], fam)
+        else:
+            bub_pop(img, x, y - BUB_RISE - 1, BUB_POP1, fam)
+    return np.array(img)
 
 
 def smoke_frames(vert=False):

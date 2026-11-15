@@ -9,9 +9,9 @@ extends "res://scripts/enchant_behavior.gd"
 const PULSE_GAP := 0.25
 const COLLIDE_DIST := 26.0
 ## Hedef sınırı (2026-10-19 maç analizi: dalga yarıçaptaki HER düşmana saldırı gücünün %70-90'ını vuruyordu, hasar düşman sayısıyla doğrusal
-## büyüyordu - 100+ yaratıklı kademelerde tek topuz takım hasarının %36'sıydı): merkeze en yakın FULL_TARGETS düşman tam hasar alır, sonrakiler
+## büyüyordu - 100+ yaratıklı kademelerde tek topuz takım hasarının %36'sıydı; 2026-11-14 denge turu: 8 -> 4 hedef, dalga %70 -> %50): merkeze en yakın FULL_TARGETS düşman tam hasar alır, sonrakiler
 ## EXTRA_DAMAGE_MULT katı. Sarsma / sersemletme herkese uygulanır; çarpışma hasarı yalnız tam hasar alan düşmanlar arasında.
-const FULL_TARGETS := 8
+const FULL_TARGETS := 4
 const EXTRA_DAMAGE_MULT := 0.35
 
 

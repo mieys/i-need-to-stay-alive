@@ -53,7 +53,7 @@ func test_alternative_profile_flags_and_files() -> void:
 	for p: String in paths:
 		assert(ResourceLoader.exists(p))
 	assert(not MapProfiles.is_selectable(ALT) and MapProfiles.is_selectable("ana")) ## madde 445: karışık harita seçimden kalktı
-	assert(MapProfiles.selectable_ids() == ["ana", "bataklik", "col", "batik_nekropol", "taskin_hisar", "lagim_agi"]) ## madde 449: Batık Nekropol, Kemik Katakombu'nun yerine; madde 524: Kara Bataklık; Altın Kumlar (çöl)
+	assert(MapProfiles.selectable_ids() == ["ana", "bataklik", "col", "kis", "batik_nekropol"]) ## madde 449: Batık Nekropol, Kemik Katakombu'nun yerine; madde 524: Kara Bataklık; Altın Kumlar (çöl); madde 629: Ayaz Dağı (kış); madde 626: Lağım Ağı geçici kapalı
 	_set_map("ana")
 
 
@@ -208,9 +208,10 @@ func test_desert_profile_flags_spawn_layers_and_weather() -> void:
 	_set_map("col")
 	assert(MapProfiles.current_id() == "col")
 	assert(MapProfiles.is_selectable("col"))
-	for f: String in ["orman_gorselleri", "hava", "gorevler", "calilik", "col_fx"]:
+	## su_efekti: vaha suyu ana haritanın su shader'ını + pişmiş kıyı/akış dokularını kullanır (col_su.gdshader, profil "su_doku")
+	for f: String in ["orman_gorselleri", "hava", "gorevler", "calilik", "col_fx", "su_efekti"]:
 		assert(MapProfiles.feature(f))
-	for f: String in ["ev_acilisi", "seyyar_satici", "madenler", "kenar_bekcileri", "zindan_etkilesim", "harita_ayiklama", "su_efekti",
+	for f: String in ["ev_acilisi", "seyyar_satici", "madenler", "kenar_bekcileri", "zindan_etkilesim", "harita_ayiklama",
 			"zemin_gecisi", "bataklik_fx", "tanimsiz_bayrak"]:
 		assert(not MapProfiles.feature(f))
 	assert(MapFrame.play_cells() == Meta.PLAY_CELLS)
@@ -246,6 +247,73 @@ func test_desert_profile_flags_spawn_layers_and_weather() -> void:
 	## zemin ve su malzemeleri bake'te kuruldu
 	assert(((h.get_node("Yer/Zemin Toprak") as TileMapLayer).material as ShaderMaterial).shader.resource_path == "res://scenes/col_zemin.gdshader")
 	assert(((h.get_node("Su/Su") as TileMapLayer).material as ShaderMaterial).shader.resource_path == "res://scenes/col_su.gdshader")
+	assert(main.get_node_or_null("HouseInterior") == null and main.get_node_or_null("TravelingMerchant") == null)
+	assert(main.get_node_or_null("WorldEventManager") != null)
+	main.free()
+	_set_map("ana")
+
+
+## AYAZ DAĞI (kış, 2026-11-12): profil bayrakları, oyun alanı 256x256, doğuş, kar yağışı / hava dönüşümü, ısınma noktaları (ileride üşüme /
+## ısınma mekaniği), katmanlar + malzemeler (kar zemini, yürünür buz, sıcak kaynak).
+func test_winter_profile_flags_spawn_heat_and_layers() -> void:
+	if OS.get_environment("HARITA") != "":
+		return
+	var Meta: GDScript = load("res://scripts/kis_meta.gd")
+	var MapFrame: GDScript = load("res://scripts/map_frame.gd")
+	_set_map("ana")
+	assert(not MapProfiles.snowfall()) ## ana haritada yağmur yağar
+	_set_map("kis")
+	assert(MapProfiles.current_id() == "kis")
+	assert(MapProfiles.is_selectable("kis"))
+	for f: String in ["orman_gorselleri", "hava", "gorevler", "calilik", "kis_fx"]:
+		assert(MapProfiles.feature(f))
+	for f: String in ["ev_acilisi", "seyyar_satici", "madenler", "kenar_bekcileri", "zindan_etkilesim", "harita_ayiklama", "su_efekti",
+			"zemin_gecisi", "bataklik_fx", "col_fx", "tanimsiz_bayrak"]:
+		assert(not MapProfiles.feature(f))
+	assert(MapFrame.play_cells() == Meta.PLAY_CELLS)
+	assert(MapFrame.play_cells().size == Vector2i(256, 256)) ## ana haritanın alanı
+	assert(MapProfiles.spawn_position() == Meta.SPAWN)
+	assert(MapProfiles.minimap_texture() != null)
+	assert(not MapProfiles.water_walkable()) ## sıcak kaynak yürünmez (buz zaten collision'a girmez)
+	assert(MapProfiles.snowfall())
+	assert(MapProfiles.map_weather(2) == 2 and MapProfiles.map_weather(3) == 2) ## kışta sağanak / şimşek yok: kar
+	## ısınma noktaları: her türden en az bir tane, yarıçap pozitif, hepsi oyun alanında
+	var kinds := {}
+	var play := Rect2(Vector2(Meta.PLAY_CELLS.position) * 16.0, Vector2(Meta.PLAY_CELLS.size) * 16.0)
+	for h: Array in Meta.HEAT_SOURCES:
+		kinds[str(h[0])] = true
+		assert(float(h[2]) > 0.0)
+		assert(play.has_point(h[1]))
+	for k: String in ["kamp_atesi", "buyuk_mangal", "mangal", "mesale", "kaplica"]:
+		assert(kinds.has(k))
+	## doğuşun yakınında ısınma noktası var (kamp)
+	var near := false
+	for h: Array in Meta.HEAT_SOURCES:
+		if (h[1] as Vector2).distance_to(Meta.SPAWN) < 200.0:
+			near = true
+	assert(near)
+	var main: Node = _fake_main()
+	for nm: String in ["HouseInterior", "TravelingMerchant", "WorldEventManager"]:
+		var n := Node2D.new()
+		n.name = nm
+		main.add_child(n)
+	assert(MapProfiles.install(main))
+	var h: Node = main.get_node("Harita")
+	for path: String in ["Su/Su", "Su/Su ayrıntılar 2", "Orman parçaları/Orman parçaları", "Orman parçaları/Saklanma Çalılığı",
+			"Shader Eklenecek/Ağaç 0", "Shader Eklenecek/Animasyonsuz çalılar", "Shader Eklenecek/Kayalar 1", "Shader Eklenecek/Çalılar",
+			"Yer/Zemin Toprak", "Yer/Zemin Çimen", "Yer/Buz", "Yer/Patika", "Yer/Kar süsleri", "Yer/Leke"]:
+		var l := h.get_node_or_null(path) as TileMapLayer
+		assert(l != null and not l.get_used_cells().is_empty())
+	var wall: TileMapLayer = h.get_node("Orman parçaları/Orman parçaları")
+	assert(not wall.visible)
+	assert(wall.get_cell_source_id(Vector2i(0, 0)) != -1) ## dış çerçeve geçilmez
+	var sc := Vector2i(int(Meta.SPAWN.x / 16.0), int(Meta.SPAWN.y / 16.0))
+	assert(wall.get_cell_source_id(sc) == -1) ## doğuş açık
+	assert((h.get_node("Su/Su") as TileMapLayer).get_cell_source_id(sc) == -1)
+	assert(((h.get_node("Yer/Zemin Toprak") as TileMapLayer).material as ShaderMaterial).shader.resource_path == "res://scenes/kis_zemin.gdshader")
+	assert(((h.get_node("Yer/Patika") as TileMapLayer).material as ShaderMaterial).shader.resource_path == "res://scenes/kis_zemin.gdshader")
+	assert(((h.get_node("Yer/Buz") as TileMapLayer).material as ShaderMaterial).shader.resource_path == "res://scenes/kis_buz.gdshader")
+	assert(((h.get_node("Su/Su") as TileMapLayer).material as ShaderMaterial).shader.resource_path == "res://scenes/kis_su.gdshader")
 	assert(main.get_node_or_null("HouseInterior") == null and main.get_node_or_null("TravelingMerchant") == null)
 	assert(main.get_node_or_null("WorldEventManager") != null)
 	main.free()

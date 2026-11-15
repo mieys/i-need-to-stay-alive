@@ -95,6 +95,8 @@ const SALVO_DAMAGE_PENALTY: float = 0.25
 ## bir dürtme yapar (kaster weapon.gd _salvo_melee_jab + kukla remote_player.gd _kick_formation_icon AYNI boy/süre); vuruş
 ## ikonun önündeki kısa hatta (geride BACK, önde REACH, hattan MARGIN + gövde yarıçapı). Dünya px'i, menzil kartları ve Talon
 ## Devleşme alanıyla büyür (weapon.gd _salvo_melee_reach).
+## 2026-11-12: yuvadaki 6 px'lik dürtme görünmüyordu -> silaha özel zincir ucu vuruş animasyonu salvo_strike_math.gd (kılıç/tırpan yay,
+## bıçak üç saplama, balyoz kaldır-indir, mızrak/kalkan geri çek-at); SALVO_MELEE_JAB* yalnız kuklada türü tanınmayan silahın yedeği.
 const SALVO_MELEE_REACH: float = 40.0
 const SALVO_MELEE_BACK: float = 12.0
 const SALVO_MELEE_MARGIN: float = 14.0

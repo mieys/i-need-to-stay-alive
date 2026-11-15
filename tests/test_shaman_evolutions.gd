@@ -211,11 +211,10 @@ func test_e1_wider_area_radius_and_aura() -> void:
 	var plain: Node2D = _make_totem(ShieldTotemScene, p)
 	var base_r: float = plain.totem_radius
 	var base_a: float = plain.area_radius
-	var base_scale: Vector2 = (plain.get_node("AreaAura") as AnimatedSprite2D).scale
 	p.apply_skill_evolution("shaman_e1", true)
 	var wide: Node2D = _make_totem(ShieldTotemScene, p)
 	assert(is_equal_approx(wide.totem_radius, base_r * 1.3) and is_equal_approx(wide.area_radius, base_a * 1.3), "alan %%30 büyür: %s / %s" % [wide.totem_radius, wide.area_radius])
-	assert((wide.get_node("AreaAura") as AnimatedSprite2D).scale.is_equal_approx(base_scale * 1.3), "mor aura da büyür")
+	assert(wide.get_node_or_null("AreaAura") == null, "mor alan çemberi çizilmez (madde 557 ek 2: dış halkalar kaldırıldı)")
 	var edge: FakeEnemy = _make_enemy(Vector2(1000.0 + base_a * 1.2, 1000.0)) ## taban alan dışı, büyütülmüş alan içi
 	plain._process_area_damage(0.02)
 	assert(edge.hits.is_empty(), "taban alan dışı")

@@ -45,8 +45,8 @@ const PERSONAL_SCENES: Dictionary = {
 	"fx_evo_gain": true, "fx_evo_shield_refill": true, "fx_evo_spin_spark": true, "fx_evo_kunai_hit": true,
 	"fx_evo_blood_burst": true, "fx_evo_bat_swoop": true,
 	"fx_assasin_dash": true, "fx_assasin_shadow_hit": true, "fx_assasin_slash": true,
-	"fx_buyucu_fastfire": true, "fx_buyucu_surge_spark": true, "fx_buyucu_surge_wave": true, "fx_buyucu_tornado_cast": true,
-	"fx_buyucu_tornado_hit": true, "fx_buyucu_meteor_channel": true, "fx_mage_swap": true, "fx_mage_passive_burst": true,
+	"fx_buyucu_fastfire": true, "fx_buyucu_surge_wave": true, "fx_buyucu_tornado_cast": true,
+	"fx_buyucu_tornado_hit": true, "fx_buyucu_meteor_channel": true, "fx_mage_swap": true, "fx_arcane_blast": true,
 	"fx_blood_splatter": true,
 }
 

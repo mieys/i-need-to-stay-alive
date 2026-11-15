@@ -23,7 +23,8 @@ const BOSS_VOLUME_DB := -5.0
 const MAX_DISTANCE := 1000.0
 
 ## Kendi ses dosyası olmayan aile -> ses ödünç aldığı aile (Minotaur 2026-10-08: ork homurtusu, boss perdesiyle derinleşir).
-const ALIASES := {"minotaur": "ork", "balkabagi": "zombie", "kabak": "slime", "yarasa": "rat", "wendigo": "agac", "banshee": "hayalet", "ucansetan": "iblis"}
+const ALIASES := {"minotaur": "ork", "balkabagi": "zombie", "kabak": "slime", "yarasa": "rat", "wendigo": "agac", "banshee": "hayalet", "ucansetan": "iblis",
+		"goblin": "rat", "gnoll": "ork", "kertenkele": "ork", "pelte": "slime"} ## madde 575: yeni havuzun kendi sesi yok
 
 static var _instance: Node = null
 static var _streams: Dictionary = {} ## aile -> Array[AudioStream] (boş dizi = bu ailenin sesi yok)

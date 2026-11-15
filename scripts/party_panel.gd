@@ -49,6 +49,7 @@ const PartyPixelBarScript: GDScript = preload("res://scripts/party_pixel_bar.gd"
 ## Telefon eski çubuk + bar_value_label (ekran pikseli 9 punto telefonda okunmaz).
 const HudPixelBarScript: GDScript = preload("res://scripts/hud_pixel_bar.gd")
 const MobileUIScript := preload("res://scripts/mobile_ui.gd")
+const TeamsScript := preload("res://scripts/pvp/teams.gd") ## PvPvE: grup paneli yalnız takım arkadaşı (madde 615)
 ## Madde 483 (kullanıcı madde 480 prototiplerinden "B yi beğendim"): MASAÜSTÜNDE grup paneli "B - Tek Konsol": bütün satırların ARKASINDA tek
 ## Gömme Tepsi (paneldeki yan kutu, _ListTray), satır levhaları kalkar (aynı içerik payıyla boş kutu), satırlar arası paneldeki ayraç; portre
 ## yuva çerçeveli (hud_tray_frame.gd) koyu kuyuda, altın düğmesi 42 px koyu yuva + çerçeve + oyundaki altın 2x, ad m5x7 32; "Hasar" tepsinin
@@ -404,6 +405,12 @@ func _build_gift_popup() -> void:
 	# Liste akışının (VBoxContainer) DIŞINDA, kök seviyesinde - böylece
 	# satırların üstünde serbestçe konumlandırılıp en üstte çizilebiliyor.
 	add_child(_gift_popup)
+	## Kumanda (denetim 547): açıkken kumandayla gezilen pencere (gamepad_ui.gd odağı ilk düğmeye verir) + yetenek tuşları oyuna sızmasın
+	## (X/Y/RB aynı zamanda yetenek düğmesi). Düğmeler FOCUS_NONE kalır (klavye odağı çalmasın); kumandayla açılınca geçici olarak odaklanır.
+	## Telefon HUD'u (hud.gd _mobile_modal_open) "gamepad_modal" üyesini tam ekran pencere sayıp dokunmatik arayüzü gizler -> yalnız masaüstü.
+	if tray:
+		_gift_popup.add_to_group(&"gamepad_modal")
+		GameManager.register_blocking_panel(_gift_popup)
 
 
 ## Hasar sıralaması - grup satırlarıyla AYNI levha; başlık + köşede küçük "x", satırlarda sıra/isim/hasar ve altında en çok
@@ -450,7 +457,71 @@ func _build_stats_popup() -> void:
 	add_child(_stats_popup)
 
 
+## ---------------------------------------------------------------- kumanda kısayolları (denetim 547)
+## L3 (party_stats) = Hasar sıralaması aç/kapa, LT (party_gift) = arkadaşa altın gönder penceresi; pencere açıkken LT tekrar = sıradaki arkadaş,
+## A = odaktaki miktar, B / Start / Esc = kapat. Yalnız başka bir pencere (envanter, kart, dükkan...) açık değilken çalışır.
+func _pad_shortcuts() -> void:
+	if not is_visible_in_tree() or is_suppressed() or get_tree().paused:
+		return
+	var g: Node = GameManager.get_node_or_null("GamepadUi")
+	if g != null and bool(g.call("in_game_modal_open", _gift_popup)):
+		return
+	if Input.is_action_just_pressed("party_stats"):
+		_on_stats_button_pressed()
+	elif Input.is_action_just_pressed("party_gift"):
+		_pad_gift_next()
+
+
+## Altın gönderilebilecek (hayatta) arkadaşların eş kimlikleri, sıralı.
+func _pad_ally_ids() -> Array:
+	var ids: Array = []
+	for pid: Variant in _rows.keys():
+		var row: PartyRow = _rows[pid]
+		if row != null and row.gold_button != null and is_instance_valid(row.gold_button) and not row.gold_button.disabled:
+			ids.append(int(pid))
+	ids.sort()
+	return ids
+
+
+func _pad_gift_next() -> void:
+	if not NetworkManager.is_multiplayer_active:
+		return
+	var ids: Array = _pad_ally_ids()
+	if ids.is_empty():
+		return
+	var idx: int = 0
+	if _gift_popup.visible:
+		idx = (ids.find(_gift_target_peer) + 1) % ids.size() ## bulunamazsa (-1) başa döner
+	_on_gold_button_pressed(ids[idx])
+
+
+## Gift penceresinin düğmeleri kumandayla gezilebilsin diye (yalnız kumandayla oynanırken) odaklanır yapılır; kapanınca eski hâline döner.
+func _set_gift_pad_focus(on: bool) -> void:
+	if _gift_popup == null:
+		return
+	for b: Node in _gift_popup.find_children("*", "Button", true, false):
+		(b as Button).focus_mode = Control.FOCUS_ALL if on else Control.FOCUS_NONE
+
+
+## B (kumanda) hasar sıralamasını da kapatır; Esc/Start yalnız altın penceresini kapatır (Esc duraklatmayı açmaya devam etsin).
+func _input(event: InputEvent) -> void:
+	if _gift_popup != null and _gift_popup.visible and event.is_action_pressed("ui_cancel") and not event.is_echo():
+		_hide_gift_popup()
+		GameManager.mark_ui_cancel_consumed()
+		get_viewport().set_input_as_handled()
+		return
+	if event is InputEventJoypadButton and event.pressed and (event as InputEventJoypadButton).button_index == JOY_BUTTON_B \
+			and _stats_popup != null and _stats_popup.visible:
+		var g: Node = GameManager.get_node_or_null("GamepadUi")
+		if g != null and bool(g.call("in_game_modal_open")):
+			return
+		_hide_stats_popup()
+		GameManager.mark_ui_cancel_consumed()
+		get_viewport().set_input_as_handled()
+
+
 func _process(delta: float) -> void:
+	_pad_shortcuts()
 	_refresh_timer += delta
 	if _refresh_timer >= REFRESH_INTERVAL:
 		_refresh_timer = 0.0
@@ -481,7 +552,7 @@ func _current_allies() -> Array:
 		return []
 	var allies: Array = []
 	for node in get_tree().get_nodes_in_group("remote_players"):
-		if is_instance_valid(node):
+		if is_instance_valid(node) and (node.get("peer_id") == null or not TeamsScript.is_enemy(TeamsScript.local_peer(), int(node.get("peer_id")))): ## PvPvE: rakip takım panelde değil (madde 615)
 			allies.append(node)
 	return allies
 
@@ -1021,6 +1092,7 @@ func _on_gold_button_pressed(peer_id: int) -> void:
 
 	var row: PartyRow = _rows.get(peer_id)
 	_gift_popup.visible = true
+	_set_gift_pad_focus(GameManager.pad_hints_active())
 	if row and row.gold_button:
 		_place_popup_left_of(_gift_popup, row.gold_button)
 
@@ -1028,6 +1100,7 @@ func _on_gold_button_pressed(peer_id: int) -> void:
 func _hide_gift_popup() -> void:
 	if _gift_popup:
 		_gift_popup.visible = false
+		_set_gift_pad_focus(false)
 	_gift_target_peer = 0
 
 

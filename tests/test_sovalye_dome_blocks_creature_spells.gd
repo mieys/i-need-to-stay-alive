@@ -29,9 +29,13 @@ class FakePlayer extends Node2D:
 	var paladin_zone_active: bool = false
 	var paladin_zone_radius: float = 126.0
 	var hits: Array = []
+	var dome_hits: Array = [] ## take_paladin_barrier_damage çağrıları: [miktar, saldıran]
 
 	func take_special_damage(amount: float, _source: Node2D, kind: String) -> void:
 		hits.append([amount, kind])
+
+	func take_paladin_barrier_damage(amount: float, attacker: Node2D = null) -> void:
+		dome_hits.append([amount, attacker])
 
 
 func _make(group: String, pos: Vector2, dome: bool) -> FakePlayer:
@@ -121,3 +125,114 @@ func test_vampire_does_not_blink_into_the_dome_but_blinks_normally_otherwise() -
 	var d: float = e.global_position.distance_to(owner_p.global_position)
 	assert(absf(d - AbilitiesScript.VAMPIRE_BLINK_DISTANCE) < 1.0, "hedefin yanına indi: %f" % d)
 	_cleanup()
+
+
+## ---- Kubbe MENZİLLİ atışları EMER (madde 542, kullanıcı: "hasar vermesi lazım kalkana, sonuçta dışarıdan gelenleri absorbe ediyor") ----
+## Eskiden mermi/kemik/ateş topu/boss büyüsü/asit kenara değince hasarsız siliniyor, lazer kenarda kesiliyordu; artık kubbe sahibi
+## `take_paladin_barrier_damage` ile (yakın dövüşçü vuruşuyla aynı yol) hasar alır. Yalnız yetkili kopya (host/tek oyunculu) vurur.
+const PaladinDomeScript := preload("res://scripts/paladin_dome.gd")
+const PlayerScript := preload("res://scripts/player.gd")
+
+
+func _physics_frames(n: int) -> void:
+	for i in range(n):
+		await get_tree().physics_frame
+
+
+func test_absorb_ranged_hit_forwards_the_amount_and_survives_bad_input() -> void:
+	var owner_p: FakePlayer = _make("player", Vector2.ZERO, true)
+	PaladinDomeScript.absorb_ranged_hit(owner_p, 12.0, null)
+	assert(owner_p.dome_hits == [[12.0, null]], "hasar kubbe sahibine aynen iletilir: %s" % str(owner_p.dome_hits))
+	PaladinDomeScript.absorb_ranged_hit(owner_p, 0.0, null)
+	PaladinDomeScript.absorb_ranged_hit(owner_p, -3.0, null)
+	assert(owner_p.dome_hits.size() == 1, "sıfır / eksi hasar çağrılmaz")
+	var shooter := Node2D.new()
+	add_child(shooter)
+	PaladinDomeScript.absorb_ranged_hit(owner_p, 5.0, shooter)
+	assert(owner_p.dome_hits[1][1] == shooter, "saldıran (Yansıtan Kubbe / hasar çarpanı için) iletilir")
+	shooter.free() ## mermiyi atan yaratık uçuşta ölüp silindi: çökmemeli, hasar yine işler (saldıran null)
+	var gone: Node2D = Node2D.new()
+	gone.free()
+	PaladinDomeScript.absorb_ranged_hit(owner_p, 6.0, gone)
+	assert(owner_p.dome_hits.size() == 3 and owner_p.dome_hits[2][1] == null, "silinmiş saldıran null sayılır: %s" % str(owner_p.dome_hits))
+	PaladinDomeScript.absorb_ranged_hit(null, 5.0, null)
+	var plain := Node2D.new()
+	add_child(plain)
+	_track(plain)
+	PaladinDomeScript.absorb_ranged_hit(plain, 5.0, null) ## take_paladin_barrier_damage'ı olmayan düğüm: sessizce yok sayılır
+	_cleanup()
+
+
+func test_ranged_attacks_hit_the_dome_shield_when_authoritative_and_only_then() -> void:
+	var tree: SceneTree = get_tree()
+	var owner_p: FakePlayer = _make("player", Vector2.ZERO, true)
+	## [tür, veri]: hepsi soldan (-230, 0) kubbeye (kenar x=-126) doğru uçar
+	var cases: Array = [
+		["fireball", {"dir": Vector2.RIGHT, "speed": 230.0}],
+		["bone", {"dir": Vector2.RIGHT, "speed": 190.0}],
+		["boss_spell", {"dir": Vector2.RIGHT, "speed": 200.0, "life": 3.0, "radius": 9.0}],
+		["worm_acid", {"dir": Vector2.RIGHT, "speed": 200.0, "range": 600.0}],
+		["demon_fire", {"dir": Vector2.RIGHT, "speed": 300.0, "life": 3.0, "radius": 9.0, "blast": 44.0}],
+	]
+	for c in cases:
+		var kind: String = c[0]
+		var visual: Node2D = AbilitiesScript.spawn_world_fx(tree, kind, Vector2(-230.0, 0.0), c[1], false, null, 0.0)
+		_track(visual)
+		await _physics_frames(110)
+		assert(owner_p.dome_hits.is_empty(), "%s: istemcideki görsel kopya kubbeye hasar vermez: %s" % [kind, str(owner_p.dome_hits)])
+		var real: Node2D = AbilitiesScript.spawn_world_fx(tree, kind, Vector2(-230.0, 0.0), c[1], true, null, 9.0)
+		_track(real)
+		await _physics_frames(110)
+		assert(owner_p.dome_hits.size() == 1 and is_equal_approx(float(owner_p.dome_hits[0][0]), 9.0),
+				"%s: yetkili atış kubbeye tam 1 kez, kendi hasarıyla vurur: %s" % [kind, str(owner_p.dome_hits)])
+		assert(owner_p.hits.is_empty(), "%s: kubbe sahibine 'özel hasar' (normal kalkan yolu) işlemez" % kind)
+		assert(not is_instance_valid(real), "%s: kubbeye çarpan atış söner" % kind)
+		owner_p.dome_hits.clear()
+	_cleanup()
+
+
+func test_enemy_projectile_hits_the_dome_but_the_network_copy_does_not() -> void:
+	var owner_p: FakePlayer = _make("player", Vector2.ZERO, true)
+	var scene: PackedScene = preload("res://scenes/enemy_projectile.tscn")
+	for network_copy in [true, false]:
+		var p: Node2D = scene.instantiate()
+		p.direction = Vector2.RIGHT
+		p.damage = 7.0
+		if network_copy:
+			p.set_meta("network_spawned", true)
+		add_child(p)
+		p.global_position = Vector2(-220.0, 0.0)
+		_track(p)
+		await _physics_frames(90)
+		assert(not is_instance_valid(p), "kubbeye çarpan mermi söner (ağ kopyası dahil)")
+		if network_copy:
+			assert(owner_p.dome_hits.is_empty(), "ağ görsel kopyası hasar vermez: %s" % str(owner_p.dome_hits))
+		else:
+			assert(owner_p.dome_hits.size() == 1 and is_equal_approx(float(owner_p.dome_hits[0][0]), 7.0), "yetkili mermi kubbeye 7 hasar: %s" % str(owner_p.dome_hits))
+	_cleanup()
+
+
+func test_laser_ending_at_the_dome_edge_hits_the_dome_once_for_double() -> void:
+	var tree: SceneTree = get_tree()
+	var owner_p: FakePlayer = _make("player", Vector2.ZERO, true)
+	var origin := Vector2(-500.0, 0.0)
+	var length: float = AbilitiesScript.clip_ray_to_domes(tree, origin, Vector2.RIGHT, 440.0)
+	var data: Dictionary = {"dir": Vector2.RIGHT, "length": length, "warn": 0.05, "fire": 0.4}
+	var beam: Node2D = AbilitiesScript.spawn_world_fx(tree, "laser", origin, data, true, null, 10.0)
+	_track(beam)
+	await get_tree().create_timer(0.7).timeout
+	assert(owner_p.dome_hits.size() == 1, "kubbede biten ışın kubbe sahibini BİR kez vurur: %s" % str(owner_p.dome_hits))
+	assert(is_equal_approx(float(owner_p.dome_hits[0][0]), 10.0 * 2.0), "Röntgen kalkanları 2 katı yıpratır: %s" % str(owner_p.dome_hits))
+	assert(owner_p.hits.is_empty(), "özel hasar yolu kullanılmaz")
+	owner_p.dome_hits.clear()
+	## kubbeye değmeyen ışın (kısa, kubbeye uzak bitiyor) kubbeyi vurmaz
+	var short: Node2D = AbilitiesScript.spawn_world_fx(tree, "laser", origin, {"dir": Vector2.RIGHT, "length": 100.0, "warn": 0.05, "fire": 0.4}, true, null, 10.0)
+	_track(short)
+	await get_tree().create_timer(0.7).timeout
+	assert(owner_p.dome_hits.is_empty(), "kubbeye ulaşmayan ışın kubbeyi vurmaz: %s" % str(owner_p.dome_hits))
+	_cleanup()
+
+
+func test_laser_dome_multiplier_matches_the_player_shield_multiplier() -> void:
+	var laser_script: GDScript = load("res://scripts/enemy_laser.gd")
+	assert(is_equal_approx(float(laser_script.get_script_constant_map()["DOME_SHIELD_MULT"]), PlayerScript.ENEMY_LASER_SHIELD_MULT), "lazerin kubbe çarpanı player.gd ENEMY_LASER_SHIELD_MULT ile aynı kalmalı")

@@ -630,7 +630,7 @@ func _on_reroll_pressed() -> void:
 	var cost: int = _reroll_cost()
 	if _has_chosen or not _revealed or GameManager.gold < cost:
 		return
-	GameManager.gold -= cost
+	GameManager.spend_shop_gold(cost)
 	_rerolls += 1
 	_roll_choices()
 

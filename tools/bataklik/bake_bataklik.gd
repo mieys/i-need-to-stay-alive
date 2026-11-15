@@ -3,8 +3,8 @@ extends SceneTree
 ## KARA BATAKLIK bake'i (yeni harita, 2026-11-09): res://harita/bataklik.tmx (tools/bataklik/gen_bataklik.py --write üretir) -> YATI ->
 ## res://scenes/bataklik_baked.tscn. Ana haritanın bake_harita.gd'sinden farkı: eski sahneden "isimle taşıma" YOK - Godot tarafındaki her
 ## ayar burada açıkça kurulur (yeniden bake her seferinde aynı sahneyi verir; elle eklemek istenen bir şey bu betiğe yazılmalı):
-##  - "Yer/Zemin Toprak" + "Yer/Zemin Çimen" + kıyı "Su/Su ayrıntılar 2": scenes/bataklik_zemin.gdshader (çimen "B - Ot Tutamları",
-##    madde 526; çamur: ana haritanın toprak deseni, ton oranları bataklık tabanına taşınır - SWAMP_GROUND);
+##  - "Yer/Zemin Toprak" + "Yer/Zemin Çimen" + kıyı "Su/Su ayrıntılar 2": scenes/bataklik_zemin.gdshader (çimen + çamur "C - Sakin Doku",
+##    madde 583; desen kendi paletini taşır, malzemeye yalnız iki taban rengi yazılır);
 ##  - "Su/Su": scenes/bataklik_su.gdshader (karo düz mavi; collision mavi pikseli su sayar);
 ##  - ağaç / ot / çiçek katmanları + "Shader Eklenecek" grubu: ana haritanın (scenes/harita_baked.tscn) AYNI adlı düğümlerinin materyali +
 ##    görünüm özellikleri (y_sort_enabled, texture_filter...) - sallanma parametreleri ana haritayla aynı; "Ağaç 3..7" "Ağaç 0"ınkini alır;
@@ -16,20 +16,12 @@ const OUT_PATH := "res://scenes/bataklik_baked.tscn"
 const MAIN_BAKED := "res://scenes/harita_baked.tscn"
 const GROUND_SHADER := "res://scenes/bataklik_zemin.gdshader"
 const WATER_SHADER := "res://scenes/bataklik_su.gdshader"
-const MAIN_GRASS_SHADER := "res://scenes/çimen yaprak.gdshader"
-const MAIN_DIRT_SHADER := "res://scenes/toprak kir.gdshader"
 const CARRY_FROM_MAIN: PackedStringArray = ["Shader Eklenecek", "Shader Eklenecek/Çiçekler 1", "Shader Eklenecek/Çalılar",
 	"Shader Eklenecek/Çalılar1", "Shader Eklenecek/Animasyonsuz çalılar", "Orman parçaları/Saklanma Çalılığı"]
 const CARRY_PROPS: PackedStringArray = ["y_sort_enabled", "z_index", "z_as_relative", "texture_filter", "light_mask"]
-## Bataklık zemin tabanları (karoların düz rengi) ve desene özel ayarlar.
+## Bataklık zemin tabanları (karoların düz rengi): desen yalnız bu renge yakın pikselleri değiştirir ve tonları buna oranlar.
 const GRASS_BASE := Color8(144, 163, 71)
 const MUD_BASE := Color8(124, 117, 56)
-const MUD_RATIO_KEYS: PackedStringArray = ["toprak_koyu", "toprak_acik", "toprak_kuru", "catlak_rengi", "catlak_kenar", "cakil_acik",
-	"cakil_orta", "cakil_koyu", "cakil_dip", "iri_isik"]
-const SWAMP_GROUND := {
-	"catlak_esik": 0.0, ## ıslak çamur: çatlak yok
-	"ince_cakil_seyrek": 0.02, "ince_cakil_sik": 0.10, "iri_cakil_yogunlugu": 0.04,
-}
 
 
 func _init() -> void:
@@ -103,39 +95,13 @@ func _carry(src: Node, dst: Node) -> int:
 	return n
 
 
-## Çamur: ana haritanın toprak deseni tonlarını bataklık tabanına oranla taşır (toprak_desen ton = karo x hedef/taban). Çimen deseni
-## (shaders/bataklik_cimen.gdshaderinc) kendi paletini taşır, yalnız cim_taban.
+## Zemin deseni (shaders/bataklik_zemin_desen.gdshaderinc) kendi paletini taşır; malzemeye yalnız karoların düz renkleri yazılır.
 func _ground_material() -> ShaderMaterial:
-	var sh: Shader = load(GROUND_SHADER)
 	var mat := ShaderMaterial.new()
-	mat.shader = sh
-	var main_mud: Color = _default_color(sh, "toprak_taban")
+	mat.shader = load(GROUND_SHADER)
 	mat.set_shader_parameter("cim_taban", GRASS_BASE)
-	mat.set_shader_parameter("toprak_taban", MUD_BASE)
-	for k: String in MUD_RATIO_KEYS:
-		mat.set_shader_parameter(k, _ratio(_default_color(sh, k), main_mud, MUD_BASE))
-	for k: String in SWAMP_GROUND:
-		mat.set_shader_parameter(k, SWAMP_GROUND[k])
+	mat.set_shader_parameter("camur_taban", MUD_BASE)
 	return mat
-
-
-func _default_color(sh: Shader, name: String) -> Color:
-	var v: Variant = RenderingServer.shader_get_parameter_default(sh.get_rid(), name)
-	if v is Color:
-		return v
-	if v is Vector4:
-		return Color(v.x, v.y, v.z, v.w)
-	if v is Vector3:
-		return Color(v.x, v.y, v.z)
-	printerr("varsayılan renk okunamadı: ", name, " ", v)
-	return Color.WHITE
-
-
-func _ratio(tone: Color, base: Color, new_base: Color) -> Color:
-	return Color(
-		clampf(new_base.r * tone.r / maxf(base.r, 0.001), 0.0, 1.0),
-		clampf(new_base.g * tone.g / maxf(base.g, 0.001), 0.0, 1.0),
-		clampf(new_base.b * tone.b / maxf(base.b, 0.001), 0.0, 1.0), 1.0)
 
 
 func _set_owner(node: Node, owner_node: Node) -> void:

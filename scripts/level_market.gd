@@ -23,6 +23,7 @@ const Logic := preload("res://scripts/weapon_shop_logic.gd")
 const MerchantShopScript := preload("res://scripts/merchant_shop_screen.gd")
 const WeaponScript := preload("res://scripts/weapon.gd")
 const WeaponCatalog := preload("res://scripts/weapon_catalog.gd")
+const Affinity := preload("res://scripts/build_affinity.gd") ## oynayış profili öneri ağırlığı (madde 637)
 
 const ITEM_COUNT := 6
 const UPGRADE_COUNT := 3
@@ -43,6 +44,15 @@ const SORT_ORDER := {"weapon": 0, "wupgrade": 1, "wplus": 1, "shield": 2, "upgra
 const TAG_WEAPON := Color("#e8a05a")
 const TAG_SHIELD := Color("#8ecdf0")
 const ROMAN := ["I", "II", "III", "IV", "V"]
+## Eşya stat anahtarı (Items.STAT_LABELS) -> stat ikonu (stat_icon.gd ICON_PATHS anahtarı); açıklamada her stat kendi ikonuyla ayrı satır.
+const ITEM_STAT_ICON := {
+	"max_health": "max_health", "damage_bonus": "damage", "item_fire_rate_percent": "fire_rate", "heal_shield_power": "heal_power",
+	"item_shield_power_flat": "shield_amount", "item_shield_regen_flat": "shield_regen", "item_shield_regen_percent": "shield_regen",
+	"item_health_regen": "health_regen", "lifesteal_percent": "lifesteal", "luck": "luck", "exp_gain_percent": "exp_gain",
+	"item_speed_percent": "speed", "dodge_chance": "dodge", "cooldown_reduction_percent": "cooldown_reduction",
+	"shield_pen_percent": "shield_pen_percent", "crit_chance_bonus": "crit_chance", "item_crit_damage_bonus": "crit_damage",
+	"shield_protection_bonus": "shield_protection",
+}
 
 
 ## Pazarın karıştırma bedeli: seyyar satıcının formülü (kademe/zaman ölçekli), sayaç level kartlarınınkinden AYRI.
@@ -103,6 +113,23 @@ static func ban(e: Dictionary) -> bool:
 static func is_saved(e: Dictionary) -> bool:
 	var id: String = offer_id(e)
 	return GameManager.market_saved.any(func(s: Dictionary) -> bool: return offer_id(s) == id)
+
+
+## Kayıtlı (KAYDET) eşyaların henüz sende olmayan alt parçaları (her kat): {parça anahtarı: ilk kayıtlı üst eşya anahtarı}.
+## Pazar bu parçaları satırda işaretler ("alt parçayı al" önerisi). Kayıtlı eşyanın kendisi ve sendeki parçalar dahil değil.
+static func saved_part_targets() -> Dictionary:
+	var out: Dictionary = {}
+	for s: Dictionary in GameManager.market_saved:
+		if str(s.get("type", "")) != "item":
+			continue
+		var top: String = str(s.get("key", ""))
+		var stack: Array = Items.recipe(top).duplicate()
+		while not stack.is_empty():
+			var p: String = str(stack.pop_back())
+			if not out.has(p) and not Items.owns(GameManager.owned_items, p):
+				out[p] = top
+			stack.append_array(Items.recipe(p))
+	return out
 
 
 ## Kayıt kopyası yuvadan bağımsızdır ("wkey"/"stype" ile); alınan seçenek kaydedilemez.
@@ -218,7 +245,7 @@ static func roll_section(player: Node, section: String, keep: Dictionary = {}, e
 	if total - excluded >= need:
 		for k: String in pools:
 			pools[k] = (pools[k] as Array).filter(func(e: Dictionary) -> bool: return not exclude.has(offer_id(e)))
-	var picked: Array = _weighted_pick(pools, need, keep.values())
+	var picked: Array = _weighted_pick(pools, need, keep.values(), Affinity.profile(player))
 	picked.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return _offer_less(a, b))
 	var out: Array = []
 	for i in size:
@@ -231,7 +258,9 @@ static func roll_section(player: Node, section: String, keep: Dictionary = {}, e
 
 ## Ağırlıklı çekiliş; bir tür seçilince ağırlığı yarıya iner. Silah başına tek geliştirme önceliklidir (aynı silahın iki satırı
 ## tekrar gibi okunuyordu) ama bölüm boş kalacaksa aynı silahın başka satırı da gelir (tek silahlı erken oyunda 3 yuva dolsun).
-static func _weighted_pick(pools: Dictionary, count: int, kept: Array) -> Array:
+## Madde 637: tür içinden seçenek OYNAYIŞ PROFİLİNE göre ağırlıklı (build_affinity.gd: abanılan stat / silah ailesi / en çok hasar veren
+## silahın geliştirmesi en çok x1,6); bölümün son Affinity.EXPLORE_PICKS seçeneği profilsiz düz rastgele (keşif). prof boşsa hepsi düz.
+static func _weighted_pick(pools: Dictionary, count: int, kept: Array, prof: Dictionary = {}) -> Array:
 	var weights: Dictionary = KIND_WEIGHTS.duplicate()
 	var used_w: Array = kept.filter(func(e: Dictionary) -> bool: return e.has("wkey")).map(func(e: Dictionary) -> String: return str(e["wkey"]))
 	var deferred: Array = []
@@ -257,7 +286,10 @@ static func _weighted_pick(pools: Dictionary, count: int, kept: Array) -> Array:
 			if r <= 0.0:
 				break
 		var pool: Array = pools[kind]
-		var got: Dictionary = pool.pop_at(randi() % pool.size())
+		var pi: int = randi() % pool.size()
+		if not prof.is_empty() and picked.size() < count - Affinity.EXPLORE_PICKS:
+			pi = Affinity.pick_index(pool.map(func(e: Dictionary) -> float: return Affinity.weight_of(Affinity.offer_fit(prof, e))))
+		var got: Dictionary = pool.pop_at(pi)
 		picked.append(got)
 		weights[kind] = float(weights[kind]) * KIND_REPEAT_MULT
 		if kind == "wupgrade":
@@ -426,9 +458,22 @@ static func buy(player: Node, e: Dictionary) -> bool:
 
 
 ## ---------------------------------------------------------------- görünen metin
-## {tag, kind (yuva üstü: SİLAH / EŞYA / MANA KALKANI), tag_col, name, sub, lines, tex, wtier (0 = silah değil)} + geliştirmelerde row_sub (satırın 2. yazısı) / row_badge (simge altı)
+## {tag, kind (yuva üstü: SİLAH / EŞYA / MANA KALKANI), tag_col, name, sub, lines, icons, tex, wtier (0 = silah değil)} + geliştirmelerde row_sub (satırın 2. yazısı) / row_badge (simge altı)
+## icons: lines ile aynı uzunlukta stat ikonu kimliği (stat_icon.gd ICON_PATHS; "" = ikonsuz düz satır). Kullanıcı 2026-11-13: açıklamada
+## verilen her stat kendi ikonuyla ve ALT ALTA (tek satırda " · " ile değil).
 static func describe(e: Dictionary, player: Node = null) -> Dictionary:
-	var d: Dictionary = {"tag": "", "tag_col": Color.WHITE, "name": "", "sub": "", "lines": [], "tex": null, "wtier": 0}
+	var d: Dictionary = _describe_raw(e, player)
+	var lines: Array = d["lines"]
+	var icons: Array = d.get("icons", [])
+	icons.resize(lines.size())
+	for n in icons.size():
+		icons[n] = "" if icons[n] == null else str(icons[n])
+	d["icons"] = icons
+	return d
+
+
+static func _describe_raw(e: Dictionary, player: Node) -> Dictionary:
+	var d: Dictionary = {"tag": "", "tag_col": Color.WHITE, "name": "", "sub": "", "lines": [], "icons": [], "tex": null, "wtier": 0}
 	match str(e.get("type", "")):
 		"weapon":
 			var key: String = str(e["key"])
@@ -447,12 +492,13 @@ static func describe(e: Dictionary, player: Node = null) -> Dictionary:
 			var plus: bool = e["type"] == "wplus"
 			var now_t: int = _slot_tier(slot)
 			var lines: Array = []
+			var icons: Array = []
 			var next_t: int = now_t
 			if plus:
 				var p0: int = 5 + Logic.wplus_count(slot)
 				d["sub"] = Loc.t("Güçlendirme +%d") % (Logic.wplus_count(slot) + 1)
-				lines.append(_tier_gain_text(p0, p0 + 1))
-				d["row_sub"] = lines[0]
+				d["row_sub"] = _tier_gain_text(p0, p0 + 1)
+				_add_tier_gain(lines, icons, p0, p0 + 1)
 				d["row_badge"] = "+%d" % (Logic.wplus_count(slot) + 1)
 				next_t = 5
 			else:
@@ -464,12 +510,14 @@ static func describe(e: Dictionary, player: Node = null) -> Dictionary:
 				d["row_sub"] = str(row["name"])
 				d["row_badge"] = "%s → %s" % [ROMAN[now_t - 1], ROMAN[next_t - 1]]
 				lines.append(str(row["text"]))
+				icons.append("")
 				if next_t != now_t:
-					lines.append(_tier_gain_text(now_t, next_t))
+					_add_tier_gain(lines, icons, now_t, next_t)
 			d["tag"] = "SİLAH GELİŞTİRME"
 			d["tag_col"] = TAG_WEAPON ## eskiden yeşil (#9fd27e); pazarda yeşil kenar yalnız "kayıtlı" demek (madde 433)
 			d["name"] = WeaponCatalog.display_name(key)
 			d["lines"] = lines
+			d["icons"] = icons
 			d["tex"] = WeaponCatalog.icon(key) ## görünüş kademeyle değişmez (madde 402); kademe "wtier" kontürüyle
 			d["wtier"] = next_t
 		"shield":
@@ -479,7 +527,15 @@ static func describe(e: Dictionary, player: Node = null) -> Dictionary:
 			d["tag_col"] = TAG_SHIELD
 			d["name"] = ShieldEnchantDefs.type_name(key)
 			d["sub"] = "Standart kalkanın yerine geçer"
-			d["lines"] = [Logic.shield_summary(key), str((ShieldEnchantDefs.TYPES.get(key, {}) as Dictionary).get("desc", ""))]
+			## özet (kalkan · soğurma · yenilenme) stat başına bir satır + ikon, sonra türün açıklaması (ikonsuz)
+			var td: Dictionary = ShieldEnchantDefs.TYPES.get(key, {})
+			if not td.is_empty():
+				d["lines"] = [Loc.t("%+d Mana Kalkanı") % int(round(float(td["power"]))),
+					Loc.t("%+d%% Soğurma") % int(round(float(td["absorption"]) * 100.0)),
+					Loc.t("%s Yenilenme/sn") % ("+" + Logic.type_regen_text(td))]
+				d["icons"] = ["shield_amount", "shield_protection", "shield_regen"]
+			if str(td.get("desc", "")) != "":
+				d["lines"].append(str(td["desc"]))
 			d["tex"] = load(str(ShieldEnchantDefs.ICONS.get(key, "")))
 		"upgrade":
 			var st: String = GameManager.shield_enchant
@@ -490,6 +546,7 @@ static func describe(e: Dictionary, player: Node = null) -> Dictionary:
 			d["name"] = ShieldEnchantDefs.type_name(st)
 			d["sub"] = Loc.t("Geliştirme %d · %s") % [i + 1, (Loc.t("%d/%d alındı") % [Logic.upgrade_count(i), lim]) if lim > 0 else (Loc.t("%d kez alındı") % Logic.upgrade_count(i))]
 			d["lines"] = Array(Logic.upgrade_effect_text(i).split("\n"))
+			d["icons"] = Array(Logic.upgrade_effect_icons(i))
 			d["row_sub"] = ", ".join(d["lines"])
 			d["row_badge"] = ("%d/%d" % [Logic.upgrade_count(i) + 1, lim]) if lim > 0 else ("%d." % (Logic.upgrade_count(i) + 1))
 			d["tex"] = load(str(ShieldEnchantDefs.ICONS.get(st, "")))
@@ -502,6 +559,7 @@ static func describe(e: Dictionary, player: Node = null) -> Dictionary:
 			d["name"] = Items.item_name(key)
 			d["sub"] = _item_sub(key)
 			d["lines"] = _item_lines(key)
+			d["icons"] = _item_icons(key)
 			d["tex"] = Items.icon(key)
 	return d
 
@@ -520,6 +578,16 @@ static func _tier_gain_text(t0: int, t1: int) -> String:
 	var dmg: int = roundi((WeaponScript.tier_damage_mult(t1) / WeaponScript.tier_damage_mult(t0) - 1.0) * 100.0)
 	var spd: int = roundi((WeaponScript.tier_fire_rate_mult(t0) / WeaponScript.tier_fire_rate_mult(t1) - 1.0) * 100.0)
 	return Loc.t("+%%%d hasar, +%%%d saldırı hızı") % [dmg, spd]
+
+
+## _tier_gain_text'in ayrıntı hâli: hasar ve saldırı hızı ayrı satır + kendi ikonu.
+static func _add_tier_gain(lines: Array, icons: Array, t0: int, t1: int) -> void:
+	var dmg: int = roundi((WeaponScript.tier_damage_mult(t1) / WeaponScript.tier_damage_mult(t0) - 1.0) * 100.0)
+	var spd: int = roundi((WeaponScript.tier_fire_rate_mult(t0) / WeaponScript.tier_fire_rate_mult(t1) - 1.0) * 100.0)
+	lines.append(Loc.t("+%%%s %s") % [str(dmg), Loc.t("hasar")])
+	icons.append("damage")
+	lines.append(Loc.t("+%%%s %s") % [str(spd), Loc.t("saldırı hızı")])
+	icons.append("fire_rate")
 
 
 ## WeaponCatalog.trait_text: "<Özellik>: ..." ya da "HASAR: ... · ... · ..." - parçalar ayrı satır.
@@ -557,3 +625,12 @@ static func _item_lines(key: String) -> Array:
 	if passive != "" and not lines.any(func(l: String) -> bool: return l.replace("+", "").trim_suffix(".") == passive.trim_suffix(".")):
 		lines.append(Loc.t("Pasif:") + " " + passive)
 	return lines
+
+
+## _item_lines ile aynı sıra: stat satırları (Items.describe, STAT_LABELS'taki statlar sözlük sırasıyla) ikonlu, pasif ikonsuz.
+static func _item_icons(key: String) -> Array:
+	var out: Array = []
+	for s in (Items.get_def(key).get("stats", {}) as Dictionary):
+		if Items.STAT_LABELS.has(s):
+			out.append(str(ITEM_STAT_ICON.get(s, "")))
+	return out

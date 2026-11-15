@@ -89,7 +89,8 @@ func test_skill_rows_use_character_skill_names_and_skip_empty_slots() -> void:
 	assert(rows.size() == 2, "yalnız bir şey yapmış slotlar (Q, E)")
 	assert(rows[0]["label"] == "Q" and rows[0]["name"] == str(def.get("skill_name", "")), "Q satırı karakterin Q adıyla")
 	assert(rows[1]["label"] == "E" and rows[1]["name"] == str(def.get("skill2_name", "")))
-	assert(absf(float(rows[0]["share"]) - 0.7) < 0.001)
+	## 2026-11-12: dash yetenekleri E'de - Talon atılışı (talon_dash) E, dönen silahlar (talon_spin) Q.
+	assert(absf(float(rows[0]["share"]) - 0.3) < 0.001 and absf(float(rows[1]["share"]) - 0.7) < 0.001)
 	_end()
 
 
@@ -100,13 +101,27 @@ func test_reset_clears_gain_and_damage() -> void:
 	assert(DamageStats.weapon_rows().is_empty() and BalanceLogScript.gain_snapshot().is_empty())
 
 
+## Oyun sonu ekranı silah/yetenek hasarını kayıt yazıldıktan (end_run_reset) SONRA okur: kopya görünmeli, yeni koşu (reset) silmeli.
+func test_end_run_reset_keeps_final_copy_for_game_over_board() -> void:
+	_begin()
+	BalanceLogScript.on_hit("w:yay", 40.0, false)
+	BalanceLogScript.on_hit("s:melek_can", 10.0, true)
+	BalanceLogScript.on_gain("s:melek_can", 5.0, 5.0)
+	BalanceLogScript.end_run_reset()
+	assert(DamageStats.weapon_rows().size() == 1 and absf(float(DamageStats.weapon_rows()[0]["dmg"]) - 40.0) < 0.01)
+	assert(not BalanceLogScript.gain_snapshot().is_empty())
+	BalanceLogScript.reset() ## yeni koşu
+	assert(DamageStats.weapon_rows().is_empty() and BalanceLogScript.gain_snapshot().is_empty())
+	_end()
+
+
 func test_tooltip_text_shows_damage_heal_shield_or_empty_note() -> void:
 	_begin()
 	var ink: Dictionary = UIKit.INK
-	assert(DamageStats.tooltip_bbcode("q", ink).contains("henüz"), "hiçbir şey yapmadıysa not")
-	BalanceLogScript.on_hit("s:talon_dash", 1234.0, true)
+	assert(DamageStats.tooltip_bbcode("e", ink).contains("henüz"), "hiçbir şey yapmadıysa not")
+	BalanceLogScript.on_hit("s:talon_dash", 1234.0, true) ## Talon atılışı E (dash yetenekleri E'de, 2026-11-12)
 	BalanceLogScript.on_gain("s:talon_dash", 0.0, 77.0)
-	var t: String = DamageStats.tooltip_bbcode("q", ink)
+	var t: String = DamageStats.tooltip_bbcode("e", ink)
 	assert(t.contains("Hasar") and t.contains("1.234") and t.contains("Kalkan") and t.contains("77"), t)
 	assert(not t.contains("Can:"), "can yoksa can satırı yok")
 	_end()
@@ -158,6 +173,38 @@ func test_pet_slot_tooltip_shows_live_stats() -> void:
 	slot.call("_close_tooltip")
 	assert(slot.get("tooltip_panel") == null)
 	host.queue_free()
+	_end()
+
+
+## Madde 585: gerçek hud.tscn'de evcil yuvası FAREYLE açılır. CharacterCluster (STOP) tüm paneli kaplıyor ve yuvanın ÖNÜNDE çiziliyordu
+## -> fare yuvaya hiç ulaşmıyor, ipucu çıkmıyordu (yukarıdaki test _open_tooltip'i doğrudan çağırdığı için yakalamadı). Evcil arka planı da çizilir.
+func test_pet_slot_tooltip_opens_on_mouse_hover() -> void:
+	_begin()
+	var hud: Node = (load("res://scenes/hud.tscn") as PackedScene).instantiate()
+	add_child(hud)
+	for i in 4:
+		await get_tree().process_frame
+	var slot: Control = hud.get_node_or_null("DockPet") as Control
+	if slot == null: ## telefon HUD'unda yuva yok
+		hud.free()
+		_end()
+		return
+	slot.call("set_pet", "hayalet")
+	assert(slot.get("_bg") != null, "evcilin kendi arka planı yüklenmeli (assets/ui/pet_bg/hayalet.png)")
+	var ev := InputEventMouseMotion.new()
+	ev.position = slot.get_global_rect().get_center()
+	ev.global_position = ev.position
+	get_viewport().push_input(ev, true)
+	await get_tree().process_frame
+	assert(get_viewport().gui_get_hovered_control() == slot, "fare yuvaya ulaşmalı, üstteki: %s" % get_viewport().gui_get_hovered_control())
+	assert(slot.get("tooltip_panel") != null, "üstüne gelince ipucu açılmalı")
+	var away := InputEventMouseMotion.new()
+	away.position = Vector2(4, 4)
+	away.global_position = away.position
+	get_viewport().push_input(away, true)
+	await get_tree().process_frame
+	assert(slot.get("tooltip_panel") == null, "fare ayrılınca ipucu kapanmalı")
+	hud.free()
 	_end()
 
 
@@ -213,7 +260,7 @@ func test_buff_window_counts_weapon_damage_only_while_open() -> void:
 	BalanceLogScript.on_hit("s:talon_dash", 999.0, false) ## silah değil: sadece-silah penceresine girmez
 	BalanceLogScript.set_window("s:elara_gercek_hasar", false, true)
 	BalanceLogScript.on_hit("w:yay", 70.0, false)
-	var util: Dictionary = DamageStats.slot_totals("e")["util"]
+	var util: Dictionary = DamageStats.slot_totals("q")["util"] ## Elara Gerçek Hasar Q (2026-11-12)
 	assert(absf(float(util.get("during_w", 0.0)) - 250.0) < 0.01, "pencere açıkken silah hasarı: %s" % str(util))
 	BalanceLogScript.set_window("s:assasin_pasif", true, false)
 	BalanceLogScript.on_hit("s:assasin_dash2", 40.0, true)
@@ -279,9 +326,9 @@ func test_spiritual_pet_and_passive_counters_madde_531() -> void:
 
 
 func test_assasin_slots_match_keys() -> void:
-	## Q = Şahin Hamlesi (dash2), E = Gölge Adımı (görünmezlik), R = Gölge Hücumu (dash) - eskiden R hasarı Q'ya yazılıyordu.
-	assert(DamageStats.slot_of("s:assasin_dash2") == "q")
-	assert(DamageStats.slot_of("s:assasin_gorunmez") == "e")
+	## 2026-11-12 (dash yetenekleri E'de): E = Şahin Hamlesi (dash2), Q = Gölge Adımı (görünmezlik), R = Gölge Hücumu (dash) - eskiden R hasarı Q'ya yazılıyordu.
+	assert(DamageStats.slot_of("s:assasin_dash2") == "e")
+	assert(DamageStats.slot_of("s:assasin_gorunmez") == "q")
 	assert(DamageStats.slot_of("s:assasin_dash") == "r")
 	assert(DamageStats.slot_of("s:oakley_agac") == "r", "Hayat Ağacı R (eskiden Diğer'e düşüyordu)")
 	assert(DamageStats.slot_of("s:shaman_kalkan_totemi") == "e" and DamageStats.slot_of("s:shaman_kalkan_alan") == "e")

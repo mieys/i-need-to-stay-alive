@@ -28,10 +28,10 @@ const VisionFogScript: GDScript = preload("res://scripts/vision_fog.gd")
 const ATTACK_POWER_RATIO := 1.5
 
 ## Yeteneğe özgü saldırı efekti (KOZMETİK - hasarla hiçbir ilgisi yok):
-## her atışta totemin tepesinden hedefe bir alev oku uçar (bkz.
-## fx_totem_fire_bolt.gd). Mermi başlangıcı totem sprite'ının tepesine denk
-## gelen nokta (bkz. totem_attack.tscn; v4 2026-10-16 madde 176: boynuz-çatal arasında süzülen ateş çekirdeği).
-const BOLT_ORIGIN_OFFSET := Vector2(0, -26) ## 40x56 kare, satır 20 = çekirdek merkezi: (20.5 - 28) x 0.903 + sprite y -19 (bkz. tools/gen_shaman_totems_v4.py)
+## her atışta RÜN TAŞINDAN hedefe bir alev oku uçar (bkz. fx_totem_fire_bolt.gd; madde 557: "ateş topları bu taştan atılacak").
+## Mermi başlangıcı Q taşının rün merkezi: rünlerin birleşik kutusu 32x32 karede (15, 13.5) -> (15 - 16, 13.5 - 16) x 0.632
+## + TotemSprite y -8 (bkz. totem_attack.tscn, tools/gen_shaman_rune_stones.py) = (-0.6, -9.6).
+const BOLT_ORIGIN_OFFSET := Vector2(-1, -10)
 
 ## Ağ GÖRSEL kopyalarında (gerçek totem başka bir client'ta) atışları göstermek
 ## için ayrı kozmetik zamanlayıcı - gerçek atış TICK_INTERVAL'le aynı ritimde.
@@ -55,6 +55,7 @@ func _init() -> void:
 	totem_kind = "attack"
 	totem_color = Color(1.0, 0.55, 0.25)
 	totem_radius = 260.0
+	rune_center = BOLT_ORIGIN_OFFSET
 	## Alan hasarı (totem_base.gd "ALAN HASARI") bu totemde KAPALI (kullanıcı isteği 2026-10-21: "Q etrafına E'deki gibi alan hasarı
 	## veriyor, bu bug, onun öyle bir gücü yok") - sadece Kalkan Totemi (E) açar; alan nabzı/ruh efektleri de onunla birlikte gider.
 
@@ -73,7 +74,15 @@ func _process(delta: float) -> void:
 	_visual_shot_timer += _current_tick_interval()
 	var vis_target: Node2D = _find_nearest_enemy()
 	if vis_target:
-		TotemFireBolt.spawn(get_tree().current_scene, global_position + BOLT_ORIGIN_OFFSET, vis_target, totem_color, _blast_radius())
+		TotemFireBolt.spawn(get_tree().current_scene, global_position + BOLT_ORIGIN_OFFSET + _stone_hover(), vis_target, totem_color, _blast_radius())
+		_on_fired(vis_target)
+
+
+## Atış anı (madde 570): taş parlar + rün parlar + taş hedefin tersine 1 piksel geri teper (gerçek totem ve ağ kopyası aynı yoldan).
+func _on_fired(target: Node2D) -> void:
+	_flare_stone()
+	if _totem_sprite and _totem_sprite.has_method("kick") and is_instance_valid(target):
+		_totem_sprite.call("kick", target.global_position - (global_position + BOLT_ORIGIN_OFFSET))
 
 
 ## Patlama yarıçapı (evrim yoksa 0). Ağ görsel kopyasında da çağrılır: patlama halkası her oyuncuda aynı çıksın.
@@ -113,7 +122,8 @@ func _tick() -> void:
 		## Yetenek efekti: atış anında totemden hedefe alev oku uçar. Salt
 		## kozmetik - hasar hesabı yukarıda bitti, bu satır silinse bile
 		## skilin davranışı değişmez.
-		TotemFireBolt.spawn(get_tree().current_scene, global_position + BOLT_ORIGIN_OFFSET, target, totem_color, blast)
+		TotemFireBolt.spawn(get_tree().current_scene, global_position + BOLT_ORIGIN_OFFSET + _stone_hover(), target, totem_color, blast)
+		_on_fired(target)
 
 
 ## Patlayan Alev hasarı: vurulan hedef HARİÇ yarıçaptaki yaratıklara sabit hasar (kritik zarı yok - atışın kendi hasarı zaten kritik

@@ -14,10 +14,7 @@ Hepsi 1 sanat pikseli = TEXEL 1.212 yerel birim (projedeki FX dili, bkz. hafiza 
      curse_impact  (48x40, 11 kare, 20 fps, tek)      yaratiga dusus: yesil cizgi + zemin rune halkasi + mor duman
      levitate      (48x32, 12 kare, 12 fps, dongu)    kanal boyunca havada suzulen Hadime'nin ayak altinda karanlik
                                                       ucma efekti (kullanici istegi 2026-09-25)
-  E  Kara Delik (2026-09-25 ikinci istek: ilk tasarim "Kara Buyu" ve kalkan zerreleri kaldirildi - "kalkan cekme efektine
-     gerek yok")
-     black_hole    (192x96, giris 8 / dongu 16 / cokus 8 kare - uc satir)  zeminde donen mor birikim diski, ortada kara
-                   kure + ustunde bukulen isik halkasi, HOLE_RADIUS halkasindan kureye sarmal cizerek akan zerreler
+  E  Lanet Cukuru (eski "Kara Delik" black_hole sayfasi 2026-11-11'de KALDIRILDI, madde 556): tools/gen_hadime_cukur_fx.py
   R  Karabasan
      nightmare_aura  (180x96, 16 kare, 10 fps, dongu) ayak altinda karanlik havuz + disa uzanip cekilen golge pencelerı
      nightmare_burst (128x96, 11 kare, 18 fps, tek)   donusum anindaki kara duman patlamasi
@@ -281,113 +278,6 @@ def curse_impact():
     save("curse_impact", frames, "burst", False, 20.0)
 
 
-# ====================================================================== E - black_hole (giris / dongu / cokus)
-HOT = (255, 222, 250)   # diskin en sicak (ic kenar) tonu
-PINK = (222, 128, 236)
-
-
-def draw_hole(im, cx, cy, k, ph, part_a, flash=0.0):
-    """Tek kare kara delik. k = boyut (0..1, giris/cokus), ph = donme fazi (dongu: 2pi'de kapanir), part_a = iceri akan
-    zerrelerin gorunurlugu. Zemin duzleminde (y x 0.45) elips disk; kure diskin merkezinde, biraz yukarida."""
-    if k <= 0.02:
-        return
-    ey = 0.45
-    # 0) cekim alaninin siniri (HOLE_RADIUS ~ 90 sanat px): yavasca donen kesikli halka - alan okunsun
-    if part_a > 0:
-        rxo, ryo = 88 * k, 88 * ey * k
-        n = int(TAU * rxo * 1.2)
-        for i in range(n):
-            a = TAU * i / n
-            if int((a - ph / 3.0) / (TAU / 36)) % 2 == 0:
-                plot(im, cx + rxo * math.cos(a), cy + ryo * math.sin(a), V_MID, 0.55 * part_a)
-    # 1) zeminde cekimin kararttigi alan (seyrek dama)
-    rx, ry = 44 * k, 44 * k * ey
-    for y in range(int(cy - ry) - 1, int(cy + ry) + 2):
-        for x in range(int(cx - rx) - 1, int(cx + rx) + 2):
-            e = ((x + 0.5 - cx) / max(rx, 0.5)) ** 2 + ((y + 0.5 - cy) / max(ry, 0.5)) ** 2
-            if e < 0.5:
-                plot(im, x, y, N_DEEP, 0.55)
-            elif e < 1.0 and ((x + y) & 1) == 0:
-                plot(im, x, y, N_DEEP, 0.3)
-    # 2) iceri sarmal cizerek akan zerreler (alan sinirindan kureye) - her biri kendi fazinda, dongu 1 turda kapanir
-    if part_a > 0:
-        n_parts = 26
-        for j in range(n_parts):
-            th0 = TAU * j / n_parts + (j % 3) * 0.37
-            off = (j * 11 % n_parts) / n_parts
-            u = (ph / TAU + off) % 1.0
-            for tail in range(5):
-                uu = max(0.0, u - tail * 0.022)
-                r = 15 + 72 * (1 - uu) ** 1.2
-                th = th0 + 2.4 * uu
-                px = cx + r * math.cos(th) * k
-                py = cy + r * math.sin(th) * ey * k
-                near = 1 - (r - 15) / 72
-                col = HOT if near > 0.8 else (PINK if near > 0.4 else V_LIGHT)
-                a = part_a * (0.8 + 0.2 * near) * (1.0 - tail * 0.18)
-                plot(im, px, py, col if tail < 2 else V_MID, a)
-    # 3) birikim diski: arka yari (kurenin ARKASINDA kalan), sonra kure, sonra on yari
-    def disk(front):
-        for rr in (23.0, 25.0, 27.0, 29.0, 31.0):
-            rxd, ryd = rr * k, rr * ey * k
-            n = max(24, int(TAU * rxd * 1.5))
-            for i in range(n):
-                a = TAU * i / n
-                if (math.sin(a) > 0) != front:
-                    continue
-                lobe = 0.5 + 0.5 * math.cos(3 * (a - ph))
-                inner = (31.0 - rr) / 8.0
-                t = min(1.0, 0.35 * lobe + 0.65 * inner)
-                col = HOT if t > 0.85 else (PINK if t > 0.6 else (V_LIGHT if t > 0.35 else V_MID))
-                plot(im, cx + rxd * math.cos(a), cy + ryd * math.sin(a), col, 1.0 if t > 0.35 else 0.8, True)
-    disk(False)
-    # 4) kure (olay ufku) + ustunde bukulen isik halkasi (diskin arka yuzunun kure uzerinden gorunen goruntusu)
-    sr = 11.0 * k
-    scy = cy - 4 * k
-    ring(im, cx, scy - 0.5, sr + 4.0 * k, sr + 2.6 * k, V_LIGHT, 0.8, gap=(0.2, math.pi - 0.2))
-    disc(im, cx, scy, sr + 1.0, V_OUT, 1.0)
-    disc(im, cx, scy, sr, N_BLACK, 1.0)
-    ring(im, cx, scy, sr + 1.0, sr + 1.0, PINK, 0.8, gap=(0.35, math.pi - 0.35))
-    disk(True)
-    if flash > 0:
-        spark(im, cx, scy, 3, HOT, PINK, flash)
-
-
-def black_hole():
-    w, h = 192, 96
-    cx, cy = 95.5, 50.0
-    intro, loop, outro = [], [], []
-    for i in range(8):                       # giris: noktadan buyur (0.4 sn)
-        t = i / 7.0
-        im = new(w, h)
-        draw_hole(im, cx, cy, 1 - (1 - t) ** 2, 0.0, t * t, flash=1.0 if i < 3 else 0.0)
-        intro.append(im)
-    for i in range(16):                      # dongu: disk doner, zerreler iceri akar (1.33 sn'de bir tur)
-        im = new(w, h)
-        draw_hole(im, cx, cy, 1.0, TAU * i / 16, 1.0)
-        loop.append(im)
-    for i in range(8):                       # cokus: iceri kapanir, en sonda parlayip genisleyen sok halkasi
-        t = i / 7.0
-        im = new(w, h)
-        if i < 5:
-            draw_hole(im, cx, cy, 1 - (t * 1.35) ** 2 if t * 1.35 < 1 else 0.0, TAU * t * 0.5, max(0.0, 1 - t * 2))
-        if i >= 4:
-            u = (i - 4) / 3.0
-            ring(im, cx, cy - 2, 6 + 30 * u, (6 + 30 * u) * 0.45, PINK if u < 0.5 else V_LIGHT, 1.0 - u * 0.7)
-            if i == 4:
-                spark(im, cx, cy - 3, 4, HOT, PINK)
-        outro.append(im)
-    os.makedirs(OUT, exist_ok=True)
-    s = Image.new("RGBA", (w * 16, h * 3), (0, 0, 0, 0))
-    for row, frames in enumerate((intro, loop, outro)):
-        for i, f in enumerate(frames):
-            s.paste(f, (i * w, row * h))
-    s.save(os.path.join(OUT, "black_hole_sheet.png"))
-    write_sprite_frames(os.path.join(OUT, "black_hole_frames.tres"), RES + "black_hole_sheet.png", w, h,
-                        [("intro", (0, 0), 8, False, 20.0), ("loop", (0, 1), 16, True, 12.0), ("outro", (0, 2), 8, False, 16.0)])
-    print("   %-16s %dx%d x 8+16+8 kare" % ("black_hole", w, h))
-
-
 def levitate():
     """Q kanali: havada suzulen Hadime'nin ayaklari altinda karanlik ucma efekti - zeminde donen kara duman topaklari,
     ayaklardan zemine suzulen koyu mor zerreler (birkac yesil kivilcim) ve altta hafif karanlik pus. 12 karelik dikissiz
@@ -543,6 +433,5 @@ if __name__ == "__main__":
     curse_launch()
     curse_impact()
     levitate()
-    black_hole()
     nightmare_aura()
     nightmare_burst()

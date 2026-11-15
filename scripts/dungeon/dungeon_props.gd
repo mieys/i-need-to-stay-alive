@@ -26,6 +26,11 @@ const STYLE: Dictionary = {
 		## 0-4 büyüme (rise), 5-7 tam boy dalgalanma döngüsü (hold). "flame": alev duvara/nesneye gelince kırpılır (DungeonWorld.flame_rows).
 		"tuzak_ejder": {"mode": "sheet1", "sheet": "runtime/dragon_trap_long.png", "w": 2, "h": 10, "step": [2, 0], "frames": 8, "rise": 5,
 				"hold": [5, 6, 7], "off": [0, -2], "unlit": true, "flame": true},
+		## KAFATASI KABARTMASI (madde 627, kullanıcı: "mavi gözlü tuzaklardan uzun ateş püskürtmeleri olmalıydı"): kabartma Duvar süsü karosu
+		## (gözler karo animasyonuyla yanıp söner), burada YALNIZ alev: ejder sayfasının alevi, baş silinmiş + çeneye 4 px kaydırılmış
+		## (tools/zindan/gen_kafatasi_alev.py). Hasar alanı 1 sütun; kafatası 2x2 bloğun sol karosunda ortalı -> sayfa yarım karo sola.
+		"tuzak_kafatasi": {"mode": "sheet1", "sheet": "runtime/skull_flame.png", "w": 2, "h": 10, "step": [2, 0], "frames": 8, "rise": 5,
+				"hold": [5, 6, 7], "off": [-0.5, -2], "unlit": true, "flame": true},
 	},
 	"et_kuyusu": {
 		"kafes": {"mode": "sheet", "sheet": "runtime/Door_darker-lattice.png", "w": 5, "h": 5, "off": [-1, -2], "frames": [[0, 0], [5, 0], [10, 0], [15, 0]]},
@@ -352,7 +357,7 @@ func _add_trap(o: Dictionary) -> void:
 				bool(st.get("unlit", false)))
 		if bool(st.get("flame", false)):
 			## alev boyu: ilk duvar/nesne hücresine kadar (hasar alanıyla aynı sayı); baş 2 satır + alev satırları
-			var rows: int = DungeonWorldScript.flame_rows(to_global(r.position), int(r.size.y / TILE))
+			var rows: int = DungeonWorldScript.flame_rows(to_global(r.position), int(r.size.y / TILE), maxi(1, int(r.size.x / TILE)))
 			spr.region_rect.size.y = float(2 + rows) * TILE
 		sprites.append(spr)
 	_traps.append({"sprites": sprites, "rect": r, "style": st, "key": str(o.get("trap_key", ""))})

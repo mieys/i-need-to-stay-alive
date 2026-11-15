@@ -35,6 +35,8 @@ from PIL import Image
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
+sys.path.insert(0, os.path.dirname(HERE))
+import harita_duvar  ## noqa: E402 (tools/harita_duvar.py, madde 676)
 ATLAS = json.load(open(os.path.join(HERE, 'atlas.json'), encoding='utf-8'))
 HDIR = os.path.join(ROOT, 'harita')
 BDIR = os.path.join(HDIR, 'bataklik')
@@ -58,6 +60,7 @@ YOGUNLUK = {
     'kume_agac': (2, 3),     ## (2, 5): kümedeki ağaç sayısı
     'tek_aralik': 13,        ## 9: çayırda tek ağaçlar arası
     'tek_sayi': 50,          ## 150
+    'kenar_aralik': 1,       ## madde 676: orman kenarı sırası gövde aralığı (Chebyshev; 1 = gövdeler arası en az 2 hücre)
     'nesne_sayi': 70,        ## 170: küçük nesne (taş, kütük, mantar...)
     'kiyi_saz': (0.10, 0.10),  ## (0.30, 0.25): suya bitişik karada saz olasılığı (taban, gürültü payı)
     'patika_ot': 0.005,      ## 0.015
@@ -217,29 +220,48 @@ def fbm(shape, scale, seed, octaves=3):
 
 
 ## ---------------------------------------------------------------- tasarım (oyun alanı yerel hücre koordinatı, 0..213)
-SPAWN = (107, 178)
+## YERLEŞİM (madde 658, 2026-11-13, kullanıcı: "yaptığın haritalar hep birbirine benziyor hepsinin ortasında göl var"): ortadaki Kara Göl
+## KALDIRILDI. Harita artık KARA NEHİR haritası: kuzeydoğu kenarından girip S çizerek güneybatı kenarından çıkan geniş, yürünür nehir; kuzeyde
+## iki kola ayrılıp tapınak adasını sarar, orta ve güneybatı kıvrımlarının yanında eski yatak (hilal göl), iki yan dere. Doğuş doğu-güneydoğuda.
+## Nehir patikaları KESMEZ: patika kıyıda biter, karşı kıyıda sürer (sığ geçit). Altın Kumlar = kaya platoları, Ayaz Dağı = ortaya inen dağ.
+SPAWN = (176, 166)
 REGIONS = {
-    'kamp': (107, 178),        ## doğuş: açık çayır + yeşil alevli meşaleler
-    'cadi': (40, 38),          ## KB: cadı oyuğu (cadı kulübesi, kazan, totemler)
-    'sazlik': (110, 26),       ## K: sazlık gölcükler
-    'kemik': (174, 40),        ## KD: kemik tarlası (dev iskelet, kafa ağaçları)
-    'mantar': (34, 106),       ## B: mantar korusu
-    'tapinak': (180, 108),     ## D: yıkık tapınak (harabeler, heykeller)
-    'egrelti': (40, 172),      ## GB: eğrelti vadisi (çadır, yırtıcı bitkiler)
-    'olu_orman': (172, 174),   ## GD: ölü orman (yüzlü ağaç, kafa ağacı)
+    'kamp': (176, 166),        ## doğuş (DGD): açık çayır + yeşil alevli meşaleler
+    'cadi': (38, 36),          ## KB: cadı oyuğu (cadı kulübesi, kazan, totemler)
+    'tapinak': (134, 34),      ## K: nehrin iki kolu arasındaki adada yıkık tapınak (harabeler, heykeller)
+    'olu_orman': (190, 76),    ## KD: ölü orman (yüzlü ağaç, kafa ağacı)
+    'sazlik': (152, 92),       ## D-orta: sazlık gölcükler (nehrin doğu kıyısı)
+    'mantar': (42, 112),       ## B: mantar korusu (nehrin batı yakası)
+    'kemik': (122, 182),       ## G: kemik tarlası (dev iskelet, kafa ağaçları)
+    'egrelti': (24, 190),      ## GB köşe: eğrelti vadisi (nehrin batısında)
 }
-LAKE = (106, 100, 31, 20)      ## Kara Göl: merkez + yarıçaplar (hücre)
-## Patikalar: kamptan göle iner, göl çevresinde batı ve doğu kolları (kıyıdan uzak), kuzeyde sazlık yayı; dış kenarı dolanan halka YOK.
+## Kara Nehir: (orta çizgi noktaları, yarı genişlik hücre). Kuzeyde (164,26)'da ikiye ayrılıp (100,46)'da birleşir; ana yatak orta-batıdan
+## güneybatı kenarına iner. Uçlar çerçevenin içinde (kenar ormanı suyu kurutur -> nehir ormanın içinden çıkıyormuş gibi).
+RIVER = [
+    ([(182, -16), (176, 8), (164, 26)], 5.6),
+    ([(164, 26), (150, 46), (128, 52), (108, 50), (100, 46)], 4.4),               ## güney kol
+    ([(164, 26), (146, 17), (124, 17), (106, 28), (100, 46)], 4.0),               ## kuzey kol
+    ([(100, 46), (92, 66), (100, 86), (116, 100), (118, 120), (104, 136), (80, 141), (64, 153), (62, 173), (52, 195), (40, 232)], 6.2),
+]
+## eski yatak (hilal göl): (merkez x, y, yarıçap, başlangıç-bitiş açısı derece, yarı genişlik)
+OXBOWS = [(140, 112, 11, -75, 75, 2.6), (40, 166, 10, 105, 255, 2.4)]
+## yan dereler (orta çizgi, yarı genişlik): kuzeybatıdan gelen dere ana nehre katılır; doğudan gelen dere sazlığın güneyinden akar
+CREEKS = [
+    ([(-12, 78), (18, 72), (44, 80), (70, 74), (94, 68)], 1.7),
+    ([(226, 126), (204, 120), (180, 114), (154, 118), (124, 112)], 1.5),
+]
+## nehirdeki küçük adacıklar (süs: kafa ağacı, heykel)
+RIVER_ISLETS = [(112, 108, 3.0, 2.2), (58, 166, 2.6, 2.0)]
+## Patikalar: nehri geçerken kıyıda kesilir (sığ geçit), dış kenarı dolanan halka YOK.
 TRAILS = [
-    ['kamp', (104, 162), (97, 146), (100, 133)],
-    [(100, 133), (82, 130), (64, 120), (50, 112), 'mantar'],
-    [(100, 133), (122, 136), (142, 128), (160, 118), 'tapinak'],
-    ['mantar', (42, 88), (50, 66), (44, 50), 'cadi'],
-    ['cadi', (60, 28), (82, 20), 'sazlik'],
-    ['sazlik', (134, 22), (152, 30), 'kemik'],
-    ['kemik', (186, 60), (190, 84), 'tapinak'],
-    ['kamp', (86, 190), (64, 186), 'egrelti'],
-    ['kamp', (126, 192), (150, 188), 'olu_orman'],
+    ['kamp', (166, 146), (156, 126), (154, 108), 'sazlik'],
+    ['sazlik', (170, 84), 'olu_orman'],
+    ['sazlik', (130, 90), (108, 94), (84, 100), (62, 108), 'mantar'],
+    ['mantar', (40, 92), (34, 64), 'cadi'],
+    ['cadi', (64, 30), (90, 26), (112, 34), 'tapinak'],
+    ['kamp', (156, 184), 'kemik'],
+    ['kemik', (94, 178), (64, 182), (42, 188), 'egrelti'],
+    ['olu_orman', (186, 52), (172, 38), (152, 34), 'tapinak'],
 ]
 CLEARINGS = {'kamp': 14, 'cadi': 9, 'sazlik': 5, 'kemik': 9, 'mantar': 8, 'tapinak': 9, 'egrelti': 8, 'olu_orman': 9}
 MUD_FLATS = {'kamp': 7, 'cadi': 6, 'kemik': 5, 'tapinak': 4}
@@ -483,16 +505,28 @@ def build_terrain(m):
     n2 = fbm((VH, VW), 9, SEED + 2)
     n3 = fbm((VH, VW), 40, SEED + 3)
 
-    ## 1) SU alanı (> 0 su)
+    ## 1) SU alanı (> 0 su). Nehir AYRI alan (riv): patikalar onu kurutmaz (sığ geçit), yalnız bölge açıklıkları.
     wet = np.full((VH, VW), -1.0)
-    cx, cy, rx, ry = LAKE
-    d = np.hypot((lx - cx) / rx, (ly - cy) / ry)
-    wet = np.maximum(wet, 1.0 - d + (n1 - 0.5) * 0.55 + (n2 - 0.5) * 0.18)
-    ## göl kolları
-    for (ax, ay, arx, ary) in [(80, 86, 12, 8), (134, 112, 13, 7), (96, 120, 10, 5), (124, 82, 9, 7)]:
-        dd = np.hypot((lx - ax) / arx, (ly - ay) / ary)
-        wet = np.maximum(wet, 1.0 - dd + (n2 - 0.5) * 0.4)
-    ## gölcükler: bölgeye göre yoğunluk (K sazlık bol)
+    riv = np.full((VH, VW), -1.0)
+    rd = np.full((VH, VW), 1e9)  ## nehir orta çizgisine uzaklık (köşe) - gölcükler, orman açıklığı, ateş böcekleri
+    m.river_lines = []
+    for (pts, hw) in RIVER:
+        line = catmull(pts, 12)
+        m.river_lines.append((line, hw))
+        d = dist_field((VH, VW), [[(p[0] + PX0, p[1] + PY0) for p in line]])
+        rd = np.minimum(rd, d)
+        ## genişlik boyunca yavaş değişir (boru gibi tek kalınlıkta durmasın): n3 büyük ölçekli -> yer yer daralır / göllenir
+        riv = np.maximum(riv, 1.0 - d / (hw * (0.62 + 0.30 * n1 + 0.55 * n3)) + (n2 - 0.5) * 0.30)
+    for (ox_, oy_, orr, a0, a1, ohw) in OXBOWS:
+        arc = [(ox_ + math.cos(math.radians(a)) * orr, oy_ + math.sin(math.radians(a)) * orr) for a in np.linspace(a0, a1, 16)]
+        d = dist_field((VH, VW), [[(p[0] + PX0, p[1] + PY0) for p in arc]])
+        rd = np.minimum(rd, d)
+        riv = np.maximum(riv, 1.0 - d / (ohw * (0.8 + 0.4 * n1)) + (n2 - 0.5) * 0.25)
+    for (pts, hw) in CREEKS:
+        line = catmull(pts, 12)
+        d = dist_field((VH, VW), [[(p[0] + PX0, p[1] + PY0) for p in line]])
+        riv = np.maximum(riv, 1.0 - d / (hw * (0.8 + 0.5 * n2)))
+    ## gölcükler: bölgeye göre yoğunluk (sazlık bol)
     ## Gölcükler: her biri 2-4 üst üste binen eğik elips (yuvarlak leke gibi durmasın) + kenarı gürültülü. Bataklık kümeleri: bir merkez
     ## çevresinde 3-6 küçük gölcük (sazlıklı çamurluk hissi).
     pools = []
@@ -501,7 +535,8 @@ def build_terrain(m):
     def pool_ok(px, py, r, gap):
         if math.hypot(px - SPAWN[0], py - SPAWN[1]) < 24:
             return False
-        if math.hypot((px - cx) / (rx + 6), (py - cy) / (ry + 6)) < 1.0:
+        iy_, ix_ = int(round(py)) + PY0, int(round(px)) + PX0
+        if 0 <= iy_ < VH and 0 <= ix_ < VW and rd[iy_, ix_] < r + 9:  ## nehre / hilal göle yapışmasın
             return False
         if any(math.hypot(px - REGIONS[k][0], py - REGIONS[k][1]) < CLEARINGS[k] + r + 1 for k in REGIONS):
             return False
@@ -515,8 +550,9 @@ def build_terrain(m):
         r = rng.uniform(2.6, 7.0)
         if pool_ok(px, py, r, 6):
             pools.append((px, py, r))
-    ## bataklık kümeleri (sazlık kuzey, göl kıyıları, ölü orman güneyi)
-    for (mx, my, n) in [(96, 40, 6), (130, 42, 5), (70, 104, 4), (146, 96, 4), (150, 160, 4), (62, 158, 4), (186, 132, 3), (24, 128, 3)]:
+    ## bataklık kümeleri (sazlık, nehir kıvrımlarının iç yanı, ölü orman, cadı oyuğu)
+    for (mx, my, n) in [(152, 92, 7), (166, 102, 4), (136, 76, 4), (80, 118, 4), (130, 150, 4), (84, 58, 3), (198, 140, 3), (28, 140, 3),
+                        (76, 200, 3), (200, 98, 3), (58, 44, 3)]:
         for _ in range(n * 8):
             px, py = mx + rng.uniform(-11, 11), my + rng.uniform(-8, 8)
             r = rng.uniform(1.6, 3.4)
@@ -536,13 +572,6 @@ def build_terrain(m):
             uy = -(lx - px - ox) * sa + (ly - py - oy) * ca
             dd = np.hypot(ux / (rr * e), uy / (rr / e))
             wet = np.maximum(wet, 1.0 - dd + (n2 - 0.5) * 0.55)
-    ## sazlık: kuzeyde birbirine yakın küçük gölcük kümesi + kıvrımlı dere (göl -> kuzey)
-    stream = catmull([(106, 82), (104, 66), (112, 52), (108, 36), (118, 24), (128, 16)], 14)
-    sd = dist_field((VH, VW), [[(p[0] + PX0, p[1] + PY0) for p in stream]])
-    wet = np.maximum(wet, 1.0 - sd / (1.6 + 1.2 * n2))
-    stream2 = catmull([(132, 116), (146, 126), (152, 142), (162, 150)], 14)
-    sd2 = dist_field((VH, VW), [[(p[0] + PX0, p[1] + PY0) for p in stream2]])
-    wet = np.maximum(wet, 1.0 - sd2 / (1.4 + 1.0 * n2))
     ## dış çerçeve + kenar bandı: seyrek su
     edge = np.minimum.reduce([lx, ly, PLAY - lx, PLAY - ly])
     wet = np.where(edge < -3, np.maximum(wet, (n3 - 0.74) * 3.0), wet)
@@ -551,14 +580,15 @@ def build_terrain(m):
     dry = np.zeros((VH, VW), bool)
     for k, (rxk, ryk) in REGIONS.items():
         dry |= np.hypot(lx - rxk, ly - ryk) < CLEARINGS[k] + n2 * 2
+    dry_reg = dry.copy()
     trails = trail_points()
     tpts = [[(p[0] + PX0, p[1] + PY0) for p in tr] for tr in trails]
     td = dist_field((VH, VW), tpts)
     tw = 1.3 + 1.2 * n2  ## patika yarı genişliği (köşe)
     dry |= td < tw + 3.2
-    water = (wet > 0) & ~dry
-    ## göl adaları (ulaşılamaz süs: kafa ağacı, heykel)
-    islands = [(98, 94, 3.2, 2.4), (118, 104, 2.6, 2.0)]
+    water = ((wet > 0) & ~dry) | ((riv > 0) & ~dry_reg)
+    ## nehir adacıkları (süs: kafa ağacı, heykel)
+    islands = list(RIVER_ISLETS)
     for (ix_, iy_, irx, iry) in islands:
         water &= ~(np.hypot((lx - ix_) / irx, (ly - iy_) / iry) < 1.0)
     water = remove_small(water, 3, True)
@@ -597,6 +627,7 @@ def build_terrain(m):
     m.edge = edge
     m.pools = pools
     m.islands = islands
+    m.river_dist = rd
 
 
 
@@ -713,11 +744,11 @@ def build_forest(m):
         r = (CLEARINGS[k] + 5) * 1.7
         open_ = np.maximum(open_, np.clip(1.0 - np.hypot(lx - rxk, ly - ryk) / r, 0, 1))
     trail = np.clip(1.0 - (m.c_trail - 2.0) / 8.0, 0, 1)
-    cx, cy, rx, ry = LAKE
-    lake_d = np.hypot((lx - cx) / (rx + 12), (ly - cy) / (ry + 12))
-    lake_open = np.clip(1.4 - lake_d, 0, 1)
+    ## nehir kıyısı seyrek (kıyıda koru duvarı nehri saklamasın); köşe ızgarasından hücreye
+    rdc = m.river_dist[:-1, :-1]
+    river_open = np.clip(1.0 - (rdc - 6.0) / 9.0, 0, 1)
     edge_up = np.clip(1.0 - edge / 26.0, 0, 1) * 0.35
-    D = d + edge_up - 0.75 * open_ - 0.55 * trail - 0.5 * lake_open
+    D = d + edge_up - 0.75 * open_ - 0.55 * trail - 0.4 * river_open
     play = (lx >= 0) & (ly >= 0) & (lx < PLAY) & (ly < PLAY)
     vals = D[play & m.c_land & ~band]
     m.T_KORU = float(np.percentile(vals, 87))
@@ -766,10 +797,11 @@ def nearest_region(x, y):
     return min(REGIONS, key=lambda k: math.hypot(lx - REGIONS[k][0], ly - REGIONS[k][1]))
 
 
-def pick_tree(region, big=True):
+def pick_tree(region, big=True, rnd=None):
+    rnd = rnd or rng
     mix = REGION_TREES[region]
     tot = sum(mix.values())
-    r = rng.uniform(0, tot)
+    r = rnd.uniform(0, tot)
     for s, w in mix.items():
         r -= w
         if r <= 0:
@@ -777,7 +809,7 @@ def pick_tree(region, big=True):
     keys = TREE_SETS[s]
     if not big:
         keys = [k for k in keys if ATLAS['objects'][k]['ht'] <= 4] or keys
-    return rng.choice(keys)
+    return rnd.choice(keys)
 
 
 def obj_rect_ok(m, key, cx, by, need_land=True, avoid_forest=False):
@@ -922,6 +954,33 @@ def collect_trees(m):
         singles += 1
         if singles >= YOGUNLUK['tek_sayi']:
             break
+    ## 3) KENAR SIRASI (madde 676): görünmez engelin (bant + korular) oyun alanına bakan kenarına sık ağaç - 527'de seyrekleşen orman kenarı
+    ## açık çamur gibi görünüp oyuncuyu "ağaç arasından" geçirmeye çağırıyordu. Gövde kenar hücresinde, gövdeler arası en az 2 hücre (taçlar
+    ## birbirine değer = duvar okunur). Ayrı rastgele üreteç: yukarıdaki ağaçlar aynı kalır. Kalan açık kenarı tools/harita_duvar.py kırpar.
+    rnd = random.Random(SEED + 675)
+    yy, xx = np.mgrid[0:H, 0:W]
+    lx, ly = xx - PX0, yy - PY0
+    play = (lx >= 0) & (ly >= 0) & (lx < PLAY) & (ly < PLAY)
+    open_land = ~m.forest & m.c_land
+    near_open = np.zeros_like(open_land)
+    near_open[1:, :] |= open_land[:-1, :]
+    near_open[:-1, :] |= open_land[1:, :]
+    near_open[:, 1:] |= open_land[:, :-1]
+    near_open[:, :-1] |= open_land[:, 1:]
+    rim = m.forest & m.c_land & near_open & play
+    ry, rx = np.nonzero(rim)
+    order = list(zip(rx.tolist(), ry.tolist()))
+    rnd.shuffle(order)
+    rim_n = 0
+    for (x, y) in order:
+        if not free(x, y, YOGUNLUK['kenar_aralik']):
+            continue
+        key = pick_tree(nearest_region(x, y), rnd=rnd)
+        if not obj_rect_ok(m, key, x, y) or not south_of_objects(m, key, x, y):
+            continue
+        add(key, x, y)
+        rim_n += 1
+    m.rim_trees = rim_n
     m.clumps = clump_centers
     return trees
 
@@ -1532,12 +1591,16 @@ def water_mask(m, imgs):
 
 def firefly_zones(m):
     zones = []
-    cx, cy, rx, ry = LAKE
-    for a in range(0, 360, 30):
-        t = math.radians(a)
-        px = cx + math.cos(t) * (rx + 2)
-        py = cy + math.sin(t) * (ry + 2)
-        zones.append(((px + PX0) * T, (py + PY0) * T, 70.0))
+    ## nehir boyunca (oyun alanı içinde) ~16 hücrede bir
+    for (line, hw) in m.river_lines:
+        acc = 99.0
+        for i in range(1, len(line)):
+            acc += math.hypot(line[i][0] - line[i - 1][0], line[i][1] - line[i - 1][1])
+            px, py = float(line[i][0]), float(line[i][1])
+            if acc < 16 or not (6 < px < PLAY - 6 and 6 < py < PLAY - 6):
+                continue
+            acc = 0.0
+            zones.append(((px + PX0) * T, (py + PY0) * T, 60.0 + hw * 4.0))
     for (px, py, r) in m.pools:
         if rng.random() < 0.55:
             zones.append(((px + PX0) * T, (py + PY0) * T, max(40.0, r * T * 1.3)))
@@ -1575,7 +1638,13 @@ def main():
     wdec = place_water_decor(m, imgs)
     nspots = place_spots(m, imgs)
     firefly_zones(m)
+    ## madde 676: görünmez engelin kenarı görünen ağaç / nesneye hizalanır (tools/harita_duvar.py)
+    cov = harita_duvar.nesne_ortusu(m, imgs, tile_rgba, ['Animasyonsuz çalılar', 'Orman parçaları 3'] + ['Ağaç %d' % i for i in range(TREE_LAYERS)],
+                                    H, W, T, FEET_SHIFT)
+    ncut = harita_duvar.duvari_hizala(m, imgs, cov, compute_blocked, flood, P(*SPAWN), (PX0, PY0, PLAY, PLAY))
     blocked, reach, npocket, cat = seal_pockets(m, imgs)
+    rim_all, rim_open = harita_duvar.acik_kenar(m, imgs, cov, compute_blocked, flood, P(*SPAWN))
+    print('duvar hizalama: kenar ağacı %d, kırpılan %d hücre, kenar %d (açık görünen %d)' % (getattr(m, 'rim_trees', 0), ncut, rim_all, rim_open))
     play = blocked[PY0:PY0 + PLAY, PX0:PX0 + PLAY]
     rplay = reach[PY0:PY0 + PLAY, PX0:PX0 + PLAY]
     print('ağaç: %d (sığmayan %d)  nesne: %d  bitki: %d  çalılık: %d  su süsü: %s  leke: %d' % (placed, skipped, nprops, nplants, nbrush, wdec, nspots))

@@ -26,6 +26,7 @@ static var _cache_frame: int = -1
 static var _nodes: Array[Node2D] = [] ## [0] = yerel oyuncu (varsa), sonra canlı RemotePlayer kuklaları
 static var _positions: PackedVector2Array = PackedVector2Array()
 static var _ranges: PackedFloat32Array = PackedFloat32Array()
+static var _xp_ranges: PackedFloat32Array = PackedFloat32Array() ## XP küresi menzili (Toplayıcı ruhanisi +%40, madde 625; yoksa _ranges ile aynı)
 static var _peer_ids: PackedInt32Array = PackedInt32Array()
 static var _alive: Array[bool] = []
 static var _ghost: Array[bool] = [] ## Suriyeli Hadime hayaleti (toplayamaz) - bkz. _push
@@ -64,6 +65,7 @@ static func _refresh(tree: SceneTree) -> void:
 	_nodes.clear()
 	_positions.clear()
 	_ranges.clear()
+	_xp_ranges.clear()
 	_peer_ids.clear()
 	_alive.clear()
 	_ghost.clear()
@@ -85,7 +87,9 @@ static func _refresh(tree: SceneTree) -> void:
 static func _push(n: Node2D, peer_id: int) -> void:
 	_nodes.append(n)
 	_positions.append(n.global_position)
-	_ranges.append(float(n.call("get_pickup_range")) if n.has_method("get_pickup_range") else DEFAULT_PICKUP_RANGE)
+	var r: float = float(n.call("get_pickup_range")) if n.has_method("get_pickup_range") else DEFAULT_PICKUP_RANGE
+	_ranges.append(r)
+	_xp_ranges.append(maxf(r, float(n.call("get_xp_pickup_range"))) if n.has_method("get_xp_pickup_range") else r)
 	_peer_ids.append(peer_id)
 	_alive.append(n.get("is_dead") != true)
 	## Suriyeli Hadime'nin hayaleti "yerden hiçbir şey toplayamaz" - düşmeler ona doğru uçup etrafında asılı kalmasın.
@@ -124,7 +128,8 @@ static func _target_index(pos: Vector2, is_magnetized: bool, magnet_target_peer_
 
 ## Düşmenin bu adımda hareket etmesi gereken hedef oyuncu (mıknatıslı ya da toplama menzilinde) - yoksa null.
 ## Çağıran taraf (xp_orb.gd/gold_drop.gd _physics_process) sadece hızlanıp o oyuncuya doğru ilerler.
-static func attraction_target(drop: Node2D, is_magnetized: bool, magnet_target_peer_id: int) -> Node2D:
+## xp: XP küresi (Toplayıcı'nın yalnız XP'ye işleyen menzil bonusu için _xp_ranges).
+static func attraction_target(drop: Node2D, is_magnetized: bool, magnet_target_peer_id: int, xp: bool = false) -> Node2D:
 	_refresh(drop.get_tree())
 	last_query_far = false
 	var pos: Vector2 = drop.global_position
@@ -137,7 +142,7 @@ static func attraction_target(drop: Node2D, is_magnetized: bool, magnet_target_p
 		return null
 	if is_magnetized:
 		return n
-	var r: float = _ranges[idx]
+	var r: float = _xp_ranges[idx] if xp else _ranges[idx]
 	var d2: float = pos.distance_squared_to(_positions[idx])
 	if d2 <= r * r:
 		return n
@@ -151,7 +156,7 @@ static func _near_any_player(pos: Vector2) -> bool:
 	for i in range(_nodes.size()):
 		if _ghost[i]:
 			continue ## hayalet toplayamaz: yanında uyuyan düşmeyi uyandırmasın (uyan-uyu döngüsü olmasın)
-		var r: float = _ranges[i] + WAKE_MARGIN
+		var r: float = _xp_ranges[i] + WAKE_MARGIN ## _xp_ranges >= _ranges: XP menzili büyükken de vaktinde uyansın
 		if pos.distance_squared_to(_positions[i]) <= r * r:
 			return true
 	return false

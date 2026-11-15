@@ -15,6 +15,12 @@ const PixelDraw := preload("res://scripts/pixel_draw.gd")
 const PixelFxScript := preload("res://scripts/fx_enchant_pixel.gd")
 const ParticleTrail := preload("res://scripts/fx_particle_trail.gd")
 const ENCHANT_AREA_PATH := "res://scripts/enchant_area.gd"
+const POISON_DRIP_PATH := "res://scripts/poison_drip_fx.gd"
+## Seken Çelik (madde 591): kopya görseli preload (yalnız weapon_tier_art + kendi sayfaları - döngü yok; uzak oyuncunun ilk Çelik
+## Değirmen'inde derleme/doku takılması olmasın). Çakram mermisi load ile: uzak kopya sahnesi zaten yüklü (broadcast_projectile), preload
+## enemy.gd sınıf zinciri yüzünden döngü riski taşır.
+const ChakramMillScript := preload("res://scripts/chakram_mill_fx.gd")
+const CHAKRAM_PROJ_PATH := "res://scripts/boomerang_projectile.gd"
 const SpriteFxScript := preload("res://scripts/fx_enchant_sprite.gd")
 ## Efsun efektleri karakterlerin ALTINDA (bkz. enchant_layer.gd).
 const EnchantLayer := preload("res://scripts/enchant_layer.gd")
@@ -92,6 +98,16 @@ static func spawn(tree: SceneTree, kind: String, pos: Vector2, data: Dictionary 
 		"area_end":
 			var area_script2: GDScript = load(ENCHANT_AREA_PATH) as GDScript
 			area_script2.end_by_id(str(data.get("id", "")))
+		## Sıçrayan Zehir (Zehir Asası, madde 592): cesetten hedefe yay çizen damla + varışta taç sıçraması (poison_drip_fx.gd leap).
+		"poison_leap":
+			var drip_script: GDScript = load(POISON_DRIP_PATH) as GDScript
+			drip_script.leap(tree, pos, Vector2(data.get("to", pos)), float(data.get("time", 0.28)))
+		## Seken Çelik finali Çelik Değirmen (madde 591): çakramın döndüğü yerde yerinde dönen çelik kopya (yalnız görsel, hasar kasterde).
+		"chakram_mill":
+			ChakramMillScript.spawn(tree, pos, data)
+		## Seken Çelik sekmesi (madde 591): uzak ekrandaki çakram kopyası kasterin sekme noktasından yeni hedefe döner (pid ile bulunur).
+		"chakram_leg":
+			(load(CHAKRAM_PROJ_PATH) as GDScript).call("apply_net_leg", int(data.get("pid", 0)), pos, Vector2(data.get("to", pos)))
 		## 2026-09-30 yeni efsun seti: sprite sayfası (tools/gen_enchant_fx.py) - tek seferlik ya da süreli döngü.
 		"sprite":
 			SpriteFxScript.spawn(tree, pos, data)

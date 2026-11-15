@@ -8,7 +8,6 @@ extends SceneTree
 ## kubbe içindeki yaratık sayısı (host gerçek yaratıkları + istemcideki kopyalar). MP_ROLE=host|client MP_DIR MP_PORT. run_audit.ps1 -Mode paladin.
 
 const PaladinDome := preload("res://scripts/paladin_dome.gd")
-const AssistScript := preload("res://scripts/assist.gd")
 
 var _role: String = OS.get_environment("MP_ROLE")
 var _dir: String = OS.get_environment("MP_DIR")
@@ -81,6 +80,8 @@ func _sample_own(player: Node2D) -> void:
 	_note("own.redirect_peer", int(player.get("damage_redirect_peer_id")))
 	_note("own.hp", int(float(player.get("health")) / 5.0) * 5)
 	_note("own.barrier_node", is_instance_valid(player.get("_paladin_barrier_instance")))
+	## Şovalye E bariyeri dostun KENDİ istemcisinde (madde 581: A5 Işık Kuyruğu, kapanış dismiss ile solar)
+	_note("own.link_fx", is_instance_valid(player.get("_local_barrier_link_fx")))
 
 
 func _sample_puppet() -> void:
@@ -93,16 +94,11 @@ func _sample_puppet() -> void:
 	_note("pup.guard", bool(rp.get("paladin_guard_active")))
 	_note("pup.guard_fx", is_instance_valid(rp.get("_paladin_guard_fx")))
 	_note("pup.barrier_visual", is_instance_valid(rp.get("_barrier_visual")))
+	_note("pup.link_fx", is_instance_valid(rp.get("_barrier_link_fx")))
 	var a: Variant = rp.get("anim")
 	if a is AnimatedSprite2D:
 		_note("pup.anim_bariyer", String((a as AnimatedSprite2D).animation).begins_with("bariyer_"))
 	_note("pup.lev", bool(rp.get("_paladin_lev_on")))
-	if _role == "host":
-		var cover: Dictionary = AssistScript.paladin_support(self)
-		var covered: Array = []
-		for k in cover.keys():
-			covered.append([int(k), cover[k]])
-		_note("host.assist_cover", str(covered))
 
 
 func _run() -> void:

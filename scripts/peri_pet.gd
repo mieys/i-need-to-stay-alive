@@ -1,7 +1,7 @@
 extends Node2D
 
 ## EVCİL HAYVAN "PERİ" (kullanıcı isteği 2026-10-12): sahibinin canı %100'ün altındayken her PERI_HEAL_INTERVAL (6 sn) saniyede bir can
-## basma büyüsü yapar: saldırı gücünün (damage_bonus) PERI_HEAL_RATIO'su (%10) kadar can. Sabitler pet_catalog.gd'de.
+## basma büyüsü yapar: saldırı gücünün (damage_bonus) PERI_HEAL_RATIO'su (%10) ya da azami canının PERI_HEAL_MAX_HP_RATIO'su (%1,5), hangisi büyükse kadar can. Sabitler pet_catalog.gd'de.
 ##  - Büyü HAZIR bekler: can doluyken sayaç 0'da durur, can eksilir eksilmez basar, sonra 6 sn bekler.
 ##  - Can player.gd heal() ile verilir (yeşil sayı + İyileştirme ve Kalkan Gücü çarpanı - oyuncunun KENDİ sağladığı can).
 ##  - Sahip yerdeyken/ölüyken basmaz (madde 104 kuralı; heal() de is_dead iken zaten işlemez).
@@ -195,7 +195,8 @@ func owner_needs_heal() -> bool:
 
 
 func heal_amount() -> float:
-	return maxf(1.0, float(owner_body.get("damage_bonus"))) * PetCatalog.PERI_HEAL_RATIO
+	return maxf(maxf(1.0, float(owner_body.get("damage_bonus"))) * PetCatalog.PERI_HEAL_RATIO,
+			float(owner_body.get("max_health")) * PetCatalog.PERI_HEAL_MAX_HP_RATIO)
 
 
 func _broadcast(cast: bool) -> void:

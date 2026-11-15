@@ -22,6 +22,9 @@ const MESAFE_TEXEL := 2 ## dünya px / su_mesafe.png tekseli (R = kıyıya uzakl
 const AKIS_TEXEL := 4 ## dünya px / su_akis.png tekseli (RG = akış, B = dalgacık doğabilir)
 const MESAFE_TEX := "res://assets/map/su_mesafe.png"
 const AKIS_TEX := "res://assets/map/su_akis.png"
+## Altın Kumlar (madde 631): aynı dokular çöl haritasından pişirilir (`-- col`, tools/gen_su_dokusu.gd), alanı + yolları profilin "su_doku"sundan
+## (scripts/map_profiles.gd) gelir; yoksa yukarıdaki ana harita sabitleri.
+const MapProfilesScript := preload("res://scripts/map_profiles.gd")
 
 var _mat: ShaderMaterial = null
 
@@ -33,8 +36,9 @@ static func attach(harita: Node) -> Node:
 	var water := harita.get_node_or_null(WATER_PATH) as TileMapLayer
 	if water == null or not (water.material is ShaderMaterial):
 		return null
-	var mesafe := load(MESAFE_TEX) as Texture2D
-	var akis := load(AKIS_TEX) as Texture2D
+	var cfg: Dictionary = MapProfilesScript.current().get("su_doku", {})
+	var mesafe := load(str(cfg.get("mesafe", MESAFE_TEX))) as Texture2D
+	var akis := load(str(cfg.get("akis", AKIS_TEX))) as Texture2D
 	if mesafe == null or akis == null:
 		push_warning("WaterFx: su dokuları yok - tools/gen_su_dokusu.gd çalıştır")
 		return null
@@ -44,8 +48,10 @@ static func attach(harita: Node) -> Node:
 	## TEX_* HARİTA KÖKÜNE göre (araç haritayı orijinde pişirir); shader dünya koordinatıyla çalışır. main.tscn'de Harita (-2, 21)'de:
 	## dönüşüm uygulanmayınca kıyı çizgileri / sığ tonlar suyun ortasına kayıyordu (kullanıcı ekran görüntüsü, 2026-10-17).
 	var xf: Transform2D = (harita as Node2D).global_transform if harita is Node2D else Transform2D.IDENTITY
-	mat.set_shader_parameter("doku_origin", xf * TEX_ORIGIN)
-	mat.set_shader_parameter("doku_size", TEX_WORLD_SIZE * xf.get_scale())
+	var tex_origin: Vector2 = cfg.get("origin", TEX_ORIGIN)
+	var tex_size: Vector2 = cfg.get("size", TEX_WORLD_SIZE)
+	mat.set_shader_parameter("doku_origin", xf * tex_origin)
+	mat.set_shader_parameter("doku_size", tex_size * xf.get_scale())
 	var nocol := harita.get_node_or_null(WATER_NOCOL_PATH) as TileMapLayer
 	if nocol != null:
 		nocol.material = mat

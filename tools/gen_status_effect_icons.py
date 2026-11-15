@@ -221,6 +221,60 @@ def hourglass():
     return ic
 
 
+def poison_drop():
+    """Zehir (debuff - Zehirli Gonca / Filiz ısırığı, Medusa yılanları; madde 682): yeşil damla + kabarcıklar."""
+    ic = Icon()
+    drop = poly([(24, 4), (31, 16), (36, 26), (35, 35), (30, 41), (24, 43), (18, 41), (13, 35), (12, 26), (17, 16)])
+    ic.outline(drop)
+    ic.fill_fn(drop, lambda x, y: hexc('#8fd65a') if x < 28 and y < 36 else hexc('#3f8a2e'))
+    ic.fill(poly([(18, 24), (21, 20), (22, 28), (19, 33)]), hexc('#d4f5a0'))
+    for (cx, cy, r) in ((38, 12, 3), (33, 6, 2)):
+        b = circle(cx, cy, r)
+        ic.outline(b)
+        ic.fill(b, hexc('#6bbf45'))
+    ic.p[(27, 31)] = hexc('#24561c')
+    ic.p[(29, 29)] = hexc('#24561c')
+    return ic
+
+
+def stone_eye():
+    """Taşlaşma (debuff - Medusa'nın bakışı, madde 682): gri taş göz, sarı-yeşil iris, çatlak."""
+    ic = Icon()
+    eye = poly([(4, 24), (14, 13), (24, 10), (34, 13), (44, 24), (34, 35), (24, 38), (14, 35)])
+    ic.outline(eye)
+    ic.fill_fn(eye, lambda x, y: hexc('#b8b4ac') if (x - 24) + (y - 24) < -6 else (hexc('#8e8a82') if (x - 24) + (y - 24) < 8 else hexc('#66625c')))
+    iris = circle(24, 24, 8)
+    ic.outline(iris, hexc('#3a3a1c'))
+    ic.fill_fn(iris, lambda x, y: hexc('#e6f08a') if (x - 24) + (y - 24) < -2 else hexc('#a8c040'))
+    pupil = rect(23, 18, 25, 30)
+    ic.fill(pupil, hexc('#1a1a10'))
+    crack = [(10, 30), (15, 27), (18, 31), (22, 28)]
+    for i in range(len(crack) - 1):
+        x0, y0 = crack[i]
+        x1, y1 = crack[i + 1]
+        steps = max(abs(x1 - x0), abs(y1 - y0), 1)
+        for s in range(steps + 1):
+            f = s / steps
+            ic.p[(int(round(x0 + (x1 - x0) * f)), int(round(y0 + (y1 - y0) * f)))] = hexc('#3a3833')
+    return ic
+
+
+def stone_weight():
+    """Taş Ağırlığı (debuff - Medusa'nın bakışı, yürürken DEĞİL: %30 yavaşlama, madde 682): gri taş yığını + aşağı ok."""
+    ic = Icon()
+    rock = poly([(10, 20), (18, 10), (30, 9), (38, 16), (40, 28), (32, 34), (16, 34), (9, 28)])
+    ic.outline(rock)
+    ic.fill_fn(rock, lambda x, y: hexc('#c2beb5') if (x - 24) + (y - 20) < -6 else (hexc('#8e8a82') if (x - 24) + (y - 20) < 8 else hexc('#66625c')))
+    ic.p[(20, 18)] = hexc('#eae6dc')
+    ic.p[(21, 18)] = hexc('#eae6dc')
+    arrow = poly([(24, 46), (31, 39), (27, 39), (27, 31), (21, 31), (21, 39), (17, 39)])  ## aşağı ok (yavaşlama)
+    for c in arrow:
+        ic.p.pop(c, None)
+    ic.outline(arrow, hexc('#5a0e0e'))
+    ic.fill_fn(arrow, lambda x, y: hexc('#ff8f80') if x < 24 else hexc('#d9463a'))
+    return ic
+
+
 def build():
     os.makedirs(OUTDIR, exist_ok=True)
     icons = {
@@ -232,6 +286,9 @@ def build():
         'burn': flame(),
         'bleed': blood_drop(),
         'time_frozen': hourglass(),
+        'poison': poison_drop(),
+        'petrify': stone_eye(),
+        'stone_slow': stone_weight(),
     }
     for k, ic in icons.items():
         ic.image().save(os.path.join(OUTDIR, '%s.png' % k))

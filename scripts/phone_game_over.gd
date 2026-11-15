@@ -9,8 +9,10 @@ extends Control
 ## müttefik / düğme hâlleri her karede oradan aynalanır.
 
 const DK := preload("res://scripts/menu_dark_kit.gd")
+const KeyIconBox := preload("res://scripts/key_icon_box.gd") ## kazanılan harita anahtarı satırı (madde 605)
 const PK := preload("res://scripts/phone_menu_kit.gd")
 const TierDisplay := preload("res://scripts/tier_display.gd")
+const SkullIcon := preload("res://scripts/skull_icon.gd")
 const RunSummaryUI := preload("res://scripts/run_summary_ui.gd")
 
 ## Yatay ölçüler simetrik: ray 272 (sekme 176 ortada, iki yanda 48), orta levha raydan ve sağ sütundan 24 açık, sağ sütun içeriği
@@ -373,7 +375,7 @@ func _page_summary(summary: Dictionary, b: Control) -> Control:
 		for p: Dictionary in team:
 			kills += int(p["kills"])
 	var tiles: Array = [[RunSummaryUI.format_time(float(summary.get("time", 0.0))), "SÜRE", PK.G_CLOCK, null],
-			[TierDisplay.to_roman(int(summary.get("tier", 1))), "KADEME", PK.G_SKULL, null]]
+			[TierDisplay.to_roman(int(summary.get("tier", 1))), "KADEME", [], SkullIcon.tex(int(summary.get("tier", 1)) >= TierDisplay.FINAL_TIER)]]
 	if int(summary.get("layer", 0)) > 0:
 		tiles.append([str(int(summary["layer"])), "SONSUZ KAT", PK.G_STAR, null])
 	tiles.append([fmt(kills), "ÖLDÜRME", PK.G_SWORD, null])
@@ -488,8 +490,12 @@ func _page_rewards(b: Control) -> Control:
 		return v
 	for ln: Array in lines:
 		var h := DK.h(16)
-		h.add_child(PK.glyph(PK.G_STAR if str(ln[0]) == "star" else PK.G_CHECK, DK.C_PRICE if str(ln[0]) == "star" else DK.C_GOOD, 5))
-		var t := PK.lbl(str(ln[1]).replace(" · ", ": "), PK.FS_SMALL, DK.C_PRICE if str(ln[0]) == "star" else DK.C_GOOD)
+		var is_key: bool = str(ln[0]).begins_with("key:") ## harita anahtarı kazanımı (madde 605): kendi simgesi, altın yazı
+		if is_key:
+			h.add_child(KeyIconBox.new(32.0, str(ln[0]).substr(4)))
+		else:
+			h.add_child(PK.glyph(PK.G_STAR if str(ln[0]) == "star" else PK.G_CHECK, DK.C_PRICE if str(ln[0]) == "star" else DK.C_GOOD, 5))
+		var t := PK.lbl(str(ln[1]).replace(" · ", ": "), PK.FS_SMALL, DK.C_PRICE if (str(ln[0]) == "star" or is_key) else DK.C_GOOD)
 		t.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		h.add_child(t)

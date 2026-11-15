@@ -461,10 +461,8 @@ def main():
         cell = save_sheet(fr, name)
         frames_res(name, cell, [("play", (0, 0), n, False, n / 0.8)])
 
-    drop, idle = bomb_frames()
-    cell = save_sheet(drop + idle, "bomb")
-    frames_res("bomb", cell, [("drop", (0, 0), len(drop), False, len(drop) / 0.44),
-                              ("idle", (len(drop), 0), len(idle), True, 14.0)])
+    # bomba sayfasi 2026-11-13'ten beri tools/gen_korsan_bomb_sprite.py'de (kullanicinin bomba cizimi + fitil kivilcimi);
+    # buradaki eski ASCII bomb_frames() artik yazilmaz - yazilirsa yeni bombanin uzerine yazar.
 
     sf, anchor = strike_frames(68.0, 190.0, 8)
     cell = save_sheet(sf, "strike")

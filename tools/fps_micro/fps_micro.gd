@@ -1803,9 +1803,6 @@ func _prof_hit() -> void:
 	per.call("enemy._flash (cooldown-blocked)", func() -> void:
 		for d in ds:
 			d._flash())
-	per.call("enemy._record_assist_damage", func() -> void:
-		for d in ds:
-			d._record_assist_damage(5.0))
 	per.call("enemy._show_hit_number", func() -> void:
 		for d in ds:
 			d._show_hit_number(5.0, false))

@@ -52,6 +52,18 @@ const WEIGHTS := [50.0, 32.0, 14.0, 4.0]
 ## %62'den %59'a, fark edilmez). Artık çarpan 0,04/puan VE kademe numarasına göre ÜSTEL (Nadir x m, Epik x m², Efsanevi x m³): şans yüksek
 ## kademeleri en çok büyütür. Kart başına (Sıradan/Nadir/Epik/Efsanevi): şans 0 = %50/32/14/4, 10 = %38/34/21/8, 20 = %28/33/26/13.
 const TIER_LUCK_WEIGHT_BONUS_PER_POINT := 0.04
+## 2026-11-11 (kullanıcı: "şans oyunda hiç hissedilmiyor", sonra "papağan ve cadı pasifi dengeli olsun"): kademe ağırlığına sayılan şans EN ÇOK 20 puan.
+## Şans sınırsız bir sayaç (Papağan +10, Cadı pasifi en çok +20, Son Şans +10, kartlar) ve ağırlık ÜSTEL olduğu için bu kaynaklar üst üste binince
+## Efsanevi oranı hızla uçuyordu (42 şansta ~%25); tavanla alt ucu (kart +3) rahatça yükseltebildik. Tavan SADECE kademe ağırlığına uygulanır -
+## yaratık düşme çarpanları (yemek/mıknatıs/sandık/parçacık, enemy.gd LUCK_DROP_MULT_PER_POINT) doğrusal olduğu için sınırsız kalır.
+const TIER_LUCK_CAP := 20.0
+## Şans kartı (level atlama "Şans"): kademe 1..4 = 3 / 3,9 / 4,8 / 5,7 (eskiden 1,5 x kademe çarpanı; kart "+1" yazıp 1,5 veriyordu).
+## player.gd apply_upgrade "luck" dalı VE level_up_screen.gd _scaled_desc_value (kartta gösterilen sayı) İÇİN TEK kaynak.
+const LUCK_CARD_BASE := 3.0
+
+
+static func luck_card_for_tier(tier: int) -> float:
+	return LUCK_CARD_BASE * (1.0 + float(maxi(tier, 1) - 1) * 0.3)
 
 ## Kullanıcı isteği: "Can çalma statlarını düzenliyoruz, tier 1: %1, tier 2: %1.5,
 ## tier 3: %2, tier 4: %2.5 can çalma" - level atlama kartındaki "Can Çalma"
@@ -140,7 +152,7 @@ const MINI_FRAME_TEXTURES := [
 static func roll(luck: float = 0.0) -> int:
 	var effective_weights: Array = WEIGHTS.duplicate()
 	if luck > 0.0:
-		var mult: float = 1.0 + luck * TIER_LUCK_WEIGHT_BONUS_PER_POINT
+		var mult: float = 1.0 + minf(luck, TIER_LUCK_CAP) * TIER_LUCK_WEIGHT_BONUS_PER_POINT
 		for i in range(1, effective_weights.size()):
 			effective_weights[i] *= pow(mult, float(i))
 	var total: float = 0.0

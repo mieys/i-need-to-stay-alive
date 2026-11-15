@@ -40,17 +40,15 @@ const FLIGHT_TIME := 0.62
 const SPRAY_DIST := 70.0 ## önce kaynağın çevresine saçılır, sonra panele kıvrılır
 const HOLD_TIMEOUT := 3.0
 
-## Sandık kaynağı: chest_art.gd sayfası (20 kare x 96 px = 48 dünya px; 12 = kapak açıldı, 16-19 açık bekleme döngüsü).
+## Sandık kaynağı: chest_art.gd sayfası (2 kare x 32 px: kare 1 = AÇIK sandık, madde 557).
 const ChestArt := preload("res://scripts/chest_art.gd")
 const CHEST_SHEETS := {
 	&"chest": ChestArt.NORMAL_SHEET,
 	&"elite_chest": ChestArt.ELITE_SHEET,
 }
 const CHEST_FRAMES := ChestArt.FRAME_COUNT
-const CHEST_OPEN_FRAME := 12
-const CHEST_LOOP := [16, 17, 18, 19]
-const CHEST_LOOP_STEP := 0.12
-const CHEST_SCALE := 5.0 * ChestArt.TEXEL ## eski 48 px karenin x5 boyu (96 px kare, 0,5 sanat pikseli)
+const CHEST_OPEN_FRAME := ChestArt.FRAME_OPEN
+const CHEST_SCALE := 5.0 * ChestArt.TEXEL ## 32 px kare x4 = 128 ekran px (1 sanat px = 4 ekran px)
 const CHEST_POP_TIME := 0.2 ## sandık belirdikten sonra ilk para bu kadar sonra fışkırır
 const CHEST_COINS_SFX := preload("res://Sound FX Starter Pack Vol. 1/Medieval/Loot Gold.wav")
 
@@ -494,8 +492,6 @@ func _update_chests(delta: float) -> void:
 		var back: float = 1.0 + 2.7 * pow(pop - 1.0, 3.0) + 1.7 * pow(pop - 1.0, 2.0) ## easeOutBack
 		spr.scale = Vector2.ONE * CHEST_SCALE * lerpf(0.7, 1.0, back)
 		spr.modulate.a = pop
-		if t >= CHEST_POP_TIME:
-			spr.frame = CHEST_LOOP[int((t - CHEST_POP_TIME) / CHEST_LOOP_STEP) % CHEST_LOOP.size()]
 		if t > life:
 			var k: float = clampf((t - life) / 0.35, 0.0, 1.0)
 			spr.modulate.a = 1.0 - k

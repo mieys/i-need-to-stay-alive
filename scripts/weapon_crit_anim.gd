@@ -26,6 +26,7 @@ const STYLES := {
 	"crossbow": {"kind": "recoil", "kick": 1.9, "rot": 0.35, "back": 0.26},
 	"tufek": {"kind": "recoil", "kick": 2.3, "rot": 0.4, "back": 0.32},
 	"pompali": {"kind": "recoil", "kick": 3.0, "rot": 0.5, "back": 0.36}, ## madde 448: pompa geri tepmesi
+	"makineli": {"kind": "recoil", "kick": 1.6, "rot": 0.22, "back": 0.12}, ## madde 652: hızlı ateş - kısa, hafif tepme
 	"fire_staff": {"kind": "recoil", "kick": 2.4, "rot": 0.3, "back": 0.3},
 	"tabanca": {"kind": "twirl", "kick": 1.6, "rot": 0.45, "back": 0.2},
 	"tuftuf": {"kind": "recoil", "kick": 2.2, "rot": 0.28, "back": 0.28}, ## Zehir Asası (madde 410): eski "puff" (üfleme hamlesi) yerine asa geri tepmesi
@@ -118,11 +119,17 @@ static func play_ranged(host: Node, icon: Node2D, weapon_key: String, dir: Vecto
 			tw.parallel().tween_property(icon, "scale", base_scale, back).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 		_:
 			## recoil / twirl: normal geri tepmenin (0.04 çık / 0.16 dön) sert ve yavaş toparlanan hali + daha derin ezilme.
-			tw.tween_property(icon, "position", base_pos + kick, 0.035)
-			tw.parallel().tween_property(icon, "scale", base_scale * Vector2(0.72, 1.28), 0.035)
-			tw.tween_property(icon, "position", base_pos, back).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-			tw.parallel().tween_property(icon, "scale", base_scale * Vector2(1.12, 0.92), back * 0.45).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-			tw.tween_property(icon, "scale", base_scale, 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			if WeaponJuice.is_rigid(weapon_key):
+				## Ateşli silah (tabanca/tüfek/pompalı/makineli, 2026-11-13): kritikte de ezilip esnemez - sert tepme + dönüş yeter.
+				icon.scale = base_scale
+				tw.tween_property(icon, "position", base_pos + kick, 0.035)
+				tw.tween_property(icon, "position", base_pos, back).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+			else:
+				tw.tween_property(icon, "position", base_pos + kick, 0.035)
+				tw.parallel().tween_property(icon, "scale", base_scale * Vector2(0.72, 1.28), 0.035)
+				tw.tween_property(icon, "position", base_pos, back).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+				tw.parallel().tween_property(icon, "scale", base_scale * Vector2(1.12, 0.92), back * 0.45).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+				tw.tween_property(icon, "scale", base_scale, 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 			if rot != 0.0:
 				_add_rotation_kick(host, icon, rot, back, true)
 			if kind == "twirl":

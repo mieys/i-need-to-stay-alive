@@ -2,7 +2,7 @@ extends RefCounted
 
 ## Efekt ısıtma: ilk kullanımda takılmayı oyun açılırken öderiz.
 ##
-## 1) Shader'lar (madde 215): mermi izi / totem ateş topu / Melek R halkası shader'ları ilk kez çizildiği karede boru hattı derlemesi yüzünden takılma
+## 1) Shader'lar (madde 215): mermi izi / Melek R halkası (totem ateş topu shader'ı madde 567'te silindi) shader'ları ilk kez çizildiği karede boru hattı derlemesi yüzünden takılma
 ## (ölçüm: ilk Melek R'de ~190 ms) yapıyordu. Oyun sahnesi açılırken her shader'ı neredeyse görünmez, ekran köşesinde tek örnekle birkaç kare çizeriz.
 ##
 ## 2) FPS turu (2026-10-18, ölçüm: yeteneklerin ilk kullanımında 10-40 ms'lik tek karelik takılmalar; Şovalye R, Büyücü Q/E/R, Cadı Q gibi bazıları verbose
@@ -16,7 +16,6 @@ extends RefCounted
 ## class_name yok (preload ile kullanılır).
 
 const TrailShader := preload("res://shaders/particle_trail.gdshader")
-const BoltShader := preload("res://shaders/totem_bolt.gdshader")
 const RingShader := preload("res://shaders/melek_holy_ring.gdshader")
 const TrailSheet := preload("res://assets/fx/projectile_trails/arcane_c_sheet.png")
 const WarmListScript := preload("res://scripts/fx_warmup_list.gd")
@@ -27,17 +26,23 @@ const TreeCrystalGlowScript := preload("res://scripts/mission_tree_crystal_glow.
 
 ## Yeteneklerin ilk kullanımında yeni canvas shader'ı olarak derlenen shader dosyaları (yoksa atlanır).
 const EXTRA_SHADERS: Array[String] = [
+	"res://shaders/totem_shield_link.gdshader", ## Shaman E kalkan şeridi (madde 567) - ilk Kalkan Totemi'nde derleme takılmasın
+	"res://shaders/shaman_aura_perde.gdshader", ## Shaman E aura sınırı Işık Perdesi (madde 586)
 	"res://shaders/yumusak_parilti.gdshader", ## toplamalı parıltıların yerine yumuşak parıltı (2026-11-08, soft_glow_blend.gd)
+	"res://shaders/toplamali.gdshader", ## Büyücü Arcane Patlama Yıldız Tozu toplamalı karışımı (madde 563, BuyucuFx.add_material)
 	"res://shaders/gorev_altin_ton.gdshader", ## Kaçan Hazine (madde 496)
 	"res://shaders/gorev_karanlik_halka.gdshader", ## Gezici Işık (madde 496)
 	"res://shaders/oakley_yaprak_halkasi.gdshader", ## Oakley çiçeği Yaprak Halkası (madde 316) - ilk çiçekte derleme takılmasın
+	"res://shaders/oakley_agac_aura.gdshader", ## Oakley R Hayat Ağacı yaprak halkası (madde 704) - ilk ağaçta derleme takılmasın
 	"res://shaders/talon_form.gdshader",
 	"res://shaders/talon_form_weapon.gdshader",
 	"res://shaders/assasin_ghost.gdshader",
 	"res://shaders/ruh_hali.gdshader", ## ruh hâli (madde 438) - ilk level ekranında derleme takılmasın
 	"res://shaders/zindan_zemin.gdshader", ## zindan haritası zemin taşları (madde 449)
 	"res://shaders/assasin_passive_outline.gdshader",
+	"res://shaders/buz_donma_dip.gdshader", ## buz donma efektinin solan dibi (madde 544) - ilk donmada derleme takılmasın
 	"res://shaders/slime_buff_outline.gdshader", ## Minik Cadı büyüsü dış hattı (madde 523) - ilk büyüde derleme takılmasın
+	"res://shaders/hadime_cukur_palet.gdshader", ## Hadime Lanet Çukuru çöl/zindan renkleri (madde 556) - ilk çukurda derleme takılmasın
 	"res://shaders/melek_bond.gdshader",
 	"res://shaders/melek_halo_tint.gdshader",
 	"res://shaders/matthew_glow.gdshader",
@@ -48,6 +53,7 @@ const EXTRA_SHADERS: Array[String] = [
 	"res://shaders/hit_flash.gdshader",
 	"res://shaders/blood_tint.gdshader",
 	"res://shaders/gokkusagi_isin.gdshader", ## Gökkuşağı Asası ışını: shader ilk ÇİZİMDE derlenir (~20 ms), kaynak listesi bunu ısıtamaz (madde 312)
+	"res://shaders/gokkusagi_sacilma.gdshader", ## Gökkuşağı Asası ışık saçılması (madde 551): aynı nedenle
 ]
 ## AÇILIŞ (2026-11-07, kullanıcı: "oyun başladığında evde doğunca anlık drop, ilk saniyelerde FPS düşük"; ölçüm fps_micro -Mode acilis: ilk 3 sn'de
 ## 40-70 ms'lik ~25 kare = bu ısınma + zindan ön kurulumu): liste kaynakları artık YÜKLEME EKRANININ iş parçacığında okunur (loading_screen.gd
@@ -87,7 +93,7 @@ static func run(host: Node) -> void:
 	arrays[Mesh.ARRAY_TEX_UV] = PackedVector2Array([Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1)])
 	arrays[Mesh.ARRAY_INDEX] = PackedInt32Array([0, 1, 2, 0, 2, 3])
 	quad.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-	for sh in [TrailShader, BoltShader]:
+	for sh in [TrailShader]:
 		var mm := MultiMesh.new()
 		mm.transform_format = MultiMesh.TRANSFORM_2D
 		mm.use_custom_data = true

@@ -107,7 +107,7 @@ static func make_player_row(pinfo: Dictionary, opts: Dictionary) -> Control:
 	var icon_px: float = 32.0 * k
 	var weapon_key: String = str(pinfo.get("weapon", ""))
 	if WeaponCatalog.is_valid(weapon_key):
-		bottom.add_child(_loadout_icon(WeaponCatalog.icon(weapon_key), icon_px, "Silah: " + WeaponCatalog.display_name(weapon_key)))
+		bottom.add_child(_loadout_icon(WeaponCatalog.menu_icon(weapon_key), icon_px, "Silah: " + WeaponCatalog.display_name(weapon_key)))
 	var pet_key: String = str(pinfo.get("pet", ""))
 	if PetCatalog.is_valid(pet_key):
 		bottom.add_child(_loadout_icon(PetCatalog.icon(pet_key), icon_px, "Evcil: " + PetCatalog.display_name(pet_key)))

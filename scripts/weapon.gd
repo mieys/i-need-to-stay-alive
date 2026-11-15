@@ -99,10 +99,28 @@ var _beam_target: Node2D = null
 var _beam_fx: Node = null
 var _beam_interval: float = 0.5 ## o anki tik aralığı (sn) - vuruş sesinin sıklık kısması (fx_lightning_beam.gd rate_db)
 var _beam_tick_timer: float = 0.0
-## Gökkuşağı Asası finali (Gökkuşağı Mızrağı, özellik bayrağı "beam_pierce"): ışın yolundaki ek hedefler + menzil sonu (madde 306).
+## Gökkuşağı Asası finali (Gökkuşağı Mızrağı, özellik bayrağı "beam_pierce"): ışın yolundaki ek hedefler + GÖRÜŞ ELİPSİNİN KENARI
+## (madde 306; madde 551: eskiden menzil sonu - kullanıcı "görüş açısına kadar dümdüz ... lux ultisine benzer").
 var _beam_extra_targets: Array = []
 var _beam_end: Vector2 = Vector2.ZERO
-const BEAM_PIERCE_RADIUS := 20.0 ## ışın yarı genişliği (FINAL_W 8 x en çok 1,15 = ~9) + yaratık gövdesi (~10)
+## IŞIN NAMLUNUN YÖNÜNDE (madde 549 ek 3, kullanıcı: "yıldırım ve gökkuşağı da öyle: boşa yıldırım/lazer atabilir, geçerken rastgele bir
+## hedefe isabet edince hasar verebilir"): nişan oturmuşsa (hedefe AIM_SHOT_TOLERANCE_DEG içinde) ışın tam hedefe KİLİTLİ (eski davranış),
+## savurmada ışın namlunun baktığı yönde uzanır: yolundaki ilk yaratığa (BEAM_HIT_RADIUS) değerse tik anında ona vurur, değmezse boşa gider.
+## _beam_hit = ışının o an vurduğu birincil yaratık (kilitliyse hedef, savurmada ilk değen, hiçbiri yoksa null); _beam_tip = ışın efektinin
+## "hedef" diye izlediği boş düğüm, her karede ışının ucuna (_beam_end) taşınır (efekt dosyaları değişmeden serbest uç çizer).
+var _beam_hit: Node2D = null
+var _beam_tip: Node2D = null
+const BEAM_HIT_RADIUS := 14.0 ## temel ışının yaratığa değme payı: ışın yarı genişliği (BASE_W 6) + yaratık gövdesi (~8)
+const BEAM_PIERCE_RADIUS := 23.0 ## ışın yarı genişliği (FINAL_W 11 x en çok 1,15 = ~13) + yaratık gövdesi (~10)
+## Gökkuşağı Asası IŞIK SAÇILMASI (madde 551): her tikte birincil hedefin RBEAM_SPLASH_RADIUS içindeki en yakın RBEAM_SPLASH_MAX düşmana tik
+## hasarının RBEAM_SPLASH_RATIO'su (finalde delinen ek hedefler hariç - onlar zaten tam hasar alır); görseli fx_rainbow_beam.gd Scatter.
+const RBEAM_SPLASH_RATIO := 0.5
+const RBEAM_SPLASH_RADIUS := 60.0
+const RBEAM_SPLASH_MAX := 3 ## 2026-11-14 denge turu: 4 -> 3
+## Işın en az bu kadar kapalı kaldıysa final yeniden "gönderilir" (uca koşar); hedef değişiminde baştan koşmaz.
+const BEAM_RELAUNCH_MSEC := 300
+var _beam_last_end_msec: int = -100000
+const ProjectileRangeScript := preload("res://scripts/projectile_range.gd")
 
 ## Menzilli silahların ateşleme anında bir kerelik oynayan görsel (ör.
 ## Tabanca'nın ateşleme efekti) - saldırı yönüne döner. "" /null = efekt yok,
@@ -114,6 +132,10 @@ const BEAM_PIERCE_RADIUS := 20.0 ## ışın yarı genişliği (FINAL_W 8 x en ç
 ## saldırı yönünde ne kadar öne kaydıracağını belirler (0 = tam merkezde).
 @export var muzzle_flash_scene: PackedScene
 @export var muzzle_flash_offset: float = 0.0
+## Namlusu doku merkezinden geçmeyen çizim (Hafif Makineli Tüfek, madde 652: namlu ekseni merkezin 12 doku px üstünde): namlu ateşi ve
+## mermi orta hattan değil ÇİZİLİ namlu ucundan (WeaponTip) çıkar, mermi yönü o noktadan hedefe. Kullanıcı 2026-11-13: "silahın
+## ucundaki patlama tuhaf görünüyor" - alev namlunun 5 px altındaki orta hatta ve yana dönük çıkıyordu.
+@export var fire_from_barrel_tip: bool = false
 
 ## Tüftüf: en yakın düşman yerine zehir önceliğine göre hedefler - kullanıcı
 ## isteği: "canı yüksek > hiç zehirlenmemiş > tüm yaratıklar" (bkz. tuftuf_
@@ -198,7 +220,7 @@ var _mag_idle_t: float = 0.0
 var weapon_shield_pen_bonus: float = 0.0
 
 ## KALKAN DELME ÜST SINIRI (kullanıcı 2026-10-10: "kalkan delme üst sınırını %40 seviyesine düşür"): silah + eşya + Ruhani "Adc" + efsun kalkan delmesinin
-## TOPLAMI bir isabette en çok %40 (eskiden %100'e kadar yığılabiliyordu). Gerçek hasar silahları (Tüftüf always_true_damage) bilinçli istisna: onların
+## TOPLAMI bir isabette en çok %40 (eskiden %100'e kadar yığılabiliyordu). Gerçek hasar silahları (always_true_damage; 2026-09-25 sade silah turundan beri hiçbir silahta açık değil, madde 592) bilinçli istisna: onların
 ## kimliği kalkanı tamamen yok saymak.
 const SHIELD_PEN_CAP := 0.40
 
@@ -305,6 +327,33 @@ func _fire_at_delayed(target: Node2D, delay: float, echo: bool = false) -> void:
 var _burst_left: int = 0
 var _burst_gap: float = 0.07
 var _burst_wait: float = 0.0
+
+
+## Talon Silah Salvosu (Q) basış anında (2026-11-13, kullanıcı: "Q'nun bonusları ve saldırı hemen aktifleşmiyor, bir süre bekleyip
+## aktifleşiyor; basıldığı anda oto saldırı bekleme süresi sıfırlanmalı"): FireTimer'ın wait_time'ı değişince SÜREN tur kısalmaz -
+## eski (yavaş) aralığın kalanı bitmeden yeni hız işlemiyordu. Tur basışta sıfırlanır: ilk atış bir sonraki karede, sonrası güncel
+## (hızlı) aralıkla. Yay: çekiliş atlanır (ok hemen gergin). Şarjör doluyorsa doldurma sürer (zaten güncel hızla kısalır).
+## Işın silahlarında bekleme yok. MP: yalnız kaster zamanlayıcısı - atışın kendisi her zamanki yoldan (mermi/FX yayını) gider.
+func reset_attack_cooldown() -> void:
+	if continuous_beam or fire_timer == null or is_reloading:
+		return
+	if draw_before_fire:
+		if _draw_ready or not icon_sprite:
+			return
+		if icon_sprite is AnimatedSprite2D and icon_sprite.sprite_frames and icon_sprite.sprite_frames.has_animation("draw"):
+			if icon_sprite.animation_finished.is_connected(_on_draw_finished):
+				icon_sprite.animation_finished.disconnect(_on_draw_finished)
+			icon_sprite.frame = maxi(0, icon_sprite.sprite_frames.get_frame_count("draw") - 1)
+			icon_sprite.pause() ## son karede gergin kalır, bir sonraki atış _start_draw_cycle ile yeniden çeker
+		if draw_sound and draw_sound.playing:
+			draw_sound.stop()
+		_draw_ready = true
+		return
+	var gap: float = maxf(0.05, _effective_fire_wait())
+	if max_ammo > 0:
+		gap = maxf(0.05, _mag_next_gap(gap))
+	fire_timer.start(0.01) ## start(süre) wait_time'ı da ezer -> hemen güncel aralığa geri al (taşma bir sonraki turda korunur)
+	fire_timer.wait_time = gap
 
 
 func fire_burst(count: int, gap: float) -> void:
@@ -605,6 +654,7 @@ func set_enchant(ench: Dictionary) -> void:
 			enchant_behavior = b
 	yay_multishot_bonus = 0 if (is_instance_valid(enchant_behavior) and enchant_behavior.overrides_multishot()) else _pure_yay_multishot
 	_recompute_attack_range()
+	_mag_refresh_capacity() ## Makineli şarjör geliştirmeleri (madde 652)
 	## Efsun kademesi parıltısı (bkz. enchant_weapon_glow.gd) - uzak kopyalara main.gd extra["ench_tiers"] ile gider.
 	enchant_glow_tier = EnchantGlowScript.tier_for(ench)
 	## Demirci geliştirmesi (kademe) stat de verir (2026-10-17): kademe başına hasar + saldırı hızı, kartlar/eşyalarla çarpışır.
@@ -670,6 +720,13 @@ func _apply_fixed_art() -> void:
 			muzzle_flash_offset = tip.length() * WeaponTierArt.WORLD_PX * WeaponTierArt.size_mult(_tier_art_key)
 
 
+## Çizili namlu ucu (dünya) - fire_from_barrel_tip silahlarında ateş ve mermi buradan çıkar.
+func _barrel_tip_global() -> Vector2:
+	if icon_sprite is Sprite2D and (icon_sprite as Sprite2D).texture != null:
+		return WeaponTipScript.tip_global(icon_sprite as Sprite2D, sprite_forward_angle_deg)
+	return global_position
+
+
 ## _update_hover_follow'daki asa çarpanı (silah kökü ölçeği = sahip ölçeği x bu x form çarpanı).
 func _wand_scale_mult() -> float:
 	var is_wand: bool = _type_src.containsn("arcane") or _type_src.containsn("fire") or _type_src.containsn("lightning") or _type_src.containsn("buz")
@@ -721,7 +778,8 @@ func fire_pellets(target: Node2D, angles: Array, dmg_mult: float = 1.0) -> void:
 		return
 	if not is_instance_valid(target) or _last_shot_damage <= 0.0:
 		return
-	var base_dir: Vector2 = (target.global_position - global_position).normalized()
+	## Asıl atışla AYNI yön (namlunun baktığı yön, madde 549 ek) - saçmalar onun etrafında koni açar.
+	var base_dir: Vector2 = _last_shot_dir if _last_shot_dir != Vector2.ZERO else (target.global_position - global_position).normalized()
 	var char_scale: Vector2 = Vector2.ONE
 	var owner_char: Node = get_parent()
 	if owner_char is Node2D:
@@ -828,10 +886,11 @@ func on_enchant_skill_used() -> void:
 ## her silahta arcane_surge çağırır: güçlendirme BEKLEYEN bir çarpan olarak durur ve bir sonraki ASIL atışta (efsun ek atışları
 ## hariç) tüketilir (_take_surge_mult) - hemen ateş edilebiliyorsa (hedef var, şarjör/bumerang/ölü/satıcı engeli yok) FireTimer
 ## baştan kurulup o an ateşlenir; edilemiyorsa güçlendirme ilk fırsattaki atışa kalır. Işın silahında bir sonraki tik hemen
-## atılır. Görsel: güçlendirilmiş atışta ikon hedefin TERSİNE sertçe geri teper (WeaponJuice.arcane_surge - uzak kopya "weapon_fire"
-## yayınındaki "surge" ile AYNI fonksiyonu oynatır), yakın dövüşte savuruş zaten ileri atılış - sadece mor parlama.
+## atılır. Görsel: SİLAHIN KENDİSİNDE animasyon YOK (2026-11-11, kullanıcı: "silahları animasyon oynatıyordu, onu kaldır" - eski sert
+## geri tepme / mor parlama / kıvılcım silindi; silah normal atışının geri tepmesiyle ateş eder). Pasif yine görünür: karakterin
+## ayağından mor dalga (player.gd _buyucu_on_skill_used) + güçlendirilmiş mermi (BuyucuFx.style_surge_projectile).
 var _surge_pending_mult: float = 1.0
-## O an işlenen atış güçlendirilmiş mi (geri tepme/savuruş görseli + yayın bayrağı için - _fire_at içinde kurulur).
+## O an işlenen atış güçlendirilmiş mi (mermi görünümü için - _fire_at içinde kurulur).
 var _surge_shot: bool = false
 
 
@@ -844,45 +903,14 @@ func arcane_surge(dmg_mult: float) -> void:
 	if continuous_beam:
 		## Kilitli bir hedef varsa bir sonraki karede tik atılır (_process_continuous_beam; kilit yoksa kilitlenince hemen).
 		_beam_tick_timer = 0.0
-		if target == null:
-			_surge_visual(_surge_fallback_dir())
 		return
 	if is_reloading or (single_active_projectile and _projectiles_in_flight > 0) or target == null:
-		## Ateş edilemiyor (şarjör doluyor / bumerang havada / hedef yok): güçlendirme bekler ama yetenek kullanıldığı HİSSEDİLSİN -
-		## ikon yine de geri teper (2026-10-04 "pasifin aktifleştiği hiç hissedilmiyor").
-		_surge_visual((target.global_position - global_position) if target != null else _surge_fallback_dir())
-		return
+		return ## ateş edilemiyor (şarjör doluyor / bumerang havada / hedef yok): güçlendirme ilk fırsattaki asıl atışa kalır
 	if fire_timer and not draw_before_fire:
 		fire_timer.start() ## saldırı bekleme süresi sıfırlanır - bir sonraki normal atış tam aralık sonra
 	_fire_at(target)
 	_item_on_attack(target)
 	_mag_spend() ## şarjör (madde 296): güçlendirilmiş atış da bir tetik
-
-
-## Hedef yokken geri tepme yönünün referansı: karakterin baktığı yön (tepme bunun tersine).
-func _surge_fallback_dir() -> Vector2:
-	var o: Node = get_parent()
-	if o != null and o.has_method("_facing_to_vector") and "facing" in o:
-		return o.call("_facing_to_vector", o.get("facing"))
-	return Vector2.RIGHT
-
-
-## Atışsız görsel: ikon hedefin tersine sertçe geri teper + kıvılcım + parlama; uzak kopyaya "weapon_surge" ile aynısı gider (atışlı yolda
-## görsel _do_recoil / _fire_at'teki "surge" bayrağıyla gider - iki kez oynamaz).
-func _surge_visual(direction: Vector2) -> void:
-	if icon_sprite == null or not icon_sprite.visible:
-		return
-	if _punch_tween and _punch_tween.is_valid():
-		_punch_tween.kill()
-	_punch_tween = WeaponJuice.arcane_surge(self, icon_sprite, direction, Vector2.ZERO, _icon_base_scale)
-	if NetworkManager.is_multiplayer_active:
-		var owner_player: Node = get_parent()
-		if owner_player and owner_player.has_method("_get_weapon_index"):
-			var slot_idx: int = owner_player._get_weapon_index(self)
-			if slot_idx >= 0:
-				NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "weapon_surge", global_position, {
-					"slot_index": slot_idx, "direction_x": direction.x, "direction_y": direction.y,
-				})
 
 
 ## Bekleyen güçlendirmeyi tüketir (asıl atışlarda - efsun ek atışları çarpanı paylaşmaz).
@@ -1026,6 +1054,7 @@ var _is_uzunkilic: bool = false
 ## Kılıcın saldırı gücü oranı (nerf notu: _ready). Süpürülen alandaki ikincil hedeflerin hasar yüzdesi player.gd UZUNKILIC_AOE_PERCENT'te.
 const SWORD_AP_RATIO := 1.2
 const SwordSwingMath := preload("res://scripts/sword_swing_math.gd")
+const SalvoStrikeMath := preload("res://scripts/salvo_strike_math.gd") ## Talon E zincir ucu vuruş animasyonu (kukla remote_player.gd de kullanır)
 const SwordHitFxScene := preload("res://scenes/fx_sword_hit.tscn")
 ## Bıçak "Kıvılcım Saplama" (madde 231): zikzak + boyalı X yerine üç saplama, hasar temas anlarında (bkz. _start_dagger_stab).
 var _is_dagger: bool = false
@@ -1044,13 +1073,16 @@ const MizrakThrustMath := preload("res://scripts/mizrak_thrust_math.gd")
 ## Mızrak menzili (saplama hattı ayrıca hedefin 80 px gerisine uzanır - MizrakThrustMath.LINE_X1).
 const MIZRAK_RANGE := 150.0
 ## Kalkan "Hayalet Kalkan" (madde 338): ikon DÖNMEZ, yüzü baktığı yöne dönük görünüş seçilir (8 yön); geniş darbe, önündeki
-## herkese tam hasar + itme; özellik Siper kalkan doldurur (bkz. _start_kalkan_bash, scripts/kalkan_bash_math.gd,
+## herkese tam hasar + itme; özellik Siper hasarı/itmeyi güçlendirir (bkz. _start_kalkan_bash, scripts/kalkan_bash_math.gd,
 ## scripts/weapon_traits/siper.gd).
 var _is_kalkan: bool = false
 ## Yin Yang Kitabı (madde 334): havada DİK durur (açık sayfalar okunsun), nişanla dönmez; kukla remote_player.gd "upright" meta'sı.
 var _is_yinyang: bool = false
 const YinYangBookScript := preload("res://scripts/yinyang_book.gd")
 const KalkanBashMath := preload("res://scripts/kalkan_bash_math.gd")
+const KalkanGuard := preload("res://scripts/kalkan_guard.gd") ## siper duruşu: menzilli atışları bloklar (madde 685)
+## Üstüne gelen en yakın atışın yönü (sahibten atışa; ZERO = tehdit yok). Menzilde düşman yoksa kalkan buna döner ve gizliyse çıkar.
+var _kalkan_threat: Vector2 = Vector2.ZERO
 const KALKAN_RANGE := 110.0
 ## "Yarı saldırı hızı" kuralı (kalkan için yazıldı 2026-10-20 madde 340, kalkanda GERİ ALINDI madde 342; Yin Yang Kitabı'nda da kullanıcı isteğiyle
 ## geri alındı, madde 334 - şu an HİÇBİR silah çağırmıyor, sabit + kalkan_softened_wait ileride gerekirse diye duruyor):
@@ -1428,6 +1460,12 @@ func enchant_on_boomerang_caught(proj: Node2D) -> void:
 		enchant_behavior.on_boomerang_caught(proj)
 
 
+## Çakram bir düşmandan diğerine sekti (Seken Çelik, madde 591 - boomerang_projectile.gd _try_bounce; yalnız kaster).
+func enchant_on_boomerang_bounce(proj: Node2D, from_body: Node, to_body: Node) -> void:
+	if is_instance_valid(enchant_behavior):
+		enchant_behavior.on_boomerang_bounce(proj, from_body, to_body)
+
+
 func enchant_on_explode(proj: Node2D, pos: Vector2) -> void:
 	if is_instance_valid(enchant_behavior):
 		enchant_behavior.on_explode(proj, pos)
@@ -1723,8 +1761,19 @@ func _wf_update(owner_node: Node2D, bob: float, delta: float) -> void:
 	var sc: Dictionary = WeaponFollowMath.scan(owner_node)
 	## Saklanma çalılığında SAKLIYKEN (madde 283) görüşte düşman olsa da içe çekilir (kullanıcı: "çalıya girince silahları içine çekilip kapansın").
 	## Sahibi ölünce/yere düşünce de AYNI çekilme, bekleme payı olmadan (kullanıcı: "direk karakterin içine girip kaybolsunlar").
-	var want: bool = (bool(sc["seen"]) or _wf_has_target) and not _owner_gone and not HideBrushScript.is_hidden(owner_node)
+	if _is_kalkan and not _owner_gone:
+		var th: Array = KalkanGuard.threat(owner_node)
+		_kalkan_threat = th[0]
+		_kalkan_threat_d = float(th[1])
+	else:
+		_kalkan_threat = Vector2.ZERO
+		_kalkan_threat_d = INF
+	if _is_kalkan:
+		home = _kalkan_cover_home(home, owner_node, delta) ## siper alma (madde 701): atış tarafına, gövdenin önüne kayar
+	var want: bool = (bool(sc["seen"]) or _wf_has_target or _kalkan_threat != Vector2.ZERO) and not _owner_gone and not HideBrushScript.is_hidden(owner_node)
 	WeaponFollowMath.step_visibility(_wf_vis, want, force, now, kind, _owner_gone)
+	if _is_kalkan:
+		_kalkan_publish_guard(owner_node)
 	## SIRT (madde 451): düşman yokken / çalıda silah göğse değil sırta girer; sahibi ölü/yerdeyse eski kural (göğüs, kaybolur).
 	var mount: Dictionary = {}
 	if not _owner_gone and not force and icon_sprite != null:
@@ -1797,6 +1846,8 @@ func _wf_update_facing(delta: float) -> void:
 		return
 	if mirror_icon_when_aiming_left and melee and _melee_swing_tween and _melee_swing_tween.is_running():
 		return ## Tırpan biçerken aynalama (flip_h) vuruşun planına ait - hedef taraf değiştirse de vuruş ortasında dönmez
+	if _is_kalkan and _kalkan_threat != Vector2.ZERO:
+		_kalkan_threat_break_bash() ## Kalkan: gelen atış varken hedefin başında bekleme (madde 687)
 	var sc: Dictionary = WeaponFollowMath.scan(owner_node)
 	var focus_dir: Vector2 = ((sc["focus"] as Vector2) - global_position) if sc["seen"] else Vector2.ZERO
 	var t: float = clampf(delta * WeaponFollowMath.TURN_RATE, 0.0, 1.0)
@@ -1813,6 +1864,10 @@ func _wf_update_facing(delta: float) -> void:
 			icon_sprite.rotation = float(rp[0])
 		icon_sprite.rotation = lerp_angle(icon_sprite.rotation, float(rp[0]), t)
 		return
+	## Kalkan: menzilde düşman yok (saldıramıyor) -> gelen atışa dön, oyuncuyu koru (madde 685).
+	if _is_kalkan and _kalkan_threat != Vector2.ZERO:
+		_kalkan_face(_kalkan_threat)
+		return
 	var dir: Vector2 = WeaponFollowMath.idle_facing_dir(_wf_owner_vel, focus_dir)
 	if dir == Vector2.ZERO:
 		return
@@ -1820,17 +1875,30 @@ func _wf_update_facing(delta: float) -> void:
 
 
 ## İkonun ucunu dünya yönü `dir`'e çevirir (aynalanan ikon dahil) - _update_aim ve _wf_update_facing ortak.
-func _face_dir(dir: Vector2, t: float) -> void:
+## max_step > 0: bu karede en çok dönülecek açı (radyan, madde 549 dönüş hızı sınırı); 0 = sınırsız (hücum takibi / dinlenme).
+func _face_dir(dir: Vector2, t: float, max_step: float = 0.0) -> void:
 	if _is_yinyang:
 		return
 	if _is_kalkan:
 		_kalkan_face(dir)
 		return
-	var r: Array = WeaponFollowMath.face_rotation(dir, deg_to_rad(sprite_forward_angle_deg), mirror_icon_when_aiming_left)
+	var forward: float = deg_to_rad(sprite_forward_angle_deg)
+	var r: Array = WeaponFollowMath.face_rotation(dir, forward, mirror_icon_when_aiming_left)
 	if not mirror_icon_when_aiming_left:
-		icon_sprite.rotation = lerp_angle(icon_sprite.rotation, float(r[0]), t)
+		icon_sprite.rotation = WeaponFollowMath.turn_angle(icon_sprite.rotation, float(r[0]), t, max_step)
 		return
 	var flip: bool = r[1]
+	if max_step > 0.0:
+		## Sınırlı dönüş + aynalanan ikon (Tabanca/Tüfek): dönüş DÜNYA açısı üzerinden yürür, aynalama yeni açıdan türetilir - sınırı
+		## (dikeyi) geçerken yön kesintisiz, yalnız ikon aynalanır (aşağıdaki "hedefe atla" dalı yavaş dönüşü boşa çıkarırdı).
+		var cur: float = WeaponFollowMath.current_aim(icon_sprite.rotation, _icon_flipped, forward)
+		var next_aim: float = WeaponFollowMath.turn_angle(cur, dir.angle(), t, max_step)
+		var nr: Array = WeaponFollowMath.face_rotation(Vector2.from_angle(next_aim), forward, true)
+		if bool(nr[1]) != _icon_flipped:
+			icon_sprite.flip_h = nr[1]
+			_icon_flipped = nr[1]
+		icon_sprite.rotation = float(nr[0])
+		return
 	if flip != _icon_flipped:
 		## Aynalama durumu değişti: ara kare yok (eski açı yeni aynalama uzayında anlamsız; geçiş noktasında görüntü aynı).
 		icon_sprite.rotation = float(r[0])
@@ -1918,6 +1986,10 @@ func _update_icon_shadow() -> void:
 	shadow_sprite.global_position = icon_sprite.global_position + Vector2(0, gap)
 
 func _process(delta: float) -> void:
+	if _strike_t >= 0.0: ## Talon E zincir ucu vuruşu (salvo_strike_pose) - ölü/satıcı kapılarından önce ilerler, bitince temizlenir
+		_strike_t += delta
+		if _strike_t >= _strike_dur:
+			_strike_t = -1.0
 	## Oyuncu öldüğünde/yere düştüğünde silah node'u (kendi Timer/_process
 	## döngüsüyle Player'dan bağımsız çalışıyor) ateş etmeyi durdurmalı -
 	## Player._physics_process'teki "if is_dead: return" koruması BU node'u
@@ -1963,11 +2035,14 @@ func _process(delta: float) -> void:
 	## Şimşek Asası: FireTimer/fire_rate'i tamamen görmezden gelir, kendi
 	## sürekli ışın döngüsünü işler (bkz. _process_continuous_beam).
 	if continuous_beam:
-		_process_continuous_beam(delta)
-		if icon_sprite:
+		## Nişan ışından ÖNCE (madde 549 ek 3): ışın namlunun BAKTIĞI yönde uzanır, bu karenin nişan açısını okur.
+		## Talon E / kubbe girdabında ikonun duruşunu formasyon yönetir (dışa bakar, döner) - _update_aim onu en yakın yaratığa çevirip
+		## ışını menzildeki yaratığa kilitliyordu (2026-11-12, kullanıcı: "ışın menzile yaratık girince aktifleşiyor").
+		if icon_sprite and not _beam_facing_mode():
 			_wf_has_target = _update_aim(delta)
 			if not _wf_has_target and icon_faces_target and not _rim_spin and not _rim_active:
 				_wf_update_facing(delta) ## hücum takibi (madde 247)
+		_process_continuous_beam(delta)
 		if beam_tremor:
 			_apply_beam_tremor()
 		return
@@ -1976,7 +2051,7 @@ func _process(delta: float) -> void:
 	_process_burst(delta) ## Talon Q sonrası bekleyen ani atışlar (bkz. fire_burst)
 	var target_wait: float = max(0.05, _effective_fire_wait())
 	## Şarjörlü silah (madde 296): şarjör içinde daha sık ateş eder, aradaki fark doldurmada geri ödenir (GunMagMath).
-	var timer_wait: float = maxf(0.05, GunMagMath.burst_wait(_mag_key, target_wait)) if max_ammo > 0 else target_wait
+	var timer_wait: float = maxf(0.05, _mag_next_gap(target_wait)) if max_ammo > 0 else target_wait
 	if abs(fire_timer.wait_time - timer_wait) > 0.01:
 		fire_timer.wait_time = timer_wait
 
@@ -2044,8 +2119,49 @@ func _update_aim(delta: float) -> bool:
 	if not target:
 		return false
 	var dir: Vector2 = (target.global_position - global_position).normalized()
-	_face_dir(dir, clampf(delta * AIM_EASE_RATE, 0.0, 1.0))
+	var t: float = clampf(delta * AIM_EASE_RATE, 0.0, 1.0)
+	## Dönüş hızı sınırı (madde 549, Kademe 2) + ATIŞ YÖNÜ İKONA BAĞLI: mermi namlunun BAKTIĞI yönden çıkar (_shot_base_dir), ikon
+	## yetişene kadar ateş sürer ama boşa gider. Sürekli ışın (Yıldırım/Gökkuşağı) da aynı: ışın namlunun yönünde uzanır, savurmada boşa
+	## gider / yolundaki yaratığa değerse tik anında ona vurur (madde 549 ek 3, bkz. _update_beam_reach). Sınır uygulanmayan: Talon E
+	## dizilimi (fire_in_facing_direction: mermi zaten ikonun baktığı yöne).
+	var max_step: float = 0.0 if fire_in_facing_direction else deg_to_rad(WeaponFollowMath.AIM_MAX_TURN_DEG) * delta
+	if max_step > 0.0:
+		## Temiz nişan açısı (geri tepme "namlu kalkması" ikon dönüşüne artımlı ofset ekler; mermi bundan etkilenmesin): ikonla aynı yasayla
+		## ilerler, yalnız atışlar için tutulur. Bayatsa (hedefsiz kalındı) ikonun şu anki bakışından yeniden başlar.
+		var now_ms: int = Time.get_ticks_msec()
+		if now_ms - _aim_angle_msec > AIM_ANGLE_STALE_MSEC:
+			_aim_angle = WeaponFollowMath.current_aim(icon_sprite.rotation, mirror_icon_when_aiming_left and icon_sprite.get("flip_h") == true,
+					deg_to_rad(sprite_forward_angle_deg))
+		_aim_angle = WeaponFollowMath.turn_angle(_aim_angle, dir.angle(), t, max_step)
+		_aim_angle_msec = now_ms
+	_face_dir(dir, t, max_step)
 	return true
+
+
+## Temiz nişan açısı (radyan, dünya) + son güncelleme zamanı (_update_aim; atış yönü buna bağlı, bkz. _shot_base_dir).
+const AIM_ANGLE_STALE_MSEC := 250
+var _aim_angle: float = 0.0
+var _aim_angle_msec: int = -100000
+## Son atışın hedefe-sınırlı yönü (sapma açısı eklenmeden) - saçma salvosu (fire_pellets) aynı yönden açılır.
+var _last_shot_dir: Vector2 = Vector2.ZERO
+
+
+## Mermi bu silahta namlunun baktığı yönden mi çıkar (menzilli, ikonu hedefe dönen, ışın/dizilim/yakın dövüş/kalkan/kitap değil)?
+func _shot_follows_icon() -> bool:
+	return icon_sprite != null and is_instance_valid(icon_sprite) and icon_faces_target and not melee and not hitscan \
+			and not fire_in_facing_direction and not _rim_spin and not _rim_active \
+			and not _is_yinyang and not _is_kalkan
+
+
+## Atış yönü: ikonun temiz nişan açısı (_aim_angle), hedefe en çok AIM_SHOT_TOLERANCE_DEG yaklaştırılmış. Nişan bayatsa (bu karede
+## _update_aim çalışmadıysa: ilk kare, test, özel yol) eski kural: hedefe düz. `from`: yönün hesaplandığı nokta (mermi: silahın kendisi,
+## sürekli ışın: namlu - madde 549 ek 3).
+func _shot_base_dir(target: Node2D, from: Variant = null) -> Vector2:
+	var origin: Vector2 = global_position if from == null else (from as Vector2)
+	var to_target: Vector2 = (target.global_position - origin).normalized()
+	if not _shot_follows_icon() or Time.get_ticks_msec() - _aim_angle_msec > AIM_ANGLE_STALE_MSEC:
+		return to_target
+	return WeaponFollowMath.shot_dir(Vector2.from_angle(_aim_angle), to_target, deg_to_rad(WeaponFollowMath.AIM_SHOT_TOLERANCE_DEG))
 
 
 
@@ -2141,6 +2257,8 @@ func _on_fire_timer_timeout() -> void:
 	if single_active_projectile and _projectiles_in_flight > 0:
 		return
 	var target: Node2D = _make_facing_direction_target() if ((fire_in_facing_direction or _rim_spin) and icon_sprite) else _get_target_enemy()
+	if target and _kalkan_postpone_bash():
+		return ## Kalkan: atış üstüne gelirken darbeye çıkmaz, siperde bekler (madde 701)
 	if target:
 		_fire_at(target)
 		## Elara ULTİ (R): "tüm silahlar 2 kez tetiklenir" - aynı hedefe kısa
@@ -2155,6 +2273,7 @@ func _on_fire_timer_timeout() -> void:
 			_fire_at_delayed(target, ITEM_DOUBLE_FIRE_VISUAL_DELAY)
 		_item_on_attack(target)
 		_mag_spend() ## şarjör: TETİK başına bir mermi (ek atışlar yemez - madde 296)
+		_ramp_retime() ## Makineli: sıradaki (daha kısa) aralık hemen (madde 652)
 	elif _is_yinyang:
 		## Yin Yang Kitabı (madde 334, kullanıcı: "saldırması gerekmediğinde de kalkan verebilsin"): hedef yokken aynı aralıkta YALNIZ ak küre
 		## kalkanı en boş oyuncuya taşır (hasar yok; kimse eksik değilse hiçbir şey) - kural + görsel + ağ YinYangBook.idle_shot.
@@ -2247,9 +2366,87 @@ var _reload_scale: float = 1.0 ## doldurulacak mermi oranı (boş şarjör 1; sa
 
 func _mag_setup() -> void:
 	_mag_key = WeaponTierArt.key_from_scene(scene_file_path)
-	max_ammo = GunMagMath.mag_size(_mag_key)
+	max_ammo = _mag_capacity()
 	current_ammo = max_ammo
 	is_reloading = false
+	_ramp_shots = 0
+
+
+## Şarjör boyu: tablo + özellik geliştirmesi ("mag_add": Makineli Uzatılmış/Tamburlu Şarjör, madde 652).
+func _mag_capacity() -> int:
+	var n: int = GunMagMath.mag_size(_mag_key)
+	if n > 0 and is_instance_valid(enchant_behavior):
+		n += maxi(0, enchant_behavior.n("mag_add"))
+	return n
+
+
+## Özellik değişti (demirci geliştirmesi oyun içinde): şarjör boyu güncellenir, eklenen yuvalar dolu gelir.
+func _mag_refresh_capacity() -> void:
+	if _mag_key == "" or max_ammo <= 0:
+		return
+	var cap: int = _mag_capacity()
+	if cap == max_ammo:
+		return
+	var d: int = cap - max_ammo
+	max_ammo = cap
+	if not is_reloading:
+		current_ammo = clampi(current_ammo + d, 0, cap)
+
+
+## ---------------------------------------------------------------- HIZLANAN ŞARJÖR (Makineli, madde 652; kural gun_mag_math.gd "ramp")
+## Şarjör içinde k. aralık max(tavan, başlangıç * 0,92^k) * W: ilk atışlar yavaş, giderek hızlanır; doldurmada sıfırlanır. Özellik
+## "Kızışan Namlu": hot_start (Sıcak Namlu: doldurmadan sonra bu kadar adım ısınmış başlar), ramp_floor_mult (final: tavan hızı).
+var _ramp_shots: int = 0 ## bu şarjörde tetiklenen atış (doldurma bitince 0)
+
+
+func _ramp_on() -> bool:
+	return max_ammo > 0 and GunMagMath.has_ramp(_mag_key)
+
+
+func _ramp_hot() -> int:
+	return maxi(0, enchant_behavior.n("hot_start")) if is_instance_valid(enchant_behavior) else 0
+
+
+func _ramp_floor_mult() -> float:
+	return clampf(enchant_behavior.f("ramp_floor_mult", 1.0), 0.3, 1.0) if is_instance_valid(enchant_behavior) else 1.0
+
+
+## Sıradaki aralığın indeksi: n. atıştan sonraki aralık = n - 1 (+ sıcak başlangıç). Şarjörün ilk atışını beklerken de başlangıç.
+func _ramp_next_k() -> int:
+	return maxi(0, _ramp_shots - 1) + _ramp_hot()
+
+
+## Sıradaki atış aralığı (sn): hızlanan şarjörde indeksli, diğer şarjörlü silahlarda sabit burst.
+func _mag_next_gap(avg_wait: float) -> float:
+	if GunMagMath.has_ramp(_mag_key):
+		return GunMagMath.ramp_gap(_mag_key, avg_wait, _ramp_next_k(), _ramp_floor_mult())
+	return GunMagMath.burst_wait(_mag_key, avg_wait)
+
+
+## Şu an ATEŞLENEN mermi en yüksek hızda mı (_fire_at içinden: _mag_spend henüz çalışmadı -> önündeki aralık _ramp_shots - 1).
+## Özellik "Kızgın Mermiler" / "Kurşun Fırtınası" delmesi bunu sorar.
+func ramp_at_top() -> bool:
+	if not _ramp_on() or _ramp_shots <= 0:
+		return false
+	return GunMagMath.ramp_at_top(_mag_key, _ramp_shots - 1 + _ramp_hot(), _ramp_floor_mult())
+
+
+## 0..1 ısınma (atış sesi perdesi).
+func ramp_heat() -> float:
+	if not _ramp_on() or _ramp_shots <= 0:
+		return 0.0
+	return GunMagMath.ramp_heat(_mag_key, _ramp_shots - 1 + _ramp_hot(), _ramp_floor_mult())
+
+
+## Zamanlayıcı tetikledi + mermi düştü: tekrar eden zamanlayıcı ESKİ aralıkla yeniden kurulmuştu (Timer önce time_left += wait_time,
+## sonra sinyal) -> yeni aralıkla, kare taşması korunarak yeniden kur (yoksa her aralık bir öncekinin süresini kullanırdı).
+func _ramp_retime() -> void:
+	if not _ramp_on() or is_reloading or fire_timer == null or fire_timer.is_stopped():
+		return
+	var carry: float = minf(0.0, fire_timer.time_left - fire_timer.wait_time) ## -taşma (<= 0)
+	var gap: float = maxf(0.05, _mag_next_gap(maxf(0.05, _effective_fire_wait())))
+	fire_timer.start(maxf(0.01, gap + carry))
+	fire_timer.wait_time = gap
 
 
 ## Tetik başına bir mermi (ek atışlar - Elara R / Kaos Kitabı / Ilıdaric / özellik ek mermisi / Talon salvosu - yemez). Son mermi
@@ -2259,6 +2456,7 @@ func _mag_spend() -> void:
 		return
 	_mag_idle_t = 0.0
 	current_ammo = maxi(0, current_ammo - 1)
+	_ramp_shots += 1
 	if current_ammo <= 0:
 		_start_reload()
 
@@ -2290,19 +2488,21 @@ func _start_reload() -> void:
 	_mag_idle_t = 0.0
 	_reload_scale = clampf(float(max_ammo - current_ammo) / float(max_ammo), 0.2, 1.0)
 	var dur: float = maxf(0.05, GunMagMath.reload_time(_mag_key, maxf(0.05, _effective_fire_wait())) * _reload_scale)
+	var shells: int = max_ammo - current_ammo ## pompalı: yalnız eksik fişek sürülür (görsel + ses; süre kuralı aynı)
 	_reload_fx = null
 	## Poz yalnızca ikonun nişanı bu silahın elindeyken (Talon dizilimi / kubbe halkası dönüşü kendisi yönetir - orada süre yine işler).
 	if icon_sprite and icon_faces_target and not _rim_spin and not _rim_active:
 		_reload_fx = GunReloadFx.begin(self, icon_sprite, _mag_key, dur, get_parent() as Node2D, {
 			"base_pos": Vector2.ZERO, "base_scale": _icon_base_scale, "forward_deg": sprite_forward_angle_deg,
-			"external": true, "kill_tweens": _kill_punch_tween})
-	_broadcast_reload(dur)
+			"external": true, "kill_tweens": _kill_punch_tween, "shells": shells})
+	_broadcast_reload(dur, shells)
 
 
 ## overshoot: ilerlemenin 1'i aştığı süre (kare taşması) - bir sonraki atış aralığından düşülür, döngü tam N*W kalır.
 func _finish_reload(overshoot: float = 0.0) -> void:
 	is_reloading = false
 	current_ammo = max_ammo
+	_ramp_shots = 0 ## Makineli: yeni şarjör yine yavaş başlar
 	_reload_progress = 0.0
 	if is_instance_valid(_reload_fx):
 		_reload_fx.finish()
@@ -2310,13 +2510,14 @@ func _finish_reload(overshoot: float = 0.0) -> void:
 	if fire_timer == null:
 		return
 	## Hedef varsa HEMEN ateş (şarjörsüz düzendeki atış anına denk), sonra şarjör içi aralık.
-	var burst: float = maxf(0.05, GunMagMath.burst_wait(_mag_key, maxf(0.05, _effective_fire_wait())))
 	## Doldururken nişan durmuştu: ilk atış eski açıdan çıkmasın, namlu hedefe anında döner.
 	if icon_sprite and icon_faces_target and not _rim_spin and not _rim_active and not fire_in_facing_direction:
 		var tg: Node2D = _get_target_enemy()
 		if tg:
 			_face_dir((tg.global_position - global_position).normalized(), 1.0)
 	_on_fire_timer_timeout()
+	## Şarjör içi aralık ATEŞTEN SONRA okunur (Makineli: ilk atış sayıldı, sıradaki aralık indeksi 0).
+	var burst: float = maxf(0.05, _mag_next_gap(maxf(0.05, _effective_fire_wait())))
 	fire_timer.start(maxf(0.02, burst - overshoot))
 
 
@@ -2338,7 +2539,7 @@ func _kill_punch_tween() -> void:
 
 
 ## Uzak kopyalar aynı doldurmayı oynatır (remote_player.gd _start_weapon_reload); d = 0 iptal.
-func _broadcast_reload(dur: float) -> void:
+func _broadcast_reload(dur: float, shells: int = -1) -> void:
 	if not NetworkManager.is_multiplayer_active:
 		return
 	var owner_player: Node = get_parent()
@@ -2348,7 +2549,7 @@ func _broadcast_reload(dur: float) -> void:
 	if slot_idx < 0:
 		return
 	NetworkManager.send_player_vfx(multiplayer.get_unique_id(), "weapon_reload", global_position, {
-		"slot_index": slot_idx, "d": dur})
+		"slot_index": slot_idx, "d": dur, "n": shells})
 
 
 func get_nearest_enemy() -> Node2D:
@@ -2468,16 +2669,23 @@ func _find_enemy_on_facing_ray(origin: Vector2, dir: Vector2, reach: float, marg
 	return best
 
 
+## İkonun O ANKİ baktığı yön (Talon E dizilimi / kubbe girdabı: yuvanın dışa bakışı). Yakın dövüşte vuruş animasyonunun dönüşü
+## (_strike_rot_now) çıkarılır: yön savuruşla sallanmasın, hep yuvanın dışa bakışı olsun.
+func _icon_facing_dir() -> Vector2:
+	var forward: float = deg_to_rad(sprite_forward_angle_deg)
+	var base_rot: float = icon_sprite.rotation - _strike_rot_now()
+	## Aynalanan ikonlarda (tabanca/tüfek, mirror_icon_when_aiming_left) sola bakarken rotasyon değil flip_h kullanılır:
+	## _update_aim'deki "rotation = açı - PI + forward" formülünün tersi burada (namlu ters yöne ateş etmesin).
+	var facing_angle: float = base_rot + forward
+	if mirror_icon_when_aiming_left and icon_sprite.get("flip_h") == true:
+		facing_angle = base_rot + PI - forward
+	return Vector2(cos(facing_angle), sin(facing_angle))
+
+
 func _make_facing_direction_target() -> Node2D:
 	if not _facing_direction_target:
 		_facing_direction_target = Node2D.new()
-	var forward: float = deg_to_rad(sprite_forward_angle_deg)
-	## Aynalanan ikonlarda (tabanca/tüfek, mirror_icon_when_aiming_left) sola bakarken rotasyon değil flip_h kullanılır:
-	## _update_aim'deki "rotation = açı - PI + forward" formülünün tersi burada (namlu ters yöne ateş etmesin).
-	var facing_angle: float = icon_sprite.rotation + forward
-	if mirror_icon_when_aiming_left and icon_sprite.get("flip_h") == true:
-		facing_angle = icon_sprite.rotation + PI - forward
-	var facing_dir: Vector2 = Vector2(cos(facing_angle), sin(facing_angle))
+	var facing_dir: Vector2 = _icon_facing_dir()
 	var reach: float = attack_range if attack_range > 0.0 else 400.0
 	if melee:
 		## Vuruş zincirin ucunda (bkz. TalonFormationMath.SALVO_MELEE_*): eskiden menzil boyu ışındaki yaratık seçiliyor, silah
@@ -2508,6 +2716,7 @@ func _salvo_melee_strike_active() -> bool:
 func cancel_melee_swing() -> void:
 	if not melee or icon_sprite == null:
 		return
+	salvo_strike_clear()
 	if _melee_swing_tween and _melee_swing_tween.is_valid():
 		_melee_swing_tween.kill()
 		icon_sprite.position = Vector2.ZERO
@@ -2515,21 +2724,68 @@ func cancel_melee_swing() -> void:
 	_melee_swing_tween = null
 
 
-## Salvoda yakın dövüş "savuruşu": ikon yuvasında (zincirin ucunda) kalır, dışa kısa dürtülüp geri gelir - yerel konum olduğu için
-## dönen çemberle birlikte gider. Kukla aynı hareketi "weapon_fire" yayınında _kick_formation_icon ile oynatır. Salvo başlarken
-## süren bir savuruş/zincir beklemesi (madde 347) burada kesilir; ikon dinlenme ölçeğine döner.
-func _salvo_melee_jab(direction: Vector2) -> void:
-	if icon_sprite == null:
-		return
+## Salvoda yakın dövüş vuruş ANİMASYONU (2026-11-12, kullanıcı: "zincire bağlı saldırı animasyonu + spam"): ikon yuvasında (zincirin
+## ucunda) kalır; silahın türüne göre (kılıç/tırpan yay çizer, bıçak üç kez saplar, balyoz kaldırıp indirir, mızrak/kalkan geri çekilip
+## atılır) yuvaya göre örneklenir (SalvoStrikeMath, tek kaynak) - yuva döndükçe vuruş de döner. Konum/dönüş player.gd
+## _talon_set_weapons_circular'da formasyon duruşuna EKLENİR (salvo_strike_pose). Kukla aynı örnekleyiciyi "weapon_fire"da başlatır.
+## Salvo başlarken süren savuruş/zincir beklemesi (madde 347) cancel_melee_swing ile kesilir; ikon dinlenme ölçeğine döner.
+var _strike_kind: String = ""
+var _strike_t: float = -1.0 ## < 0: vuruş yok; saniye olarak ilerler
+var _strike_dur: float = 0.0
+var _strike_side: float = 1.0
+
+
+func _salvo_strike_kind() -> String:
+	if _is_uzunkilic:
+		return "sword"
+	if _is_dagger:
+		return "dagger"
+	if _is_topuz:
+		return "hammer"
+	if _is_pence:
+		return "scythe"
+	if _is_mizrak:
+		return "spear"
+	if _is_kalkan:
+		return "shield"
+	return ""
+
+
+## Yeni vuruşu başlatır (öncekini keser - spam); süreyi (sn) döner (kuklaya "ss_dur" olarak gider).
+func _salvo_strike_start() -> float:
+	var kind: String = _salvo_strike_kind()
+	if icon_sprite == null or kind == "":
+		return 0.0
 	if _melee_swing_tween and _melee_swing_tween.is_valid():
 		_melee_swing_tween.kill()
 	_melee_swing_tween = null
 	if _punch_tween and _punch_tween.is_valid():
 		_punch_tween.kill()
 	icon_sprite.scale = _icon_base_scale
-	icon_sprite.position = direction.normalized() * TalonFormationMath.SALVO_MELEE_JAB if not direction.is_zero_approx() else Vector2.ZERO
-	_punch_tween = create_tween()
-	_punch_tween.tween_property(icon_sprite, "position", Vector2.ZERO, TalonFormationMath.SALVO_MELEE_JAB_TIME) ## kukla gibi doğrusal
+	icon_sprite.position = Vector2.ZERO
+	_strike_kind = kind
+	_strike_dur = SalvoStrikeMath.duration(kind, _effective_fire_wait())
+	_strike_t = 0.0
+	_strike_side = -_strike_side
+	return _strike_dur
+
+
+## Yuvanın dışa baktığı açıda vuruşun şu anki duruşu: {"pos": formasyon konumuna eklenir, "rot": formasyon dönüşüne eklenir}.
+func salvo_strike_pose(outward_angle: float) -> Dictionary:
+	if _strike_t < 0.0 or _strike_dur <= 0.0 or _strike_kind == "":
+		return {"pos": Vector2.ZERO, "rot": 0.0}
+	return SalvoStrikeMath.sample(_strike_kind, _strike_t / _strike_dur, _strike_side, outward_angle)
+
+
+func _strike_rot_now() -> float:
+	if _strike_t < 0.0:
+		return 0.0
+	return float(salvo_strike_pose(0.0)["rot"])
+
+
+func salvo_strike_clear() -> void:
+	_strike_t = -1.0
+	_strike_kind = ""
 
 
 ## Salvoda yakın dövüş hasarı: silahın KENDİ temas kuralı (kılıç alanı, bıçak parçaları, topuz/tırpan, mızrak hattı, kalkan
@@ -2764,9 +3020,12 @@ func _get_highest_health_enemy() -> Node2D:
 ## böylece tier 1 (hiç bonus yokken) tam olarak beam_tick_interval saniyede
 ## bir tık atar.
 func _process_continuous_beam(delta: float) -> void:
-	var target := _get_target_enemy()
+	## Talon E (Silah Salvosu) / kubbe girdabı: ışın hedef aramaz, yaratık olsun olmasın ikonun BAKTIĞI yönde (dönerken de) düz açılır;
+	## yolundaki ilk yaratığa tik anında vurur (savurma kuralı, _update_beam_reach). Hayalet hedef = ikonun önünde menzil boyu nokta.
+	var facing: bool = _beam_facing_mode()
+	var target: Node2D = _make_facing_direction_target() if facing else _get_target_enemy()
 	if not target or not is_instance_valid(target):
-		_end_beam()
+		_end_beam(true)
 		return
 	var rate_ratio: float = _effective_fire_wait() / _base_fire_rate if _base_fire_rate > 0.0 else 1.0
 	## BUG DÜZELTMESİ (2026-09-24 denge turu): Elara ULTİ'si (Çift Tetik) ışın silahında "2 kez tetiklenme"yi hiç
@@ -2776,7 +3035,13 @@ func _process_continuous_beam(delta: float) -> void:
 		rate_ratio *= 0.5
 	var effective_tick_interval: float = max(0.05, beam_tick_interval * rate_ratio)
 	_beam_interval = effective_tick_interval
-	if target != _beam_target:
+	if target != _beam_target and _beam_fx and is_instance_valid(_beam_fx) and _beam_fx.has_method("retarget") and not _beam_fx.get("_releasing"):
+		## Gökkuşağı: hedef değişince ışın + giriş sesi baştan başlamaz (efekt zaten _beam_tip'i izler; ağda "rbeam_update" uç günceller).
+		_beam_target = target
+		_beam_tick_timer = effective_tick_interval
+	elif target != _beam_target:
+		## ışın bir süredir kapalıysa final yeniden gönderilir (uca koşar); hedef değişiminde (_end_beam az önce) koşmaz
+		var launch: bool = not (_beam_fx and is_instance_valid(_beam_fx)) and Time.get_ticks_msec() - _beam_last_end_msec > BEAM_RELAUNCH_MSEC
 		_end_beam()
 		_beam_target = target
 		## Hedef (yeniden) kilitlendiği HER an tik sayacı TAM aralığa
@@ -2784,38 +3049,48 @@ func _process_continuous_beam(delta: float) -> void:
 		## yoruma bkz.).
 		_beam_tick_timer = effective_tick_interval
 		if beam_scene:
+			var origin_node: Node2D = muzzle if muzzle else (icon_sprite if icon_sprite else self)
+			## Işın ucu: efekt hedef düğümü gibi _beam_tip'i izler; ışın görünmeden önce doğru yere konur.
+			_ensure_beam_tip()
+			_update_beam_reach(target, origin_node, facing)
 			_beam_fx = beam_scene.instantiate()
 			get_tree().current_scene.add_child(_beam_fx)
-			var origin_node: Node2D = muzzle if muzzle else (icon_sprite if icon_sprite else self)
 			if _beam_fx.has_method("setup"):
-				_beam_fx.setup(origin_node, target)
+				_beam_fx.setup(origin_node, _beam_tip)
+			if _beam_fx.has_method("set_launch"):
+				_beam_fx.set_launch(launch)
 			## İlk çakış sesi (madde 294) - uzakta "beam_start" alınınca remote_player.gd _start_beam_vfx çalar.
 			if _beam_fx.has_method("play_strike_sfx"):
-				_beam_fx.play_strike_sfx(target.global_position, get_instance_id())
+				_beam_fx.play_strike_sfx(_beam_end, get_instance_id())
 			## Gökkuşağı finali: uç ve parlaklık ilk karede de doğru olsun (ağ başlangıcı da aynı veriyi taşır).
-			_update_beam_reach(target, origin_node)
+			_update_beam_reach(target, origin_node, facing)
 			# Broadcast the exact muzzle position so remote beams start at the same point.
 			if NetworkManager.is_multiplayer_active:
 				var start_data: Dictionary = _beam_net_data(origin_node)
 				if beam_net_kind == "beam":
 					start_data["beam_type"] = "lightning"
+				else:
+					start_data["ln"] = launch
 				NetworkManager.send_player_vfx(multiplayer.get_unique_id(), beam_net_kind + "_start", _beam_net_end(target), start_data)
 	var origin_now: Node2D = muzzle if muzzle else (icon_sprite if icon_sprite else self)
-	_update_beam_reach(target, origin_now)
+	_update_beam_reach(target, origin_now, facing)
 	# Keep both endpoints synchronized while the player or target moves.
 	if NetworkManager.is_multiplayer_active and not NetworkManager.should_throttle("%s_%d" % [beam_net_kind, multiplayer.get_unique_id()], 0.05):
 		NetworkManager.send_player_vfx(multiplayer.get_unique_id(), beam_net_kind + "_update", _beam_net_end(target), _beam_net_data(origin_now))
 	_beam_tick_timer -= delta
 	if _beam_tick_timer <= 0.0:
 		_beam_tick_timer += effective_tick_interval
-		var hit_positions: Array = [target.global_position]
-		_deal_beam_tick(target)
+		## Tik anında ışının O AN değdiği yaratığa vurur (kilitliyse hedef; savurmada ışının ilk değdiği - hiçbiri yoksa boşa gider).
+		var hit_positions: Array = []
+		if _beam_hit != null and is_instance_valid(_beam_hit) and _beam_hit.get("is_dead") != true:
+			hit_positions.append(_beam_hit.global_position)
+			_deal_beam_tick(_beam_hit)
 		for e in _beam_extra_targets:
 			if is_instance_valid(e) and e.get("is_dead") != true:
 				hit_positions.append((e as Node2D).global_position)
 				_deal_beam_tick(e, true)
 		## Gökkuşağı: vurulan her hedefte renk patlaması + vuruş sesi (Yıldırım kendi sesini _deal_beam_tick'te çalar).
-		if _beam_fx and is_instance_valid(_beam_fx) and _beam_fx.has_method("play_tick"):
+		if not hit_positions.is_empty() and _beam_fx and is_instance_valid(_beam_fx) and _beam_fx.has_method("play_tick"):
 			_beam_fx.play_tick(hit_positions)
 			if NetworkManager.is_multiplayer_active:
 				NetworkManager.send_player_vfx(multiplayer.get_unique_id(), beam_net_kind + "_hit", hit_positions[0], {"ps": hit_positions})
@@ -2823,22 +3098,92 @@ func _process_continuous_beam(delta: float) -> void:
 
 ## Gökkuşağı Asası (madde 306): ışının ucu + delinen ek hedefler + özellik parlaklığı (tutma / kamaşma) her karede. Finalde (özellik
 ## bayrağı "beam_pierce") ışın hedef yönünde menzil sonuna uzanır, hattaki (BEAM_PIERCE_RADIUS) herkes ek hedef olur.
-func _update_beam_reach(target: Node2D, origin_node: Node2D) -> void:
+## facing: Talon E / kubbe girdabı - hedef yok, ışın ikonun baktığı yönde (hayalet hedef yalnız menzil için); asla kilitli sayılmaz.
+func _update_beam_reach(target: Node2D, origin_node: Node2D, facing: bool = false) -> void:
 	_beam_extra_targets.clear()
+	_beam_hit = null
 	var ench: Node = enchant_behavior if is_instance_valid(enchant_behavior) else null
 	var pierce: bool = ench != null and ench.flag("beam_pierce")
-	if pierce and is_instance_valid(target):
-		var a: Vector2 = origin_node.global_position
-		var dir: Vector2 = (target.global_position - a).normalized()
-		if dir == Vector2.ZERO:
-			dir = Vector2.RIGHT
-		_beam_end = a + dir * attack_range
-		_beam_extra_targets = _collect_pierce_targets(a, _beam_end, target)
+	var a: Vector2 = origin_node.global_position
+	var has_target: bool = is_instance_valid(target)
+	var to_target: Vector2 = (target.global_position - a) if has_target else Vector2.ZERO
+	## Işının yönü: ikonun temiz nişan açısı, hedefe en çok AIM_SHOT_TOLERANCE_DEG yaklaştırılmış (mermiyle aynı kural, _shot_base_dir).
+	var dir: Vector2 = _icon_facing_dir() if facing else (_shot_base_dir(target, a) if has_target else Vector2.RIGHT)
+	if dir == Vector2.ZERO:
+		dir = Vector2.RIGHT
+	## KİLİTLİ: nişan oturmuş, ışın tam hedefe (eski davranış). Değilse ışın namlunun baktığı yönde uzanır (boşa gidebilir).
+	var locked: bool = not facing and (not has_target or to_target == Vector2.ZERO or absf(dir.angle_to(to_target)) < 0.001)
+	if locked and has_target:
+		_beam_hit = target
+	if pierce and (has_target or facing):
+		## madde 551: ışın sahibin görüş elipsinin kenarına kadar (kilitliyse en az hedefin biraz ötesine)
+		var owner_node: Node2D = get_parent() as Node2D
+		var center: Vector2 = owner_node.global_position if owner_node != null else a
+		var edge: Vector2 = ProjectileRangeScript.vision_edge_along(a, dir, center, get_tree())
+		var reach: float = a.distance_to(edge)
+		if locked:
+			reach = maxf(reach, a.distance_to(target.global_position) + 12.0)
+		_beam_end = a + dir * reach
+		var line: Array = _collect_pierce_targets(a, _beam_end, _beam_hit)
+		if _beam_hit == null and not line.is_empty():
+			## savurma: hattaki en yakın birincil sayılır (ışık saçılması + ses ondan), diğerleri delinen ek hedef
+			line.sort_custom(func(x: Node, y: Node) -> bool:
+				return a.distance_squared_to((x as Node2D).global_position) < a.distance_squared_to((y as Node2D).global_position))
+			_beam_hit = line.pop_front() as Node2D
+		_beam_extra_targets = line
+	elif locked and has_target:
+		_beam_end = target.global_position
+	else:
+		## savurma (temel ışın): menzil boyunca ilk değen yaratıkta biter, hiçbiri yoksa menzil sonunda boşa gider
+		var reach_len: float = attack_range if attack_range > 0.0 else maxf(to_target.length() if not facing else 400.0, 1.0)
+		var far: Vector2 = a + dir * reach_len
+		var hits: Array = _beam_ray_hits(a, far, BEAM_HIT_RADIUS)
+		if hits.is_empty():
+			_beam_end = far
+		else:
+			_beam_hit = hits[0] as Node2D
+			_beam_end = a + dir * clampf((_beam_hit.global_position - a).dot(dir), 0.0, reach_len)
+	if _beam_tip != null and is_instance_valid(_beam_tip):
+		_beam_tip.global_position = _beam_end
 	if _beam_fx and is_instance_valid(_beam_fx):
 		if _beam_fx.has_method("set_end"):
 			_beam_fx.set_end(_beam_end, pierce)
 		if _beam_fx.has_method("set_glow"):
-			_beam_fx.set_glow(ench.beam_glow(target) if ench != null else 0.0)
+			_beam_fx.set_glow(ench.beam_glow(_beam_hit) if ench != null else 0.0)
+		## namlu parıltısı + uçtaki saçılma yalnız ışın bir yaratığa değerken (boşa giden / savrulan ışında yok)
+		if _beam_fx.has_method("set_hit"):
+			var touching: bool = _beam_hit != null and is_instance_valid(_beam_hit)
+			_beam_fx.set_hit(touching, (_beam_hit as Node2D).global_position if touching else null)
+
+
+## Işın bu karede ikonun baktığı yöne mi açılır (Talon E dizilimi / Şovalye kubbesi girdabı)? Yaratık aramaz, menzil dışını beklemez.
+func _beam_facing_mode() -> bool:
+	return (fire_in_facing_direction or _rim_spin) and icon_sprite != null
+
+
+## Işın efektinin hedef diye izlediği boş düğüm (bkz. _beam_tip).
+func _ensure_beam_tip() -> void:
+	if _beam_tip != null and is_instance_valid(_beam_tip):
+		return
+	_beam_tip = Node2D.new()
+	_beam_tip.name = "BeamTip"
+	get_tree().current_scene.add_child(_beam_tip)
+	_beam_tip.global_position = _beam_end
+
+
+## a -> b doğrusuna `radius` içinde değen hedeflenebilir yaratıklar, a'dan uzaklığa göre sıralı (en yakın önce).
+func _beam_ray_hits(a: Vector2, b: Vector2, radius: float) -> Array:
+	var out: Array = []
+	var half: float = a.distance_to(b) * 0.5
+	for e in EnemyQueryScript.candidates(get_tree(), (a + b) * 0.5, half + radius):
+		if not is_instance_valid(e) or e.get("is_dead") == true or not e.has_method("take_damage") or not _can_target(e):
+			continue
+		var p: Vector2 = (e as Node2D).global_position
+		if p.distance_to(Geometry2D.get_closest_point_to_segment(p, a, b)) <= radius:
+			out.append(e)
+	out.sort_custom(func(x: Node, y: Node) -> bool:
+		return a.distance_squared_to((x as Node2D).global_position) < a.distance_squared_to((y as Node2D).global_position))
+	return out
 
 
 func _collect_pierce_targets(a: Vector2, b: Vector2, primary: Node2D) -> Array:
@@ -2855,18 +3200,42 @@ func _collect_pierce_targets(a: Vector2, b: Vector2, primary: Node2D) -> Array:
 	return out
 
 
+## Gökkuşağı Asası IŞIK SAÇILMASI (madde 551): birincil hedefin çevresindeki en yakın RBEAM_SPLASH_MAX düşmana tik hasarının yarısı.
+## Zincir değil (sekmez), kamaşma saymaz; finalde ışının deldiği ek hedefler zaten tam hasar aldığı için atlanır. Kritik tikin hasarı yarıya
+## iner ama kritik görünür (aynı tik).
+func _apply_beam_splash(center: Vector2, primary: Node2D, tick_damage: float, is_crit: bool, shield_pen: float) -> void:
+	var picks: Array = []
+	for e in EnemyQueryScript.candidates(get_tree(), center, RBEAM_SPLASH_RADIUS):
+		if e == primary or not is_instance_valid(e) or e.get("is_dead") == true or not e.has_method("take_damage"):
+			continue
+		if _beam_extra_targets.has(e) or not _can_target(e):
+			continue
+		var d2: float = center.distance_squared_to((e as Node2D).global_position)
+		if d2 <= RBEAM_SPLASH_RADIUS * RBEAM_SPLASH_RADIUS:
+			picks.append([d2, e])
+	picks.sort_custom(func(x: Array, y: Array) -> bool: return float(x[0]) < float(y[0]))
+	for i in range(mini(RBEAM_SPLASH_MAX, picks.size())):
+		var e: Node = picks[i][1]
+		BalanceLogScript.tag_weapon(self)
+		e.take_damage(tick_damage * RBEAM_SPLASH_RATIO, is_crit, shield_pen)
+
+
 ## Işının şu an vurduğu düşmanlar (birincil + delinenler) - Göz Kamaştıran Işık özelliği tutma süresini bunlarla sayar.
 func beam_targets() -> Array:
 	var out: Array = []
-	if _beam_target != null and is_instance_valid(_beam_target) and _beam_fx != null and is_instance_valid(_beam_fx):
-		out.append(_beam_target)
+	## Birincil = ışının O AN değdiği yaratık (_beam_hit; savurmada değişir -> tutma süresi sıfırlanır), hiçbirine değmiyorsa boş.
+	if _beam_hit != null and is_instance_valid(_beam_hit) and _beam_fx != null and is_instance_valid(_beam_fx):
+		out.append(_beam_hit)
 		for e in _beam_extra_targets:
 			if is_instance_valid(e) and e.get("is_dead") != true:
 				out.append(e)
 	return out
 
 
+## Ağa giden ışın ucu: ışının gerçek ucu (kilitliyse hedefin konumu, savurmada namlunun yönündeki nokta, finalde görüş kenarı).
 func _beam_net_end(target: Node2D) -> Vector2:
+	if _beam_tip != null and is_instance_valid(_beam_tip):
+		return _beam_end
 	if _beam_fx and is_instance_valid(_beam_fx) and _beam_fx.get("pierce") == true:
 		return _beam_end
 	return target.global_position
@@ -2877,16 +3246,29 @@ func _beam_net_data(origin_node: Node2D) -> Dictionary:
 	if beam_net_kind == "rbeam" and _beam_fx and is_instance_valid(_beam_fx):
 		d["pi"] = _beam_fx.get("pierce") == true
 		d["h"] = snappedf(float(_beam_fx.get("glow")), 0.05)
+		d["ht"] = _beam_hit != null and is_instance_valid(_beam_hit) ## ışın bir yaratığa değiyor mu (uzakta namlu parıltısı + saçılma)
+		## finalde ışının ucu görüş kenarı: ışık saçılmasının merkezi (birincil hedef) ayrıca gider (madde 551)
+		if d["pi"] and _beam_hit != null and is_instance_valid(_beam_hit):
+			d["sp"] = _beam_hit.global_position
 	return d
 
 
-## Işını (varsa) kapatır - hedef kaybolduğunda/değiştiğinde çağrılır.
-func _end_beam() -> void:
+## Işını (varsa) kapatır - hedef kaybolduğunda/değiştiğinde çağrılır. soft: hedef kalmadı (ışın gerçekten bitiyor) - Gökkuşağı finali
+## incelerek söner (fx release); hedef değişiminde hemen silinir (yenisi aynı karede açılır).
+func _end_beam(soft: bool = false) -> void:
 	if _beam_fx and is_instance_valid(_beam_fx):
-		_beam_fx.queue_free()
+		_beam_last_end_msec = Time.get_ticks_msec()
+		if soft and _beam_fx.has_method("release"):
+			_beam_fx.release()
+		else:
+			_beam_fx.queue_free()
 	_beam_fx = null
 	_beam_target = null
+	_beam_hit = null
 	_beam_extra_targets.clear()
+	if _beam_tip != null and is_instance_valid(_beam_tip):
+		_beam_tip.queue_free()
+	_beam_tip = null
 	_stop_beam_tremor()
 	if NetworkManager.is_multiplayer_active:
 		NetworkManager.send_player_vfx(multiplayer.get_unique_id(), beam_net_kind + "_stop", Vector2.ZERO, {})
@@ -2985,25 +3367,16 @@ func _deal_beam_tick(target: Node2D, is_pierce: bool = false) -> void:
 		return
 	var hit_pos: Vector2 = target.global_position
 	var final_damage: float = damage * beam_tick_ratio * rage_multiplier
-	## Büyücü Kız pasifi: güçlendirme ışın silahında bir sonraki tike (+%30) - asa da hedefin tersine sertçe geri tepe.
-	var surge_mult: float = 1.0 if is_pierce else _take_surge_mult()
-	final_damage *= surge_mult
-	if surge_mult > 1.0 and icon_sprite:
-		var surge_dir: Vector2 = target.global_position - global_position
-		if _punch_tween and _punch_tween.is_valid():
-			_punch_tween.kill()
-		_punch_tween = WeaponJuice.arcane_surge(self, icon_sprite, surge_dir, Vector2.ZERO, _icon_base_scale, recoil_distance)
-		if NetworkManager.is_multiplayer_active:
-			_broadcast_weapon_fire_anim(surge_dir, Vector2.ZERO, 0.0, {"surge": true})
+	## Büyücü Kız pasifi: güçlendirme ışın silahında bir sonraki tike (+%60) (silahta animasyon yok).
+	final_damage *= 1.0 if is_pierce else _take_surge_mult()
 	final_damage *= 1.0 + _player_stat("talon_damage_bonus")
 	final_damage *= 1.0 - maxf(_player_stat("talon_salvo_damage_penalty"), _rim_spin_penalty) ## Talon E aktifken / kubbe girdabında -%25 (TalonFormationMath.SALVO_DAMAGE_PENALTY)
 	var first_hit: bool = _item_first_hit(target)
 	var is_crit: bool = first_hit or _passive_guaranteed_crit() or randf() < crit_chance
 	if is_crit:
 		final_damage *= crit_damage + _player_stat("item_crit_damage_bonus")
-		## Kritik tik: asa hafifçe titrer (bkz. WeaponCritAnim "jitter") - uzak kopyaya da gider. (Büyücü pasifinin
-		## güçlendirilmiş tikinde geri tepme öncelikli - iki tween aynı ikonda çekişmesin.)
-		if icon_sprite and surge_mult <= 1.0 and not is_pierce:
+		## Kritik tik: asa hafifçe titrer (bkz. WeaponCritAnim "jitter") - uzak kopyaya da gider.
+		if icon_sprite and not is_pierce:
 			WeaponCritAnim.play_ranged(self, icon_sprite, _crit_key(), (target.global_position - global_position), Vector2.ZERO,
 				_icon_base_scale, recoil_distance)
 			if NetworkManager.is_multiplayer_active:
@@ -3049,6 +3422,8 @@ func _deal_beam_tick(target: Node2D, is_pierce: bool = false) -> void:
 	var chain_pct: float = ench.chain_pct(chain_damage_percent) if ench else chain_damage_percent
 	if jumps > 0 and not is_pierce and is_instance_valid(target):
 		_apply_chain_jumps(target, final_damage * chain_pct, is_crit, shield_pen, _shaman_burn_applied, jumps)
+	if not is_pierce and beam_net_kind == "rbeam":
+		_apply_beam_splash(hit_pos, target, final_damage, is_crit, shield_pen)
 	if not is_pierce:
 		fired.emit((target.global_position - global_position).normalized())
 	_apply_item_slow_on_hit(target)
@@ -3186,13 +3561,16 @@ func _fire_at(target: Node2D) -> void:
 		final_damage *= crit_damage + (ench.crit_damage_bonus(target) if ench else 0.0) + _player_stat("item_crit_damage_bonus")
 	## Efsun: ek atış hasar çarpanı (ör. Ok Yağmuru ek okları %80) + efsunun kendi hasar değişikliği (güç, koşullu bonuslar).
 	final_damage *= _shot_damage_mult * (1.0 + GameManager.enchant_damage_percent)
-	## Büyücü Kız pasifi (bkz. arcane_surge): bekleyen güçlendirme bu asıl atışta tüketilir (+%30) - görsel de sertleşir.
+	## Büyücü Kız pasifi (bkz. arcane_surge): bekleyen güçlendirme bu asıl atışta tüketilir (+%60); mermi görünümü _fire_at'te (look["surge"]).
 	var surge_mult: float = _take_surge_mult()
 	_surge_shot = surge_mult > 1.0
 	final_damage *= surge_mult
 	if ench:
 		final_damage = ench.modify_damage(final_damage, target)
-	var direction: Vector2 = (target.global_position - global_position).normalized()
+	## ATIŞ YÖNÜ (madde 549 ek): menzilli silahta namlunun BAKTIĞI yön (hedefe en çok AIM_SHOT_TOLERANCE_DEG yaklaştırılmış) - ikon hedefe
+	## dönene kadar mermi boşa gider; yakın dövüş / ışın / Talon dizilimi eski kuralda (hedefe düz ya da zaten ikonun yönü).
+	var direction: Vector2 = _shot_base_dir(target)
+	_last_shot_dir = direction
 	if _shot_angle_offset != 0.0:
 		direction = direction.rotated(_shot_angle_offset)
 	## (2026-09-30: burada ilk sürümden kalma "get_skill_character_id() == 5 ise her atışta mor hız çizgisi" bloğu vardı. Q
@@ -3222,22 +3600,18 @@ func _fire_at(target: Node2D) -> void:
 	## önceden söyleyebilmemizi sağlar - bkz. kullanıcı bildirimi: "kesme
 	## efekti bitmeden kılıcın geri dönmesi [sorunu]".
 	var melee_effect_hold: float = 0.0
-	## Büyücü pasifi: yakın dövüşte savuruş zaten hedefe atılış - güçlendirilmiş vuruşta ikon mor parlar (uzak kopya "surge" ile).
-	var surge_extra: Dictionary = {"surge": true} if _surge_shot else {}
+	var fire_extra: Dictionary = {}
 	if is_crit:
-		surge_extra["crit"] = true
-	if _surge_shot and icon_sprite:
-		WeaponJuice.surge_flash(self, icon_sprite)
-		if melee:
-			WeaponJuice.spawn_surge_spark(self, icon_sprite) ## menzilli silahta kıvılcım arcane_surge içinde
+		fire_extra["crit"] = true
 	## Talon Silah Salvosu (E): yakın dövüş vuruşu zincirin ucunda - ikon yuvada kalıp dışa dürtülür (bkz. _salvo_melee_jab);
 	## silaha özel savuruşlar dünyaya sabit planla ikonu dönen zincirden koparıp öteye atıyordu. Kukla "weapon_fire"ı formasyonda
 	## zaten _kick_formation_icon ile oynatır.
 	var salvo_strike: bool = _salvo_melee_strike_active()
 	if salvo_strike:
-		_salvo_melee_jab(direction)
+		var strike_dur: float = _salvo_strike_start()
 		if NetworkManager.is_multiplayer_active:
-			_broadcast_weapon_fire_anim(direction, target_pos_at_attack, 0.0, surge_extra)
+			fire_extra["ss_dur"] = snappedf(strike_dur, 0.005) ## kukla vuruşu aynı sürede oynatır (SalvoStrikeMath)
+			_broadcast_weapon_fire_anim(direction, target_pos_at_attack, 0.0, fire_extra)
 	elif melee and _is_uzunkilic:
 		## Uzunkılıç: hedefe atılıp üstünden yay çizen kendi savuruşu (bkz. _start_sword_swing) - diğer yakın dövüş
 		## silahlarının hedef üstündeki "Z" zikzağı ve eski kırmızı hilal (fx_uzunkilic_slash) kılıçta kullanılmıyor.
@@ -3278,14 +3652,14 @@ func _fire_at(target: Node2D) -> void:
 		## efekt(ler) tamamen bitmeden dönmeye başlamıyor (melee_effect_hold).
 		_do_melee_swing(direction, melee_at_position, melee_effect_hold, is_crit)
 		if NetworkManager.is_multiplayer_active:
-			_broadcast_weapon_fire_anim(direction, melee_at_position, melee_effect_hold, surge_extra)
+			_broadcast_weapon_fire_anim(direction, melee_at_position, melee_effect_hold, fire_extra)
 	else:
 		_do_recoil(direction, is_crit)
 		_spawn_muzzle_flash(direction)
 		if max_ammo > 0:
-			ShellCasingFx.eject(icon_sprite, _mag_key, direction, get_parent() as Node2D) ## boş kovan (madde 296; kukla "weapon_fire"da)
+			GunReloadFx.on_shot(icon_sprite, _mag_key, direction, get_parent() as Node2D) ## boş kovan (madde 296; pompalıda pompa + kovan 0,2 sn sonra; kukla "weapon_fire"da)
 		if NetworkManager.is_multiplayer_active:
-			_broadcast_weapon_fire_anim(direction, Vector2.ZERO, 0.0, surge_extra)
+			_broadcast_weapon_fire_anim(direction, Vector2.ZERO, 0.0, fire_extra)
 
 	## Uzunkılıç/Tüfek/Topuz gibi silaha özel kalkan delme (weapon_shield_pen_bonus,
 	## diğer tüm silahlerde 0 - no-op).
@@ -3409,6 +3783,11 @@ func _fire_at(target: Node2D) -> void:
 	get_tree().current_scene.add_child(proj)
 	## Elara Çift Tetik ikinci tetiği: ikonun turkuaz ikizinden çıkar (bkz. _fire_at_delayed echo, elara_fx.gd).
 	var spawn_pos: Vector2 = global_position + (ElaraFx.ECHO_OFFSET if _elara_echo_shot else Vector2.ZERO)
+	if fire_from_barrel_tip and not _elara_echo_shot:
+		spawn_pos = _barrel_tip_global()
+		var to_t: Vector2 = target_pos_at_attack - spawn_pos
+		if to_t.length() > 12.0:
+			direction = to_t.normalized() ## namlu ucundan hedefe (orta hat yönüyle paralel giderse 5 px kaçırırdı)
 	proj.global_position = spawn_pos
 	proj.direction = direction
 	if "face_direction" in proj and proj.face_direction:
@@ -3486,6 +3865,9 @@ func _fire_at(target: Node2D) -> void:
 	## firework_projectile.gd). Diğer tüm mermilerde bu alan yok, no-op.
 	if "target_position" in proj:
 		proj.target_position = target_pos_at_attack
+		## Namlunun baktığı yöne atıldıysa (ikon hedefe dönmemişken) iniş noktası da o yönde, hedefle AYNI uzaklıkta (madde 549 ek).
+		if _shot_follows_icon() and not _last_shot_dir.is_equal_approx((target_pos_at_attack - global_position).normalized()):
+			proj.target_position = global_position + _last_shot_dir * (target_pos_at_attack - global_position).length()
 	if splash_radius_mult != 1.0 and "splash_radius" in proj:
 		proj.splash_radius *= splash_radius_mult
 	## Boomerang: tier'e göre büyüyen gidiş/dönüş hız çarpanı + havada tek
@@ -3738,8 +4120,6 @@ func _start_sword_swing(direction: Vector2, target_pos: Vector2, is_crit: bool =
 		var sword_extra: Dictionary = {"sword_side": _sword_side, "sword_size": size, "sword_speed": speed, "chain_hold": hold}
 		if is_crit:
 			sword_extra["crit"] = true
-		if _surge_shot:
-			sword_extra["surge"] = true ## Büyücü pasifi: uzak kopyada da mor parlama
 		_broadcast_weapon_fire_anim(direction, target_pos, 0.0, sword_extra)
 
 
@@ -3790,8 +4170,6 @@ func _start_dagger_stab(direction: Vector2, target_pos: Vector2, is_crit: bool =
 		var d_extra: Dictionary = {"dagger_size": size, "dagger_speed": speed, "chain_hold": hold}
 		if is_crit:
 			d_extra["crit"] = true
-		if _surge_shot:
-			d_extra["surge"] = true ## Büyücü pasifi: uzak kopyada da mor parlama
 		_broadcast_weapon_fire_anim(direction, target_pos, 0.0, d_extra)
 
 
@@ -3836,8 +4214,6 @@ func _start_topuz_slam(direction: Vector2, target_pos: Vector2, is_crit: bool = 
 		var t_extra: Dictionary = {"topuz_size": size, "topuz_speed": speed, "chain_hold": hold}
 		if is_crit:
 			t_extra["crit"] = true
-		if _surge_shot:
-			t_extra["surge"] = true ## Büyücü pasifi: uzak kopyada da mor parlama
 		_broadcast_weapon_fire_anim(direction, target_pos, 0.0, t_extra)
 
 
@@ -3885,8 +4261,6 @@ func _start_tirpan_reap(direction: Vector2, target_pos: Vector2, is_crit: bool =
 		var p_extra: Dictionary = {"pence_size": size, "pence_speed": speed, "chain_hold": hold}
 		if is_crit:
 			p_extra["crit"] = true
-		if _surge_shot:
-			p_extra["surge"] = true ## Büyücü pasifi: uzak kopyada da mor parlama
 		_broadcast_weapon_fire_anim(direction, target_pos, 0.0, p_extra)
 
 
@@ -3957,8 +4331,6 @@ func _start_mizrak_thrust(direction: Vector2, target_pos: Vector2, is_crit: bool
 			m_extra["mizrak_fly"] = float(plan["fly_speed"])
 		if is_crit:
 			m_extra["crit"] = true
-		if _surge_shot:
-			m_extra["surge"] = true ## Büyücü pasifi: uzak kopyada da mor parlama
 		_broadcast_weapon_fire_anim(plan["dir"], target_pos, 0.0, m_extra) ## kukla planı bu yönle kurar (karakterden hedefe)
 
 
@@ -4036,6 +4408,107 @@ func _mizrak_hit_one(e_v: Variant, amount: float, is_crit: bool, shield_pen: flo
 var _kalkan_plan: Dictionary = {}
 
 
+## Siper duruşu (madde 685): ekranda (çıkış / gösterim) olan kalkanın görünen yüz yönünü sahibe yayınlar - mermiler KalkanGuard.try_block ile
+## o yöndeki +-60 derece yaya giren atışı hasarsız söndürür. Gizli (sırtta) / sahip ölü ise koruma yok. Uzak kukla aynısını yapar.
+func _kalkan_publish_guard(owner_node: Node2D) -> void:
+	var st: int = int(_wf_vis.get("s", WeaponFollowMath.HIDDEN))
+	if _owner_gone or icon_sprite == null or st == WeaponFollowMath.HIDDEN or st == WeaponFollowMath.RETRACT:
+		KalkanGuard.clear(owner_node)
+		return
+	var sector: int = int(icon_sprite.get_meta(KalkanBashMath.META_SECTOR, -1))
+	if sector < 0:
+		return
+	if not _kalkan_react_cb.is_valid():
+		_kalkan_react_cb = Callable(self, "_kalkan_block_react")
+	KalkanGuard.publish(owner_node, KalkanGuard.sector_dir(sector), _kalkan_react_cb, kalkan_guard_reduction())
+
+
+## Siper duruşunun menzilli atış hasar azaltması (madde 705): %30 + Sağlam Siper (siper.gd). main.gd bunu "kguard" ile kuklaya da yollar.
+func kalkan_guard_reduction() -> float:
+	var ench: Node = enchant_behavior if is_instance_valid(enchant_behavior) else null
+	if ench != null and ench.has_method("guard_reduction"):
+		return float(ench.call("guard_reduction"))
+	return KalkanGuard.DAMAGE_REDUCTION
+
+
+## Blok tepkisi (madde 687): kalkan atıştan uzağa kısa geri tepme + ezilme yapar. Darbe (tween) ikonu yönetirken karışılmaz (kıvılcım + ses yine çıkar).
+## Uzak kukla aynısını remote_player.gd kalkan_block_react ile oynatır (KalkanGuard.recoil ortak).
+var _kalkan_react_cb: Callable = Callable()
+var _kalkan_recoil_tween: Tween = null
+var _kalkan_release_msec: int = 0 ## darbenin sarsılarak oturduğu an (KalkanBashMath.settle_delay): bundan sonra gelen atış tehdidi beklemeyi böler
+
+
+## Siper alma (madde 701): KalkanGuard.cover_step durumu; darbe sürerken donar (darbe yolu kaymasın). home/dönüş YEREL birim
+## (global = sahip + pos x sahip ölçeği, bkz. _wf_update).
+var _kalkan_cover: Dictionary = {}
+var _kalkan_threat_d: float = INF
+var _kalkan_postpone_msec: int = -1 ## ertelenen darbenin ilk erteleme anı (-1 = ertelenmiyor)
+
+
+func _kalkan_cover_home(home: Vector2, owner_node: Node2D, delta: float) -> Vector2:
+	if not _kalkan_bash_running():
+		KalkanGuard.cover_step(_kalkan_cover, _kalkan_threat, delta)
+	var e: float = KalkanGuard.cover_blend(_kalkan_cover)
+	if e <= 0.0:
+		return home
+	var s: Vector2 = owner_node.scale
+	if absf(s.x) < 0.0001 or absf(s.y) < 0.0001:
+		return home
+	return home.lerp(KalkanGuard.cover_world(_kalkan_cover) / s, e)
+
+
+## Atış çok yakınken yeni darbeye çıkma, siperde kal (en çok POSTPONE_MAX_MSEC). true = bu tur ertelendi.
+func _kalkan_postpone_bash() -> bool:
+	if not _is_kalkan or _kalkan_threat_d > KalkanGuard.IMMINENT_DIST:
+		_kalkan_postpone_msec = -1
+		return false
+	var now: int = Time.get_ticks_msec()
+	if _kalkan_postpone_msec < 0:
+		_kalkan_postpone_msec = now
+	elif now - _kalkan_postpone_msec > KalkanGuard.POSTPONE_MAX_MSEC:
+		_kalkan_postpone_msec = -1
+		return false
+	var gap: float = maxf(0.05, _effective_fire_wait())
+	fire_timer.start(0.08) ## kısa sonra yeniden dene; start(süre) wait_time'ı ezer -> sonraki turlar tam aralık (reset_attack_cooldown deseni)
+	fire_timer.wait_time = gap
+	return true
+
+
+func _kalkan_block_react(to_shot: Vector2) -> void:
+	KalkanGuard.cover_hit(_kalkan_cover, to_shot)
+	if icon_sprite == null or not icon_sprite.is_inside_tree():
+		return
+	if _kalkan_bash_running():
+		if Time.get_ticks_msec() < _kalkan_release_msec:
+			return ## darbe henüz oturmadı (hasar/itme zamanı bozulmasın): kıvılcım + ses yine çıkar
+		_kalkan_threat_break_bash()
+	if _kalkan_recoil_tween and _kalkan_recoil_tween.is_valid():
+		_kalkan_recoil_tween.kill()
+	_kalkan_recoil_tween = KalkanGuard.recoil(self, icon_sprite, to_shot, Vector2.ZERO, _kalkan_rest_scale())
+
+
+func _kalkan_rest_scale() -> Vector2:
+	return Vector2(absf(_icon_base_scale.x), absf(_icon_base_scale.y))
+
+
+func _kalkan_bash_running() -> bool:
+	return _melee_swing_tween != null and _melee_swing_tween.is_valid() and _melee_swing_tween.is_running()
+
+
+## Gelen atış (tehdit) varken darbenin hedefin başındaki beklemesi/dönüşü bölünür: kalkan hedeften atışa döner (yüz yönü _kalkan_face'te tehdide
+## ayarlanır). Darbe oturana kadar (vuruş + sarsılma) bölünmez - hasar/itme zamanları değişmez.
+func _kalkan_threat_break_bash() -> void:
+	if not _kalkan_bash_running() or Time.get_ticks_msec() < _kalkan_release_msec:
+		return
+	_melee_swing_tween.kill()
+	_melee_swing_tween = null
+	if _kalkan_recoil_tween and _kalkan_recoil_tween.is_valid():
+		_kalkan_recoil_tween.kill()
+	_kalkan_recoil_tween = create_tween() ## ikon hedefin başındaki yerinden gövdeye yumuşakça döner (ışınlanmasın)
+	_kalkan_recoil_tween.tween_property(icon_sprite, "position", Vector2.ZERO, 0.12).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	_kalkan_recoil_tween.parallel().tween_property(icon_sprite, "scale", _kalkan_rest_scale(), 0.12)
+
+
 ## Kalkanın görünüş/hayalet sayfası: görünüş kademeyle değişmez (madde 402) -> hep 1. seviye.
 func _kalkan_tier() -> int:
 	return 1
@@ -4043,8 +4516,10 @@ func _kalkan_tier() -> int:
 
 ## Yüzü `dir`'e bakan görünüş (dönme yerine). Darbe oynarken dokunulmaz (plan kendi görünüşünü kurar).
 func _kalkan_face(dir: Vector2) -> void:
-	if icon_sprite == null or (_melee_swing_tween and _melee_swing_tween.is_valid() and _melee_swing_tween.is_running()):
+	if icon_sprite == null or _kalkan_bash_running():
 		return
+	if _kalkan_threat != Vector2.ZERO:
+		dir = _kalkan_threat ## üstüne gelen atış her yönelmenin önüne geçer: kalkan düşmana değil atışa hizalanır (madde 687)
 	KalkanBashMath.face(icon_sprite, _kalkan_tier(), dir)
 
 
@@ -4066,6 +4541,9 @@ func _start_kalkan_bash(direction: Vector2, target_pos: Vector2, is_crit: bool =
 		_melee_swing_tween.kill()
 	var speed: float = _melee_effect_speed_scale()
 	var hold: float = _melee_chain_hold(speed) ## madde 347: sonraki darbe gelene kadar dönmez
+	if _kalkan_recoil_tween and _kalkan_recoil_tween.is_valid():
+		_kalkan_recoil_tween.kill() ## blok geri tepmesi darbenin ilk adımıyla çekişmesin
+	_kalkan_release_msec = Time.get_ticks_msec() + int(KalkanBashMath.settle_delay(speed) * 1000.0)
 	_melee_swing_tween = KalkanBashMath.play(self, icon_sprite, plan, _kalkan_tier(), Vector2.ZERO, _icon_base_scale, speed, is_crit,
 		get_tree().current_scene, hold)
 	if NetworkManager.is_multiplayer_active:
@@ -4076,13 +4554,11 @@ func _start_kalkan_bash(direction: Vector2, target_pos: Vector2, is_crit: bool =
 			k_extra["kalkan_wall"] = true
 		if is_crit:
 			k_extra["crit"] = true
-		if _surge_shot:
-			k_extra["surge"] = true ## Büyücü pasifi: uzak kopyada da mor parlama
 		_broadcast_weapon_fire_anim(plan["dir"], target_pos, 0.0, k_extra)
 
 
 ## Çarpmanın bittiği an (bkz. _fire_at'teki zamanlayıcı): önündeki herkes (Final'de çevredeki herkes) TAM hasar alır ve itilir;
-## özellik (Siper) hasar çarpanını verir, ardından kalkan doldurur. target_v tipsiz: zamanlayıcı beklerken hedef serbest
+## özellik (Siper) hasar çarpanını verir, ardından yavaşlatır / sersemletir. target_v tipsiz: zamanlayıcı beklerken hedef serbest
 ## bırakılmış olabilir. Hayalet hedefte (Talon salvosu) gerçek vuruş yok.
 func _kalkan_contact(target_v: Variant, center: Vector2, real_hit: bool, final_damage: float, is_crit: bool, shield_pen: float,
 		direction: Vector2, plan: Dictionary, show_fx: bool = true) -> void:
@@ -4122,7 +4598,10 @@ func _kalkan_hit_one(e_v: Variant, amount: float, is_crit: bool, shield_pen: flo
 	var e: Node2D = e_v as Node2D
 	_apply_knockback(e)
 	if e.has_method("apply_skill_push"):
-		e.apply_skill_push(KalkanBashMath.push_dir(plan, e.global_position), KalkanBashMath.push_distance(plan))
+		var push_mult: float = 1.0
+		if is_instance_valid(enchant_behavior) and enchant_behavior.has_method("bash_push_mult"):
+			push_mult = float(enchant_behavior.bash_push_mult()) ## Siper "Sert İtiş"
+		e.apply_skill_push(KalkanBashMath.push_dir(plan, e.global_position), KalkanBashMath.push_distance(plan) * push_mult)
 	BalanceLogScript.tag_weapon(self)
 	e.take_damage(amount, is_crit, shield_pen, not is_primary)
 	_apply_item_slow_on_hit(e)
@@ -4457,6 +4936,8 @@ func _play_attack_sound() -> void:
 		## Geniş rastgele perde aralığı: art arda vuruşlar tekdüze/spam gibi
 		## hissettirmesin.
 		s.pitch_scale = randf_range(0.88, 1.12) * float(s.get_meta("pitch_base", 1.0)) ## pitch_base: derin sesli silah (Pompalı, madde 448)
+		if _ramp_on():
+			s.pitch_scale = randf_range(0.95, 1.05) * (1.0 + 0.08 * ramp_heat()) ## Makineli: hızlandıkça perde hafif yükselir (madde 652)
 		s.play()
 		_broadcast_attack_sound(s, on_rim)
 
@@ -4532,7 +5013,7 @@ func _spawn_muzzle_flash(direction: Vector2) -> void:
 		return
 	var fx = muzzle_flash_scene.instantiate()
 	get_tree().current_scene.add_child(fx)
-	fx.global_position = global_position + direction * muzzle_flash_offset
+	fx.global_position = _barrel_tip_global() if fire_from_barrel_tip else global_position + direction * muzzle_flash_offset
 	fx.rotation = direction.angle() + muzzle_flash_rotation_offset
 	# Broadcast to remote players
 	## Relay flood korumasına takılmamayı garantilemek için sınırlanıyor
@@ -4594,13 +5075,6 @@ func _hide_icon_if_still_flying() -> void:
 func _do_recoil(direction: Vector2, is_crit: bool = false) -> void:
 	if not icon_sprite:
 		return
-	## Büyücü Kız pasifi: güçlendirilmiş atışta normal geri tepme yerine pasifin sert geri tepmesi (kritik animasyonunun da önünde). Uzak kopya
-	## "weapon_fire" yayınındaki "surge" ile aynısını oynatır - ayrı "weapon_recoil" yayını gönderilmez (iki tween çekişirdi).
-	if _surge_shot:
-		if _punch_tween and _punch_tween.is_valid():
-			_punch_tween.kill()
-		_punch_tween = WeaponJuice.arcane_surge(self, icon_sprite, direction, Vector2.ZERO, _icon_base_scale, recoil_distance)
-		return
 	## Kritik: silaha özel sert animasyon (bkz. weapon_crit_anim.gd) - uzak kopya "weapon_fire" yayınındaki "crit" ile aynısını
 	## oynatır, bu yüzden ayrı "weapon_recoil" yayını gönderilmez (iki tween aynı ikonda çekişirdi).
 	if is_crit and WeaponCritAnim.kind_of(_crit_key()) != "":
@@ -4656,8 +5130,8 @@ func _broadcast_weapon_fire_anim(fire_direction: Vector2, melee_target_pos: Vect
 	## Relay flood korumasına takılmamak için sınırlanıyor (bkz.
 	## NetworkManager.should_throttle) - yüksek ateş hızlı silahlarda animasyon
 	## zaten görsel olarak ~20/sn üzerinde fark edilmiyor.
-	## Kritikler ve Büyücü pasifinin güçlendirilmiş atışı sınırlamaya takılmaz (seyrek ve görsel olarak önemli).
-	if not extra.get("crit", false) and not extra.get("surge", false) \
+	## Kritikler sınırlamaya takılmaz (seyrek ve görsel olarak önemli).
+	if not extra.get("crit", false) \
 			and NetworkManager.should_throttle("wfire_%d_%d" % [multiplayer.get_unique_id(), slot_idx], 0.05):
 		return
 	## DÜZELTME (mimari sadeleştirme - kullanıcı isteği: "singleplayerda zaten

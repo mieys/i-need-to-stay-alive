@@ -32,6 +32,18 @@ SPAWN_AT = P.A_WIND  # = tirpan_reap_math.gd FX_AT
 TRAIL_FPS = 60.0
 FX_FPS = 30.0
 
+## YENİ TIRPAN ÇİZİMİ (2026-11-11, madde 589; Desktop\tırpan.png yatay aynalı -> assets/weapons/yeni/tirpan.png, 32x32): prototip
+## eski 40x40 çizimin geometrisiyle yazıldı; burada yeni çizimin ölçüleri yazılır (tirpan_reap_math.gd GRIP_PX / ART_SIZE,
+## weapon_tier_art.gd FORWARD -62 / SIZE_MULT 1,55 ile AYNI (2026-11-13; eskiden 1,74)). Bıçak orta hattı baştan uca, sanat px.
+P.ICON_PATH = "assets/weapons/yeni/tirpan.png"
+P.CENTER_PX = (16.0, 16.0)
+P.GRIP_PX = (6.8, 23.3)
+P.BLADE_PX = [(19.0, 5.0), (23.0, 6.3), (26.0, 8.5), (28.0, 10.5), (29.3, 12.8), (30.0, 15.0)]
+P.BLADE_GHOST_PX = [(15.5, 4.5)] + P.BLADE_PX
+P.ART_FWD = -62.0 * P.D2R
+P.ICON_K = 1.55 ## weapon_tier_art.gd SIZE_MULT["pence"] ile AYNI (2026-11-13 boyut turu: 1,74 -> 1,55)
+P.GKT = P.ICON_K * P.GK
+
 ## Çerçeveyi sağa çevir: prototipin modül değişkenleri çağrı anında okunur; yöne bağlı türetilmişler yeniden kurulur.
 P.DIR_ANG, P.DIRV, P.PERP = 0.0, (1.0, 0.0), (0.0, 1.0)
 PP.DIR_ANG, PP.DIRV = 0.0, (1.0, 0.0)

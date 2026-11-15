@@ -76,10 +76,11 @@ def half(a: np.ndarray) -> np.ndarray:
 
 def main() -> None:
     mask_path, out_dir = sys.argv[1], sys.argv[2]
+    prefix = sys.argv[3] if len(sys.argv) > 3 else ""
     cov = np.asarray(Image.open(mask_path).convert("L"), dtype=np.float32) / 252.0
     water = cov >= 0.5
     d_px = np.clip(chamfer(water, int(MAX_PX / TEXEL) + 2) * TEXEL, 0, MAX_PX)
-    Image.fromarray(np.round(d_px / MAX_PX * 255).astype(np.uint8), "L").save(os.path.join(out_dir, "su_mesafe.png"))
+    Image.fromarray(np.round(d_px / MAX_PX * 255).astype(np.uint8), "L").save(os.path.join(out_dir, prefix + "su_mesafe.png"))
 
     fx, fy = flow(water, d_px)
     fx, fy = half(fx), half(fy)
@@ -87,7 +88,7 @@ def main() -> None:
     rgb = np.dstack([
         np.round((0.5 + 0.5 * fx) * 255), np.round((0.5 + 0.5 * fy) * 255), np.round(birth * 255),
     ]).clip(0, 255).astype(np.uint8)
-    Image.fromarray(rgb, "RGB").save(os.path.join(out_dir, "su_akis.png"))
+    Image.fromarray(rgb, "RGB").save(os.path.join(out_dir, prefix + "su_akis.png"))
     os.remove(mask_path)
     for extra in (mask_path + ".import",):
         if os.path.exists(extra):

@@ -197,7 +197,8 @@ func _lead_point(player: Node2D) -> Vector2:
 func _spawn_fireball(dir: Vector2, speed: float, life: float) -> void:
 	var pos: Vector2 = e.global_position + (Vector2(0.0, -34.0) + dir * 26.0) * BODY_SCALE_REL
 	var data: Dictionary = {"dir": dir, "speed": speed, "life": life, "radius": FIREBALL_RADIUS}
-	AbilitiesScript.spawn_world_fx(e.get_tree(), "boss_spell", pos, data, true, e, FIREBALL_DAMAGE)
+	## Sabit hasar eski kademe (8) için yazılı: kademe yuvasına göre çarpan (enemy_spawner.gd BOSS_HOME_TIER; madde 682: Batık Nekropol K5'inde ~x0,7).
+	AbilitiesScript.spawn_world_fx(e.get_tree(), "boss_spell", pos, data, true, e, FIREBALL_DAMAGE * float(e.get_meta("boss_damage_mult", 1.0)))
 	AbilitiesScript._broadcast_world_fx("boss_spell", pos, data)
 
 

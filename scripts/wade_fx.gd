@@ -106,6 +106,22 @@ func water_at(world: Vector2) -> float:
 	return 0.0 if v <= 0.002 else (v * 255.0 - 1.0) / 254.0 + 0.001
 
 
+## Karakterin ayak noktası (dünya, tam piksel): görsel örtüyle ve yavaşlatmayla AYNI nokta.
+func _feet_of(n: Node2D) -> Vector2:
+	var pos: Vector2 = n.global_position
+	var fy: float = pos.y
+	if _main != null and is_instance_valid(_main) and _main.has_method("_creature_foot_y"):
+		fy = float(_main.call("_creature_foot_y", n))
+	return Vector2(pos.x, fy).floor()
+
+
+## Ayakları suyun içinde mi (uçanlar / ölüler / ruh hâlindekiler hariç) - görsel örtü ve hareket yavaşlatması ortak kural.
+func is_wading(n: Node2D) -> bool:
+	if _mask_img == null or not n.is_inside_tree() or is_airborne(n):
+		return false
+	return water_at(_feet_of(n)) > 0.0
+
+
 ## Havada mı (suya girmez): oyuncu / kukla durumları ve uçan yaratık aileleri.
 static func is_airborne(n: Node) -> bool:
 	if n.has_method("is_buyucu_airborne") and bool(n.call("is_buyucu_airborne")):
@@ -150,6 +166,10 @@ func _process(delta: float) -> void:
 			chars.append(a)
 	for n in chars:
 		_update(n as Node2D, view, delta, false)
+	## Yerel oyuncu suda yürüyorsa toplam hareket hızı %25 düşer (madde 596, player.gd WADE_MOVE_MULT); görsel koşullarından (görüntü / görünürlük) bağımsız.
+	for p in tree.get_nodes_in_group("player"):
+		if p is Node2D and "wade_slow_active" in p:
+			p.set("wade_slow_active", is_wading(p as Node2D))
 	if _frame % WADE_ENEMY_EVERY == 0 or not _overlays.is_empty():
 		var cand: Array = EnemyQueryScript.candidates(tree, view.get_center(), view.size.length() * 0.5)
 		var full: bool = _frame % WADE_ENEMY_EVERY == 0
@@ -189,8 +209,7 @@ func _update(n: Node2D, view: Rect2, delta: float, creature: bool) -> void:
 		if ov != null:
 			ov.set_wading(false)
 		return
-	var feet := Vector2(pos.x, float(_main.call("_creature_foot_y", n)) if _main.has_method("_creature_foot_y") else pos.y)
-	feet = feet.floor()
+	var feet: Vector2 = _feet_of(n)
 	var w: float = water_at(feet)
 	if w <= 0.0:
 		if ov != null:

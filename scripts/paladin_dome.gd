@@ -88,6 +88,20 @@ static func node_contains(node: Node, pos: Vector2, margin: float = 0.0) -> bool
 	return contains((node as Node2D).global_position, float(node.get("paladin_zone_radius")), pos, margin)
 
 
+## Kubbeye çarpan MENZİLLİ yaratık saldırısının hasarı (madde 542, kullanıcı: "hasar vermesi lazım kalkana, sonuçta dışarıdan gelenleri absorbe ediyor").
+## Eskiden mermi/kemik/ateş topu/boss büyüsü/asit kenara değince hasarsız siliniyor, lazer kenarda kesiliyordu: kubbeyi yalnız yakın dövüşçüler
+## aşındırıyordu. Artık yakın dövüşçü vuruşuyla AYNI yol: `take_paladin_barrier_damage` (kalkana yalnız %8 işler, cana hiç gitmez; uzak Şovalye'de
+## kukla host'tan sahibine yönlendirir). SADECE yetkili kopya (host / tek oyunculu) çağırır - istemcideki görsel kopya hasar vermez, yalnız söner.
+## `source` TİPSİZ: mermiyi atan yaratık uçuşta ölüp silinmiş olabilir (silinmiş = null, hasar yine işler).
+static func absorb_ranged_hit(dome_owner: Node, amount: float, source) -> void:
+	if dome_owner == null or not is_instance_valid(dome_owner) or amount <= 0.0:
+		return
+	if not dome_owner.has_method("take_paladin_barrier_damage"):
+		return
+	var src: Node2D = (source as Node2D) if is_instance_valid(source) else null
+	dome_owner.call("take_paladin_barrier_damage", amount, src)
+
+
 ## `pos` aktif (sahibi canlı) bir Şovalye kubbesinin içinde mi - yerel oyuncu + uzak kuklalar; içindeyse kubbenin sahibi, değilse null.
 static func owner_containing(tree: SceneTree, pos: Vector2) -> Node2D:
 	if tree == null:

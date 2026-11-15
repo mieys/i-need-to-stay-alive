@@ -10,6 +10,10 @@ Ok sağ-alta uçar (weapon_tier_art.gd FORWARD["yay"] = +45).
   kollarıyla aynı dil), uçta çelik ok başı, çentikte beyaz/kırmızı tüy (uçan okun ok_govde.png renkleri). Ok yayın ALTINDA çizilir: kabzanın
   arkasından geçer, ucu gövdenin önünden çıkar.
 - Geri çekiş adımları eski draw kareleriyle aynı oranda (held_arrow_offsets 0/12/24/38/58 -> 0/1/2/3/5 köşegen adım).
+2026-11-10 YENİ YAY ÇİZİMİ (masaüstü yay.png): kavis SOL-ÜSTTE, ip renkli (uçlarda koyu, ortada açık mavi geçiş). Kareler çizimin
+sağ-üst -> sol-alt köşegenine göre aynasından (Image.TRANSVERSE) üretilir -> düzen yukarıdakiyle birebir (ip x+y=28, uçlar (24,4)/(4,24)),
+FORWARD +45 aynı kalır; arayüz ikonu (yay.png) kullanıcının çizdiği gibi durur. İp silinirken/çizilirken çizimin kendi ip renkleri
+kullanılır (uçtan çentiğe aynı renk sırası); eski siyah ip de çalışır.
 Çalıştırma: python tools/gen_yay_cekis.py [--onizleme <klasör>]
 """
 import sys
@@ -86,31 +90,40 @@ def arrow_layer(size, nock):
     return lay
 
 
+def string_colors(src):
+    """Düz ipin uçtan (STRING_ENDS[0]) ortaya (NOCK0) renk sırası; iki yarı simetrik kabul edilir."""
+    px = src.load()
+    (ax, ay) = STRING_ENDS[0]
+    return [px[x, STRING_SUM - x] for x in range(ax, NOCK0 - 1, -1)]
+
+
 def bow_without_string(src):
     im = src.copy()
     px = im.load()
     (ax, ay), (bx, by) = STRING_ENDS
     for x in range(bx + 1, ax):
         y = STRING_SUM - x
-        if px[x, y][3] > 0 and px[x, y][:3] == (0, 0, 0):
-            px[x, y] = (0, 0, 0, 0)
+        px[x, y] = (0, 0, 0, 0)  ## ip köşegeni uçlar arasında yalnız ipten oluşur (kollar ve kabza bu çizgiye değmez)
     return im
 
 
 def make_frame(src, pull):
     nock = NOCK0 - pull
+    cols = string_colors(src)
     bow = bow_without_string(src)
     px = bow.load()
     for end in STRING_ENDS:
-        for (x, y) in line(end[0], end[1], nock, nock):
-            px[x, y] = BLACK
+        pts = line(end[0], end[1], nock, nock)
+        n = max(1, len(pts) - 1)
+        for i, (x, y) in enumerate(pts):
+            px[x, y] = cols[round(i / n * (len(cols) - 1))]
     frame = arrow_layer(src.size, nock)
     frame.alpha_composite(bow)  ## yay okun ÜSTÜNDE: ok kabzanın arkasından geçer
     return frame
 
 
 def main():
-    src = Image.open(SRC).convert("RGBA")
+    src = Image.open(SRC).convert("RGBA").transpose(Image.TRANSVERSE)  ## yeni çizim: kavis sol-üst -> sağ-alta aynala
     frames = [make_frame(src, p) for p in PULLS]
     for i, fr in enumerate(frames, 1):
         fr.save(OUT / ("yay_d%d.png" % i))

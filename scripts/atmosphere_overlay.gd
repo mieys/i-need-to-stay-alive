@@ -239,7 +239,12 @@ func _gather_lights(xf: Transform2D, map_size: Vector2) -> Array:
 		var r_px: float = float(glow.get("radius")) * GLOW_RADIUS_SCALE * zoom * inv
 		if bool(glow.call("is_segment_light")):
 			var seg: Array = glow.call("current_segment")
-			if seg.size() >= 2:
+			if seg.size() > 2:
+				var pts: Array = []
+				for sp in seg:
+					pts.append((xf * Vector2(sp)) * inv)
+				_push_polyline(out, pts, r_px, col, map_size)
+			elif seg.size() >= 2:
 				_push_segment(out, (xf * Vector2(seg[0])) * inv, (xf * Vector2(seg[1])) * inv, r_px, col, map_size)
 		else:
 			_push(out, (xf * glow.global_position) * inv, r_px, col, map_size)
@@ -252,6 +257,29 @@ func _push(out: Array, center: Vector2, r: float, col: Color, map_size: Vector2)
 	if center.x < -r or center.y < -r or center.x > map_size.x + r or center.y > map_size.y + r:
 		return
 	out.append([center, r, Color(col.r * LIGHT_MAP_HEADROOM, col.g * LIGHT_MAP_HEADROOM, col.b * LIGHT_MAP_HEADROOM, 1.0)])
+
+
+## Kırık çizgi ışık (3+ nokta; bükülen alev): yol boyunca eşit aralıklı lekeler, yoğunluk _push_segment ile aynı hesap.
+func _push_polyline(out: Array, pts: Array, r: float, col: Color, map_size: Vector2) -> void:
+	var total: float = 0.0
+	for i in range(1, pts.size()):
+		total += Vector2(pts[i - 1]).distance_to(Vector2(pts[i]))
+	var spacing: float = maxf(r * SEGMENT_SPACING, 1.0)
+	var dots: int = clampi(int(ceil(total / spacing)) + 1, 2, SEGMENT_MAX_DOTS)
+	var step: float = total / float(dots - 1)
+	var k: float = clampf(step / (r * 16.0 / 15.0), 0.15, 1.0)
+	var c := Color(col.r * k, col.g * k, col.b * k, 1.0)
+	var seg_i: int = 1
+	var seg_start: float = 0.0
+	var seg_len: float = Vector2(pts[0]).distance_to(Vector2(pts[1]))
+	for d in dots:
+		var at: float = step * float(d)
+		while seg_i < pts.size() - 1 and at > seg_start + seg_len:
+			seg_start += seg_len
+			seg_i += 1
+			seg_len = Vector2(pts[seg_i - 1]).distance_to(Vector2(pts[seg_i]))
+		var w: float = clampf((at - seg_start) / seg_len, 0.0, 1.0) if seg_len > 0.0 else 0.0
+		_push(out, Vector2(pts[seg_i - 1]).lerp(Vector2(pts[seg_i]), w), r, c, map_size)
 
 
 ## Çizgi ışık: çizgi boyunca eşit aralıklı lekeler. Lekeler üst üste bindiği için her birinin gücü, çizginin ortası tek

@@ -1,0 +1,77 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+Vulkan 1.4.351 - Forward+ - Using Device #0: NVIDIA - NVIDIA GeForce RTX 5060
+
+WARNING: res://scenes/remote_player.tscn:3 - ext_resource, invalid UID: uid://b00g7qwyj3h8f - using text path instead: res://scripts/remote_player.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _kukla (res://tools/proto_20261111/sovalye_bariyer/yakala.gd:33)
+       [1] _run_variant (res://tools/proto_20261111/sovalye_bariyer/yakala.gd:56)
+       [2] _run (res://tools/proto_20261111/sovalye_bariyer/yakala.gd:27)
+WARNING: res://scenes/remote_player.tscn:4 - ext_resource, invalid UID: uid://c6s78w221s8vj - using text path instead: res://scripts/shadow_blob.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _kukla (res://tools/proto_20261111/sovalye_bariyer/yakala.gd:33)
+       [1] _run_variant (res://tools/proto_20261111/sovalye_bariyer/yakala.gd:56)
+       [2] _run (res://tools/proto_20261111/sovalye_bariyer/yakala.gd:27)
+WARNING: res://scenes/remote_player.tscn:5 - ext_resource, invalid UID: uid://dfw4p8b0v84x1 - using text path instead: res://scripts/shield_visual.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _kukla (res://tools/proto_20261111/sovalye_bariyer/yakala.gd:33)
+       [1] _run_variant (res://tools/proto_20261111/sovalye_bariyer/yakala.gd:56)
+       [2] _run (res://tools/proto_20261111/sovalye_bariyer/yakala.gd:27)
+WARNING: res://scenes/remote_player.tscn:6 - ext_resource, invalid UID: uid://bsh25h8y0v2xq - using text path instead: res://scripts/overhead_bar.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _kukla (res://tools/proto_20261111/sovalye_bariyer/yakala.gd:33)
+       [1] _run_variant (res://tools/proto_20261111/sovalye_bariyer/yakala.gd:56)
+       [2] _run (res://tools/proto_20261111/sovalye_bariyer/yakala.gd:27)
+WARNING: res://scenes/remote_player.tscn:3 - ext_resource, invalid UID: uid://b00g7qwyj3h8f - using text path instead: res://scripts/remote_player.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _kukla (res://tools/proto_20261111/sovalye_bariyer/yakala.gd:33)
+       [1] _run_variant (res://tools/proto_20261111/sovalye_bariyer/yakala.gd:57)
+       [2] _run (res://tools/proto_20261111/sovalye_bariyer/yakala.gd:27)
+WARNING: res://scenes/remote_player.tscn:4 - ext_resource, invalid UID: uid://c6s78w221s8vj - using text path instead: res://scripts/shadow_blob.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _kukla (res://tools/proto_20261111/sovalye_bariyer/yakala.gd:33)
+       [1] _run_variant (res://tools/proto_20261111/sovalye_bariyer/yakala.gd:57)
+       [2] _run (res://tools/proto_20261111/sovalye_bariyer/yakala.gd:27)
+WARNING: res://scenes/remote_player.tscn:5 - ext_resource, invalid UID: uid://dfw4p8b0v84x1 - using text path instead: res://scripts/shield_visual.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _kukla (res://tools/proto_20261111/sovalye_bariyer/yakala.gd:33)
+       [1] _run_variant (res://tools/proto_20261111/sovalye_bariyer/yakala.gd:57)
+       [2] _run (res://tools/proto_20261111/sovalye_bariyer/yakala.gd:27)
+WARNING: res://scenes/remote_player.tscn:6 - ext_resource, invalid UID: uid://bsh25h8y0v2xq - using text path instead: res://scripts/overhead_bar.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _kukla (res://tools/proto_20261111/sovalye_bariyer/yakala.gd:33)
+       [1] _run_variant (res://tools/proto_20261111/sovalye_bariyer/yakala.gd:57)
+       [2] _run (res://tools/proto_20261111/sovalye_bariyer/yakala.gd:27)
+WARNING: res://scenes/remote_player.tscn:3 - ext_resource, invalid UID: uid://b00g7qwyj3h8f - using text path instead: res://scripts/remote_player.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _kukla (res://tools/proto_20261111/sovalye_bariyer/yakala.gd:33)
+       [1] _run_variant (res://tools/proto_20261111/sovalye_bariyer/yakala.gd:57)
+       [2] _run (res://tools/proto_20261111/sovalye_bariyer/yakala.gd:27)
+WARNING: res://scenes/remote_player.tscn:4 - ext_resource, invalid UID: uid://c6s78w221s8vj - using text path instead: res://scripts/shadow_blob.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _kukla (res://tools/proto_20261111/sovalye_bariyer/yakala.gd:33)
+       [1] _run_variant (res://tools/proto_20261111/sovalye_bariyer/yakala.gd:57)
+       [2] _run (res://tools/proto_20261111/sovalye_bariyer/yakala.gd:27)
+WARNING: res://scenes/remote_player.tscn:5 - ext_resource, invalid UID: uid://dfw4p8b0v84x1 - using text path instead: res://scripts/shield_visual.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _kukla (res://tools/proto_20261111/sovalye_bariyer/yakala.gd:33)
+       [1] _run_variant (res://tools/proto_20261111/sovalye_bariyer/yakala.gd:57)
+       [2] _run (res://tools/proto_20261111/sovalye_bariyer/yakala.gd:27)
+WARNING: res://scenes/remote_player.tscn:6 - ext_resource, invalid UID: uid://bsh25h8y0v2xq - using text path instead: res://scripts/overhead_bar.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _kukla (res://tools/proto_20261111/sovalye_bariyer/yakala.gd:33)
+       [1] _run_variant (res://tools/proto_20261111/sovalye_bariyer/yakala.gd:57)
+       [2] _run (res://tools/proto_20261111/sovalye_bariyer/yakala.gd:27)
+SECENEK oyun kare 75
+BITTI

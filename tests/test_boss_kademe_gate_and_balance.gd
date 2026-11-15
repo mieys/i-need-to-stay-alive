@@ -37,15 +37,12 @@ func _cleanup() -> void:
 		if is_instance_valid(n):
 			n.free()
 	_made.clear()
-	GameManager.bosses_enabled = false
 	GameManager.game_time = 0.0
 	NetworkManager.is_multiplayer_active = false
 
 
-## 2026-10-08: boss sistemi varsayılan KAPALI (GameManager.bosses_enabled, bkz. CLAUDE.md madde 39) - bu dosya boss/Final akışını sınar, bu yüzden geçici açar
 func _spawner() -> Node:
 	_cleanup()
-	GameManager.bosses_enabled = true
 	var sp: Node = SpawnerScript.new()
 	add_child(sp)
 	sp.max_concurrent_enemies = 100000
@@ -60,8 +57,9 @@ func _spawner() -> Node:
 	return sp
 
 
+## Nihai statlı OLMAYAN (boss_base_stats yolu) örnek boss: madde 597'de eski 13'lü BOSS_TIERS tablosu kalktı, formül testleri iskelet3'ü doğrudan doğurur.
 func _boss_of_tier(sp: Node, tier: int) -> Array:
-	sp._spawn_boss_group(SpawnerScript.BOSS_TIERS[tier], tier)
+	sp._spawn_boss_group(["iskelet3"], tier)
 	var found: Array = []
 	for e: Node in get_tree().get_nodes_in_group("boss"):
 		if is_instance_valid(e) and e.get("is_dead") != true and not found.has(e):
@@ -72,39 +70,39 @@ func _boss_of_tier(sp: Node, tier: int) -> Array:
 ## ---------------------------------------------------------------- 1) boss kademe kapısı
 func test_tier_does_not_advance_while_the_tier_boss_is_alive_and_resumes_after() -> void:
 	var sp: Node = _spawner()
-	GameManager.game_time = 2.0 * TIER_SECONDS + 76.0 ## kademe 3'ün %75'i: boss zamanı
+	GameManager.game_time = 4.0 * TIER_SECONDS + 76.0 ## kademe 5'in %75'i: boss zamanı (madde 597: ilk boss Kademe 5'te)
 	sp._check_boss_tiers()
-	assert(sp._tier_bosses.has(3), "3. kademenin bossu doğmalı ve kapı için kaydedilmeli")
-	assert(sp._current_tier() == 3, "Boss doğduğunda kademe 3")
+	assert(sp._tier_bosses.has(5), "5. kademenin bossu doğmalı ve kapı için kaydedilmeli")
+	assert(sp._current_tier() == 5, "Boss doğduğunda kademe 5")
 
-	## Kademe 3'ün sonu geçti (game_time 350) ama boss sağ: kademe 3'te kalmalı.
-	GameManager.game_time = 3.0 * TIER_SECONDS + 50.0
-	assert(sp._current_tier() == 3, "Boss sağken kademe 4'e atlanmamalı, bulunan: %d" % sp._current_tier())
+	## Kademe 5'in sonu geçti (game_time 550) ama boss sağ: kademe 5'te kalmalı.
+	GameManager.game_time = 5.0 * TIER_SECONDS + 50.0
+	assert(sp._current_tier() == 5, "Boss sağken kademe 6'ya atlanmamalı, bulunan: %d" % sp._current_tier())
 	assert(sp.is_tier_held_by_boss(), "Kapı 'boss tutuyor' demeli")
-	GameManager.game_time = 3.0 * TIER_SECONDS + 900.0 ## çok uzun süre geçse de
-	assert(sp._current_tier() == 3, "Ne kadar beklenirse beklensin kademe 3'te kalmalı")
+	GameManager.game_time = 5.0 * TIER_SECONDS + 900.0 ## çok uzun süre geçse de
+	assert(sp._current_tier() == 5, "Ne kadar beklenirse beklensin kademe 5'te kalmalı")
 
-	## Boss ölünce saat kaldığı yerden devam eder: hemen 4. kademe, ama ATLAMA yok (ör. 4 değil 10 olmaz).
-	for b in sp._tier_bosses[3]:
+	## Boss ölünce saat kaldığı yerden devam eder: hemen 6. kademe, ama ATLAMA yok (ör. 6 değil 10 olmaz).
+	for b in sp._tier_bosses[5]:
 		b.is_dead = true
 	assert(not sp.is_tier_held_by_boss(), "Boss ölünce kapı açılmalı")
-	## Saat sınırın 0.001sn altında durmuştu: bir sonraki karede (game_time küçük bir adım ilerleyince) kademe 4 olur -
-	## oyun zamanı kaç saat geçmiş olursa olsun 4'ten öteye atlanmaz.
+	## Saat sınırın 0.001sn altında durmuştu: bir sonraki karede (game_time küçük bir adım ilerleyince) kademe 6 olur -
+	## oyun zamanı kaç saat geçmiş olursa olsun 6'dan öteye atlanmaz.
 	GameManager.game_time += 0.05
-	assert(sp._current_tier() == 4, "Boss ölünce kademe 4 olmalı (birden fazla kademe atlanmamalı), bulunan: %d" % sp._current_tier())
+	assert(sp._current_tier() == 6, "Boss ölünce kademe 6 olmalı (birden fazla kademe atlanmamalı), bulunan: %d" % sp._current_tier())
 	GameManager.game_time += TIER_SECONDS
-	assert(sp._current_tier() == 5, "Sonra normal hızla ilerlemeli")
+	assert(sp._current_tier() == 7, "Sonra normal hızla ilerlemeli")
 	_cleanup()
 
 
 func test_killing_the_boss_before_the_boundary_changes_nothing() -> void:
 	var sp: Node = _spawner()
-	GameManager.game_time = 2.0 * TIER_SECONDS + 76.0
+	GameManager.game_time = 4.0 * TIER_SECONDS + 76.0
 	sp._check_boss_tiers()
-	for b in sp._tier_bosses[3]:
+	for b in sp._tier_bosses[5]:
 		b.is_dead = true
-	GameManager.game_time = 3.0 * TIER_SECONDS + 10.0
-	assert(sp._current_tier() == 4, "Boss sınırdan önce öldüyse kademe zamanında ilerlemeli, bulunan: %d" % sp._current_tier())
+	GameManager.game_time = 5.0 * TIER_SECONDS + 10.0
+	assert(sp._current_tier() == 6, "Boss sınırdan önce öldüyse kademe zamanında ilerlemeli, bulunan: %d" % sp._current_tier())
 	assert(is_equal_approx(sp._held_total, 0.0), "Hiç bekleme birikmemeli")
 	_cleanup()
 
@@ -118,23 +116,23 @@ func test_tiers_without_a_boss_are_never_held() -> void:
 	_cleanup()
 
 
-func test_next_boss_and_final_wait_for_the_held_tier() -> void:
+func test_next_boss_and_the_last_boss_wait_for_the_held_tier() -> void:
 	var sp: Node = _spawner()
-	## Kademe 3 bossu sağ: kademe 6 bossunun (zaman 575) ve Final'in (1500) tetik zamanı gelse bile kademe saati 300'de bekler.
-	GameManager.game_time = 2.0 * TIER_SECONDS + 76.0
+	## Kademe 5 bossu sağ: kademe 10 (SON) bossunun (zaman 975) tetik zamanı gelse bile kademe saati 500'de bekler.
+	GameManager.game_time = 4.0 * TIER_SECONDS + 76.0
 	sp._check_boss_tiers()
 	GameManager.game_time = 6000.0
 	sp._check_boss_tiers()
-	sp._check_final_tier()
-	assert(not sp._boss_tiers_spawned.has(6), "Kademe 3 bossu sağken 6. kademe bossu doğmamalı")
-	assert(not sp._final_spawned, "Final Kademe de beklemeli")
-	assert(sp._current_tier() == 3, "Kademe 3'te kalmalı")
+	sp._check_auto_endless()
+	assert(not sp._boss_tiers_spawned.has(10), "Kademe 5 bossu sağken 10. kademe bossu doğmamalı")
+	assert(not sp._final_spawned, "son boss da beklemeli")
+	assert(sp._current_tier() == 5, "Kademe 5'te kalmalı")
 	_cleanup()
 
 
 func test_new_game_resets_the_hold() -> void:
 	var sp: Node = _spawner()
-	GameManager.game_time = 2.0 * TIER_SECONDS + 76.0
+	GameManager.game_time = 4.0 * TIER_SECONDS + 76.0
 	sp._check_boss_tiers()
 	GameManager.game_time = 5000.0
 	sp._current_tier()

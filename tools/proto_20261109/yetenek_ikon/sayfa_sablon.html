@@ -1,0 +1,367 @@
+<title>Yetenek İkonu Seçimi</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=Nunito:wght@500;700;800&display=swap">
+<style>
+/* Yerleşim: yapışkan üst şerit (ilerleme + karakter atlama), altında karakter başına 4 yetenek kartı;
+   kartta "şu an" + 3 aday büyük tıklanır kare. Tek koyu tema = oyunun Kısık Ahşap HUD paleti (hud_theme.gd). */
+:root {
+  --deep: #140e09;
+  --bg: #1d150e;
+  --panel: #2c2016;
+  --panel-hi: #3a2b1d;
+  --rim: #6a4a30;
+  --rim-lo: #4b3320;
+  --text: #f3e6cc;
+  --dim: #c4b090;
+  --gold: #f0c070;
+  --gold-ink: #24160a;
+  --good: #8fb466;
+  --good-fill: #2d2b17;
+  --bad: #d06a4e;
+  --bad-fill: #2e1912;
+  --font-display: "Pixelify Sans", "Nunito", system-ui, sans-serif;
+  --font-body: "Nunito", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--text); font-family: var(--font-body); font-size: 15px; line-height: 1.45; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--deep); }
+.wrap { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); max-width: 1480px; margin: 0 auto; }
+
+header.bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--deep); border-bottom: 2px solid var(--rim-lo); }
+.bar .wrap { padding-block: 12px; display: flex; flex-direction: column; gap: 10px; }
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: 26px; color: var(--gold); margin: 0; letter-spacing: 0.02em; }
+.prog { display: flex; align-items: center; gap: 10px; flex: 1 1 260px; min-width: 0; }
+.prog-track { flex: 1; height: 12px; background: var(--panel); border: 2px solid var(--rim-lo); border-radius: 3px; overflow: hidden; }
+.prog-fill { height: 100%; width: 0; background: var(--good); transition: width .25s; }
+.prog-txt { font-variant-numeric: tabular-nums; font-weight: 800; white-space: nowrap; }
+.save { font-size: 13px; color: var(--dim); white-space: nowrap; }
+.save.ok { color: var(--good); }
+.save.warn { color: var(--bad); }
+.tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: thin; }
+.chip { flex: 0 0 auto; font: 700 13px var(--font-body); color: var(--dim); background: var(--panel); border: 2px solid var(--rim-lo); border-radius: 4px; padding: 4px 9px; text-decoration: none; display: flex; gap: 6px; align-items: center; }
+.chip:hover, .chip:focus-visible { color: var(--text); border-color: var(--rim); outline: none; }
+.chip .n { font-variant-numeric: tabular-nums; color: var(--gold); }
+.chip.done .n { color: var(--good); }
+.btn { font: 800 13px var(--font-body); color: var(--text); background: var(--panel-hi); border: 2px solid var(--rim); border-radius: 4px; padding: 6px 12px; cursor: pointer; }
+.btn:hover { border-color: var(--gold); }
+.btn:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.btn.on { background: var(--gold); color: var(--gold-ink); border-color: var(--gold); }
+
+main .wrap { padding-block: 18px 60px; display: flex; flex-direction: column; gap: 28px; }
+.intro { color: var(--dim); max-width: 70ch; margin: 0; }
+.intro b { color: var(--text); }
+section.char { display: flex; flex-direction: column; gap: 12px; scroll-margin-top: 140px; }
+section.char h2 { font-family: var(--font-display); font-weight: 700; font-size: 22px; margin: 0; color: var(--text); display: flex; align-items: baseline; gap: 10px; text-wrap: balance; }
+section.char h2 small { font: 700 13px var(--font-body); color: var(--dim); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 12px; }
+
+.card { background: var(--panel); border: 2px solid var(--rim-lo); border-radius: 6px; padding: 12px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.card.decided { border-color: var(--good); background: var(--good-fill); }
+.card.rejected { border-color: var(--bad); background: var(--bad-fill); }
+.card.hide { display: none; }
+.head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.key { flex: 0 0 auto; width: 26px; height: 26px; display: grid; place-items: center; font: 700 15px var(--font-display); color: var(--gold-ink); background: var(--gold); border-radius: 4px; box-shadow: inset 0 -3px 0 rgba(0,0,0,.25); }
+.key.p { background: var(--dim); }
+.sname { font-weight: 800; font-size: 16px; min-width: 0; overflow-wrap: anywhere; }
+.no { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--dim); font-size: 13px; font-weight: 700; }
+.desc { color: var(--dim); font-size: 13px; margin: 0; }
+.opts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.opt { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 4px 5px; background: var(--deep); border: 2px solid var(--rim-lo); border-radius: 5px; cursor: pointer; color: var(--dim); font: 700 12px var(--font-body); min-width: 0; }
+.opt:hover { border-color: var(--rim); color: var(--text); }
+.opt:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.opt[aria-pressed="true"] { border-color: var(--gold); color: var(--gold); box-shadow: 0 0 0 2px var(--gold) inset; }
+.opt[aria-pressed="true"]::after { content: "✓"; position: absolute; top: 2px; right: 4px; font-size: 14px; color: var(--gold); }
+.opt.cur { background: transparent; border-style: dashed; }
+.ic { width: 100%; max-width: 84px; aspect-ratio: 1; border-radius: 3px; background-image: url("ikonlar.webp"); background-repeat: no-repeat; }
+.opt .lbl { text-align: center; line-height: 1.2; overflow-wrap: anywhere; }
+.opt.t-rec .sub { color: var(--gold); }
+.opt.t-new .sub { color: var(--good); }
+.opt.t-new { border-color: #4d5a30; }
+.opt.t-old .sub { color: #8a7660; }
+.opt.t-tint { border-color: #8a6a2a; color: var(--gold); }
+.fresh { margin-left: auto; font: 800 11px var(--font-body); letter-spacing: .06em; text-transform: uppercase; color: var(--gold-ink); background: var(--good); border-radius: 3px; padding: 2px 6px; white-space: nowrap; }
+.fresh.tint { background: var(--gold); }
+.fresh + .no { margin-left: 6px; }
+.opts { grid-template-columns: repeat(auto-fill, minmax(66px, 1fr)); }
+@media (min-width: 760px) { .card.wide { grid-column: span 2; } }
+/* iksir sayfası: kart başına 49 küçük kare, piksel sanat keskin */
+.iksir .grid { grid-template-columns: 1fr; }
+.iksir .card.wide { grid-column: auto; }
+.iksir .grid { grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); }
+.iksir .opts { grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 6px; }
+.iksir .ic { image-rendering: pixelated; max-width: 96px; }
+@media (max-width: 460px) { .iksir .grid { grid-template-columns: 1fr; } }
+.iksir .opt { padding: 4px 2px 3px; font-size: 11px; }
+.foot { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.none { font: 700 12px var(--font-body); color: var(--dim); background: transparent; border: 2px solid var(--rim-lo); border-radius: 4px; padding: 5px 9px; cursor: pointer; }
+.none:hover { color: var(--text); border-color: var(--rim); }
+.none:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.none[aria-pressed="true"] { color: var(--text); background: var(--bad); border-color: var(--bad); }
+.note { flex: 1 1 140px; min-width: 0; font: 500 13px var(--font-body); color: var(--text); background: var(--deep); border: 2px solid var(--rim-lo); border-radius: 4px; padding: 5px 8px; }
+.note::placeholder { color: #8a7660; }
+.note:focus { outline: none; border-color: var(--gold); }
+
+.copybox { width: 100%; min-height: 160px; font: 13px ui-monospace, Consolas, monospace; color: var(--text); background: var(--deep); border: 2px solid var(--rim); border-radius: 4px; padding: 8px; }
+@media (max-width: 420px) { .opts { gap: 5px; } .opt { font-size: 11px; } h1 { font-size: 22px; } }
+@media (prefers-reduced-motion: reduce) { .prog-fill { transition: none; } }
+</style>
+
+<header class="bar">
+  <div class="wrap">
+    <div class="top">
+      <h1>Yetenek İkonu Seçimi</h1>
+      <div class="prog"><div class="prog-track"><div class="prog-fill" id="progFill"></div></div><span class="prog-txt" id="progTxt">0 / 56</span></div>
+      <span class="save" id="saveState" role="status">Kayıt bağlanıyor…</span>
+    </div>
+    <div class="tools">
+      <nav class="chips" id="chips" aria-label="Karaktere git"></nav>
+      <button class="btn" id="onlyFresh" type="button" aria-pressed="false">Yenilenenler</button>
+      <button class="btn" id="onlyOpen" type="button" aria-pressed="false">Sadece seçilmemişler</button>
+      <button class="btn" id="copyBtn" type="button">Seçimleri kopyala</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    <p class="intro">Seçimlerin oyunda: 56 yetenek + Büyücü Kız'ın 2. set büyüleri + Shaman'ın golem yetenekleri. Cadı'nın 6 iksiri ayrı sayfada (Transperent klasöründen) seçiliyor. <b>Yıldırım Kalkanı</b>'nda oyuna e'nin yalnız tonla sarı-turuncuya dönmüş ilk hâli yazıldı; zemini biraz açık olanı istersen ikinci altın kareyi seç.</p>
+    <div id="copyWrap" hidden><textarea class="copybox" id="copyBox" readonly aria-label="Seçimlerin metni"></textarea></div>
+    <div id="list"></div>
+  </div>
+</main>
+
+<script>
+const DATA = /*VERI*/{};
+const ROWS = DATA.rows || [];
+const COLS = DATA.cols || 4;
+const N = ROWS.length;
+const state = {};            // no -> {pick, not}
+const cards = {};            // no -> element refs
+let db = null, coll = null, writable = true;
+const LS_KEY = "ikon_secim_v1_" + (DATA.coll || "secimler");
+
+const pad = n => String(n).padStart(2, "0");
+const optOf = (r, pick) => r.opts.find(o => o.id === pick);
+const iconKeyOf = (r, pick) => optOf(r, pick)?.icon || "";
+const decided = no => !!state[no]?.pick && state[no].pick !== "hicbiri";
+const isFresh = r => r.opts.some(o => o.tag === "new" || o.tag === "tint");
+
+function sprite(el, row, col) {
+  const s = el.getBoundingClientRect().width || 84;
+  el.style.backgroundSize = `${s * COLS}px ${s * N}px`;
+  el.style.backgroundPosition = `${-col * s}px ${-row * s}px`;
+}
+
+function build() {
+  const list = document.getElementById("list");
+  const chips = document.getElementById("chips");
+  const chars = [];
+  for (const r of ROWS) if (!chars.includes(r.karakter)) chars.push(r.karakter);
+  list.style.display = "flex"; list.style.flexDirection = "column"; list.style.gap = "28px";
+  chars.forEach((c, ci) => {
+    const id = "k" + ci;
+    const a = document.createElement("a");
+    a.className = "chip"; a.href = "#" + id; a.dataset.char = c;
+    a.innerHTML = `<span></span><span class="n"></span>`;
+    a.firstChild.textContent = c;
+    chips.appendChild(a);
+    const sec = document.createElement("section");
+    sec.className = "char"; sec.id = id;
+    const h = document.createElement("h2");
+    h.textContent = c;
+    const sm = document.createElement("small"); h.appendChild(sm);
+    sec.appendChild(h);
+    const grid = document.createElement("div"); grid.className = "grid";
+    sec.appendChild(grid);
+    list.appendChild(sec);
+    ROWS.filter(r => r.karakter === c).forEach(r => grid.appendChild(makeCard(r)));
+  });
+}
+
+function makeCard(r) {
+  const row = r.row ?? (r.no - 1);
+  const card = document.createElement("article");
+  card.className = "card";
+  card.innerHTML = `
+    <div class="head"><span class="key"></span><span class="sname"></span><span class="no"></span></div>
+    <p class="desc"></p>
+    <div class="opts" role="group"></div>
+    <div class="foot"><button type="button" class="none" aria-pressed="false">Hiçbiri, başka bak</button>
+      <input class="note" type="text" maxlength="200" placeholder="Not (isteğe bağlı)"></div>`;
+  const key = card.querySelector(".key");
+  key.textContent = r.yuva; if (r.yuva === "P") key.classList.add("p");
+  card.querySelector(".sname").textContent = r.yetenek;
+  card.querySelector(".no").textContent = "#" + r.no;
+  card.querySelector(".desc").textContent = r.desc;
+  const group = card.querySelector(".opts");
+  group.setAttribute("aria-label", r.karakter + " " + r.yuva + " " + r.yetenek);
+  const btns = {};
+  if (r.opts.length > 4) card.classList.add("wide");
+  if (isFresh(r)) {
+    const tag = document.createElement("span");
+    const hasNew = r.opts.some(o => o.tag === "new");
+    tag.className = "fresh" + (hasNew ? "" : " tint");
+    tag.textContent = hasNew ? "yeni adaylar" : "renk önizlemesi";
+    card.querySelector(".no").before(tag);
+  }
+  for (const o of r.opts) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "opt" + (o.tag === "cur" ? " cur" : "") + (o.tag ? " t-" + o.tag : "");
+    b.setAttribute("aria-pressed", "false");
+    b.title = o.tag === "cur" ? "Şu anki ikon kalsın" : o.icon;
+    const ic = document.createElement("span"); ic.className = "ic"; ic.dataset.row = row; ic.dataset.col = o.col;
+    const l = document.createElement("span"); l.className = "lbl";
+    l.textContent = o.label;
+    if (o.tag === "rec" || o.tag === "new" || o.tag === "old") {
+      const s = document.createElement("span"); s.className = "sub";
+      s.textContent = o.tag === "rec" ? " · önerim" : o.tag === "new" ? " · yeni" : " · önceki tur";
+      l.appendChild(s);
+    }
+    b.append(ic, l);
+    b.addEventListener("click", () => choose(r.no, state[r.no]?.pick === o.id ? "" : o.id));
+    group.appendChild(b); btns[o.id] = b;
+  }
+  const none = card.querySelector(".none");
+  none.addEventListener("click", () => choose(r.no, state[r.no]?.pick === "hicbiri" ? "" : "hicbiri"));
+  const note = card.querySelector(".note");
+  note.id = "not-" + r.no;
+  let t = null;
+  note.addEventListener("input", () => { clearTimeout(t); t = setTimeout(() => setNote(r.no, note.value.trim()), 700); });
+  note.addEventListener("blur", () => { clearTimeout(t); setNote(r.no, note.value.trim()); });
+  cards[r.no] = { card, btns, none, note, r };
+  return card;
+}
+
+function paint(no) {
+  const c = cards[no]; const s = state[no] || {};
+  for (const k in c.btns) c.btns[k].setAttribute("aria-pressed", String(s.pick === k));
+  c.none.setAttribute("aria-pressed", String(s.pick === "hicbiri"));
+  c.card.classList.toggle("decided", !!s.pick && s.pick !== "hicbiri");
+  c.card.classList.toggle("rejected", s.pick === "hicbiri");
+  if (document.activeElement !== c.note && (s.not || "") !== c.note.value) c.note.value = s.not || "";
+}
+
+function paintAll() {
+  for (const no in cards) paint(no);
+  const done = ROWS.filter(r => decided(r.no)).length;
+  document.getElementById("progTxt").textContent = `${done} / ${N} seçildi`;
+  document.getElementById("progFill").style.width = (100 * done / N) + "%";
+  for (const chip of document.querySelectorAll(".chip")) {
+    const rs = ROWS.filter(r => r.karakter === chip.dataset.char);
+    const d = rs.filter(r => decided(r.no)).length;
+    chip.querySelector(".n").textContent = `${d}/${rs.length}`;
+    chip.classList.toggle("done", d === rs.length);
+  }
+  document.querySelectorAll("section.char").forEach(sec => {
+    const name = sec.querySelector("h2").firstChild.textContent;
+    const rs = ROWS.filter(r => r.karakter === name);
+    sec.querySelector("small").textContent = `${rs.filter(r => decided(r.no)).length} / ${rs.length} seçildi`;
+  });
+  applyFilter();
+  if (!document.getElementById("copyWrap").hidden) document.getElementById("copyBox").value = summary();
+}
+
+function applyFilter() {
+  const only = document.getElementById("onlyOpen").getAttribute("aria-pressed") === "true";
+  const fresh = document.getElementById("onlyFresh").getAttribute("aria-pressed") === "true";
+  for (const no in cards) cards[no].card.classList.toggle("hide", (only && decided(no)) || (fresh && !isFresh(cards[no].r)));
+  document.querySelectorAll("section.char").forEach(sec => {
+    sec.hidden = !sec.querySelector(".card:not(.hide)");
+  });
+}
+
+function setStatus(txt, cls) {
+  const el = document.getElementById("saveState");
+  el.textContent = txt; el.className = "save" + (cls ? " " + cls : "");
+}
+
+const chains = {};
+function persist(no) {
+  const s = state[no] || {}; const r = cards[no].r;
+  saveLocal();
+  if (!coll || !writable) return;
+  const body = { no: r.no, karakter: r.karakter, yuva: r.yuva, yetenek: r.yetenek, secim: s.pick || "", ikon: iconKeyOf(r, s.pick), not: s.not || "", mevcut: r.mevcut };
+  setStatus("Kaydediliyor…");
+  chains[no] = (chains[no] || Promise.resolve()).then(() => coll.doc("s" + pad(no)).set(body)).then(
+    () => setStatus("Kaydedildi", "ok"),
+    e => {
+      if (e && (e.code === "invalid_argument" || e.code === "not_granted")) { writable = false; setStatus("Kayıt izni yok: Seçimleri kopyala ile gönder", "warn"); }
+      else setStatus("Kaydedilemedi, tekrar dene", "warn");
+    });
+}
+
+function choose(no, pick) {
+  state[no] = { ...(state[no] || {}), pick };
+  paint(no); paintAll(); persist(no);
+}
+function setNote(no, txt) {
+  if ((state[no]?.not || "") === txt) return;
+  state[no] = { ...(state[no] || {}), not: txt };
+  persist(no);
+}
+
+function saveLocal() { try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (e) {} }
+function loadLocal() { try { Object.assign(state, JSON.parse(localStorage.getItem(LS_KEY) || "{}")); } catch (e) {} }
+
+function summary() {
+  const lines = [];
+  for (const r of ROWS) {
+    const s = state[r.no] || {};
+    const o = optOf(r, s.pick);
+    const what = !s.pick ? "(seçilmedi)" : s.pick === "hicbiri" ? "hiçbiri, başka bak" : s.pick === "mevcut" ? "şu anki kalsın" : o ? `${o.label} (${o.icon})` : s.pick;
+    lines.push(`${r.no}. ${r.karakter} ${r.yuva} ${r.yetenek}: ${what}${s.not ? " - not: " + s.not : ""}`);
+  }
+  return lines.join("\n");
+}
+
+function layoutSprites() { document.querySelectorAll(".ic").forEach(el => sprite(el, +el.dataset.row, +el.dataset.col)); }
+
+async function connect() {
+  const timer = setTimeout(() => setStatus("Kayda ulaşılamadı; seçimler bu tarayıcıda tutuluyor", "warn"), 10000);
+  try {
+    db = window.claude?.use ? await window.claude.use("db") : null;
+  } catch (e) { db = null; }
+  if (!db) { clearTimeout(timer); setStatus("Kayıt kapalı: bitince Seçimleri kopyala ile gönder", "warn"); return; }
+  coll = db.collection(DATA.coll || "secimler");
+  coll.onSnapshot(snap => {
+    if (!snap.metadata.fromCache) clearTimeout(timer);
+    let changed = false;
+    for (const d of snap.docs) {
+      const v = d.data(); const no = Number(v.no);
+      if (!cards[no]) continue;
+      const cur = state[no] || {};
+      if (cur.pick !== (v.secim || "") || (cur.not || "") !== (v.not || "")) { state[no] = { pick: v.secim || "", not: v.not || "" }; changed = true; }
+    }
+    if (changed) { saveLocal(); paintAll(); }
+    if (!snap.metadata.fromCache && !/Kaydedil/.test(document.getElementById("saveState").textContent)) setStatus("Kayıt açık", "ok");
+  }, () => { clearTimeout(timer); setStatus("Kayıt bağlantısı koptu; seçimler bu tarayıcıda tutuluyor", "warn"); });
+}
+
+for (const id of ["onlyOpen", "onlyFresh"]) document.getElementById(id).addEventListener("click", e => {
+  const on = e.currentTarget.getAttribute("aria-pressed") !== "true";
+  e.currentTarget.setAttribute("aria-pressed", String(on)); e.currentTarget.classList.toggle("on", on);
+  applyFilter(); layoutSprites();
+});
+document.getElementById("onlyFresh").textContent = `Yenilenenler (${ROWS.filter(isFresh).length})`;
+document.getElementById("copyBtn").addEventListener("click", () => {
+  const txt = summary();
+  const wrap = document.getElementById("copyWrap"); const box = document.getElementById("copyBox");
+  wrap.hidden = false; box.value = txt;
+  const done = () => setStatus("Metin kopyalandı", "ok");
+  const fallback = () => { box.focus(); box.select(); setStatus("Metni seçtim, Ctrl+C ile kopyala", "warn"); };
+  try { navigator.clipboard.writeText(txt).then(done, fallback); } catch (e) { fallback(); }
+});
+
+if (DATA.mode) document.body.classList.add(DATA.mode);
+if (DATA.intro) document.querySelector(".intro").textContent = DATA.intro;
+build();
+loadLocal();
+paintAll();
+layoutSprites();
+new ResizeObserver(() => layoutSprites()).observe(document.getElementById("list"));
+connect();
+</script>

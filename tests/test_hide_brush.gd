@@ -193,6 +193,26 @@ func test_chasers_stop_and_search_instead_of_following() -> void:
 	_cleanup()
 
 
+## Menzilli yaratığın "normal atış" (homing) olayı C++ hedefine atar; eskiden en yakın oyuncuyu kendisi bulup çalıdakine de ateş ediyordu.
+func test_ranged_homing_shot_goes_to_event_target_not_hidden_closest() -> void:
+	var hidden: FakePlayer = _make_player(Vector2(100.0, 0.0))
+	hidden.brush_state = HideBrushScript.STATE_HIDDEN
+	var other: FakePlayer = _make_player(Vector2(0.0, 300.0))
+	var enemy: Node2D = _make_enemy(Vector2.ZERO)
+	await get_tree().process_frame
+	var scene: Node = get_tree().current_scene if get_tree().current_scene != null else self
+	var before: Array = scene.get_children()
+	enemy.call("_fire_homing_attack", other)
+	await get_tree().process_frame
+	var proj: Node = null
+	for c: Node in scene.get_children():
+		if not before.has(c) and "source" in c and c.get("source") == enemy:
+			proj = _track(c)
+	assert(proj != null, "olay hedefine mermi atılmalı")
+	assert(proj.get("direction").dot(Vector2(0.0, 1.0)) > 0.9, "mermi olay hedefine (görünür oyuncu) gitmeli, saklı yakındakine değil: %s" % str(proj.get("direction")))
+	_cleanup()
+
+
 func test_ring_detection_alarms_searchers_and_neighbours() -> void:
 	_setup_brush()
 	var player: FakePlayer = _make_player(_cc(Vector2i(17, 22)))

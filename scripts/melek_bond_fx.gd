@@ -14,9 +14,17 @@ extends Node2D
 ##  - stop_aura(): ip ortadan hilallere kopar, halka kapanır, sonra düğüm silinir.
 ## Ağ: kasterde _set_ally_aura -> yerel kurulum + broadcast_ally_aura_start(kaster id, hedef id, tür); her tik
 ## _spawn_wave_beam_to_ally -> yerel pulse() + broadcast_wave_fx -> alıcıda hedefin bağına pulse(). İki tarafta aynı kod.
+## BALONCUK KİPİ (madde 565, E "shield" + dostun mana kalkanı varsa; prototip tools/proto_20261111/melek_e_kalkan/ C1 + C4):
+##  - dostun kalkan baloncuğu bağ boyunca AÇIK (kalkan yenilenme efekti): sahibi player.gd _update_shield_bubble / kukla
+##    remote_player.gd refresh_bond_bubble holds_bubble()'a bakar (ek ağ alanı yok: hedefin kendi kararı shield_bubble_visible
+##    ile zaten herkese gider, kukla yerelde de açar ki gecikmede ip boş kenara bağlanmasın).
+##  - ip bel halkası yerine baloncuğun Melek'e bakan YÜZEYİNE iner (rope_end_world -> melek_bond_ribbon.gd), bel halkası gizli.
+##  - değme noktasında BAĞ HALKASI + varışta kenar ışığı; kaster Kutsal Zırh (melek_e1) evrimliyse SARMAL BAĞ (melek_bond_joint.gd).
+##  - her varışta baloncuk bağın açık mavisine parlar (shield_visual.gd pour).
 
 const BondMath := preload("res://scripts/melek_bond_math.gd")
 const RibbonScript := preload("res://scripts/melek_bond_ribbon.gd")
+const JointScript := preload("res://scripts/melek_bond_joint.gd")
 const RING_TEX := {
 	"heal": preload("res://assets/fx/melek_bond/ring_heal.png"),
 	"shield": preload("res://assets/fx/melek_bond/ring_shield.png"),
@@ -36,6 +44,15 @@ const RING_ECHO0 := 32
 const RING_ECHO_N := 7
 const GLYPH_LIFE := 8.0 / BondMath.PROTO_FPS
 const STAR_LIFE := 4.0 / BondMath.PROTO_FPS
+## Baloncuk kipi (madde 565). Tek anahtar: false = eski bel halkası.
+const BUBBLE_JOINT_ENABLED := true
+const BUBBLE_RIM_PX := 10.5 ## baloncuk sanatının görünen kenarı (24x24 karede bbox 1..23; 4 tür sayfası aynı)
+## "grow" karelerinin görünen yarıçapı (bubble_frames.tres ölçüldü, 12 fps: 0,42 sn'de tam boy) - büyürken ip havada kalmasın
+const BUBBLE_GROW_R := [3.0, 5.0, 9.0, 10.0, 10.0, 11.0, 11.0, 11.0, 11.0, 11.0]
+const CONTACT_AIM_UP := 30.0 ## değme noktası kasterin bu kadar üstüne (halesine) bakar
+const RIPPLE_TIME := 0.42
+const POUR_TIME := 0.38 ## shield_visual.gd POUR_TIME ile aynı (halkanın varış parlaması)
+const ARMOR_EVO := "melek_e1" ## Kutsal Zırh: sarmal bağ
 
 var kind: String = "heal"
 var caster: Node2D = null
@@ -59,6 +76,11 @@ var _ring_front: Sprite2D
 var _echo_back: Sprite2D
 var _echo_front: Sprite2D
 var _ribbon: Node2D = null
+var _bubble_mode: bool = false
+var _conn_t: float = -1.0
+var _pour_t: float = -10.0
+var _ripples: Array[float] = []
+var _joint: Node2D = null
 
 
 ## Hedefin bu türdeki bağına bir dalga paketi yollar; bağ yoksa false. player.gd _spawn_wave_beam_to_ally (kaster) ve
@@ -91,6 +113,12 @@ func _ready() -> void:
 		_ribbon.setup(self, kind)
 		var scene_root: Node = get_tree().current_scene if get_tree().current_scene != null else get_tree().root
 		scene_root.add_child(_ribbon)
+	_bubble_mode = _decide_bubble_mode()
+	if _bubble_mode:
+		_joint = JointScript.new()
+		_joint.set("bond", self)
+		add_child(_joint)
+		_notify_bubble()
 	_update_ring_position()
 	_update_ring_frames()
 
@@ -130,6 +158,7 @@ func stop_aura() -> void:
 		return
 	_stopping = true
 	_stop_t = _t
+	_notify_bubble()
 
 
 func is_connected_bond() -> bool:
@@ -171,6 +200,7 @@ func _process(delta: float) -> void:
 		stop_aura()
 	if not _connected and not _stopping and _t >= BondMath.HEAD_TIME:
 		_connected = true
+		_conn_t = _t
 		_arrive("plus_big" if kind == "heal" else "star")
 	## varış: paketin merkezi ipin sonuna değdi (uzunluk ipin son çiziminden)
 	var total: float = float(_ribbon.get("last_total")) if _ribbon != null and is_instance_valid(_ribbon) else 0.0
@@ -178,6 +208,9 @@ func _process(delta: float) -> void:
 		if total > 0.0 and (_t - _pulses[i]) * BondMath.WAVE_SPEED >= total:
 			_pulses.remove_at(i)
 			_arrive("plus" if kind == "heal" else "crystal")
+	for i in range(_ripples.size() - 1, -1, -1):
+		if _t - _ripples[i] > RIPPLE_TIME:
+			_ripples.remove_at(i)
 	_update_ring_position()
 	_update_ring_frames()
 	_update_glyphs()
@@ -190,6 +223,13 @@ func _arrive(glyph: String) -> void:
 	_bright_until = _t + BondMath.BRIGHT_TIME
 	_echoes.append(_t)
 	_spawn_glyph(glyph)
+	if _bubble_mode:
+		_ripples.append(_t)
+		if glyph != "star": ## dalga kalkana girdi: baloncuk parlar
+			_pour_t = _t
+			var sv: Node = _shield_visual()
+			if sv != null and sv.has_method("pour"):
+				sv.call("pour")
 
 
 # ---------------------------------------------------------------- halka + glifler
@@ -258,6 +298,9 @@ func _update_ring_frames() -> void:
 		var k: int = clampi(int((_t - _echoes[_echoes.size() - 1]) * BondMath.PROTO_FPS), 0, RING_ECHO_N - 1)
 		_echo_back.frame = RING_ECHO0 + k
 		_echo_front.frame = RING_HFRAMES + RING_ECHO0 + k
+	if _bubble_mode: ## bağ baloncuğa bağlı: bel halkası + yankısı yok (yerine melek_bond_joint.gd)
+		for s: Sprite2D in [_ring_back, _ring_front, _echo_back, _echo_front]:
+			s.visible = false
 
 
 func _spawn_glyph(glyph: String) -> void:
@@ -294,3 +337,98 @@ func _update_glyphs() -> void:
 		s.scale = Vector2.ONE * sc
 		var dy: float = 1.0 if glyph == "star" else -float(k) * (1.2 if glyph == "crystal" else 1.3)
 		s.position = base + Vector2(0.0, dy) * sc
+
+
+# ---------------------------------------------------------------- baloncuk kipi (madde 565)
+func _decide_bubble_mode() -> bool:
+	if not BUBBLE_JOINT_ENABLED or kind != "shield" or caster == null or not is_instance_valid(caster):
+		return false
+	var p: Node = get_parent()
+	if p == null or p.get_node_or_null("ShieldVisual/BubbleSprite") == null:
+		return false
+	var m: Variant = p.get("item_shield_max")
+	return m != null and float(m) > 0.0
+
+
+## Bağ dostun kalkan baloncuğunu açık tutuyor mu (player.gd _update_shield_bubble / remote_player.gd refresh_bond_bubble).
+func holds_bubble() -> bool:
+	return _bubble_mode and not _stopping
+
+
+func is_bubble_mode() -> bool:
+	return _bubble_mode
+
+
+## Kaster Kutsal Zırh evrimli mi (yerel Player ya da kukla - ikisinde de has_evo; kukla main.gd extra["evo"]'dan bilir).
+func armor_wrap() -> bool:
+	if caster == null or not is_instance_valid(caster) or not caster.has_method("has_evo"):
+		return false
+	return bool(caster.call("has_evo", ARMOR_EVO))
+
+
+func _notify_bubble() -> void:
+	var p: Node = get_parent()
+	if p != null and p.has_method("refresh_bond_bubble"):
+		p.call_deferred("refresh_bond_bubble")
+
+
+func _shield_visual() -> Node:
+	var p: Node = get_parent()
+	return p.get_node_or_null("ShieldVisual") if p != null else null
+
+
+func _bubble_sprite() -> AnimatedSprite2D:
+	var p: Node = get_parent()
+	return p.get_node_or_null("ShieldVisual/BubbleSprite") as AnimatedSprite2D if p != null else null
+
+
+## Baloncuğun ŞU ANKİ görünen kenarı (baloncuk sanat pikseli).
+func bubble_rim_px() -> float:
+	var b: AnimatedSprite2D = _bubble_sprite()
+	if b != null and b.animation == &"grow":
+		return float(BUBBLE_GROW_R[clampi(b.frame, 0, BUBBLE_GROW_R.size() - 1)]) - 0.5
+	return BUBBLE_RIM_PX
+
+
+## Baloncuğun Melek'e bakan kenar noktası (dünya) - ip buraya iner, bağ halkası burada.
+func contact_world() -> Vector2:
+	var b: AnimatedSprite2D = _bubble_sprite()
+	if b == null:
+		return ring_world_center()
+	var c: Vector2 = b.global_position
+	var aim: Vector2 = c + Vector2(-1.0, -0.4)
+	if caster != null and is_instance_valid(caster):
+		aim = caster.global_position - Vector2(0.0, CONTACT_AIM_UP)
+	var dir: Vector2 = (aim - c).normalized() if aim.distance_squared_to(c) > 0.01 else Vector2.LEFT
+	return c + dir * (bubble_rim_px() - 0.5) * absf(b.global_scale.x)
+
+
+## İpin ucu (dünya) - baloncuk kipinde değme noktası, yoksa null (ip bel halkasının kenarına iner).
+func rope_end_world() -> Variant:
+	if not _bubble_mode or caster == null or not is_instance_valid(caster):
+		return null
+	return contact_world()
+
+
+## melek_bond_joint.gd'nin çizimi için anlık durum (bu düğümün yereli = dostun yereli; çocuk düğümün dönüşümü yok).
+func joint_state() -> Dictionary:
+	var b: AnimatedSprite2D = _bubble_sprite()
+	if not _bubble_mode or b == null:
+		return {}
+	var c: Vector2 = to_local(b.global_position)
+	var g: float = clampf(1.0 - (_t - _pour_t) / POUR_TIME, 0.0, 1.0)
+	## baloncuk sanat pikseli bu düğümün yerelinde: dünya ölçeği / bu düğümün dünya ölçeği
+	var own: float = maxf(absf(global_scale.x), 0.0001)
+	return {
+		"c": c,
+		"bp": absf(b.global_scale.x) / own,
+		"rim": bubble_rim_px(),
+		"a0": (to_local(contact_world()) - c).angle(),
+		"tx": _local_px_scale(),
+		"t": _t,
+		"conn_t": _conn_t,
+		"stop_t": _stop_t if _stopping else -1.0,
+		"glow": g * g,
+		"ripples": _ripples,
+		"wrap": armor_wrap(),
+	}

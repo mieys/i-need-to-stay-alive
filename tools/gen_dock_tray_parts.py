@@ -5,7 +5,7 @@
 #        hud_avatar_tray.png  84x84  = DOCK_PORTRAIT (portrenin ARKASINDA, yuz ustte)
 #        hud_level_tray.png   54x39  = DOCK_BADGE_RECT boyu (seviye rakami ustte, LevelLabel)
 #   4) madde 483 (sol ust konsol "B Tek Konsol"): hud_console_well.png (gomme kuyu, 9 dilim 9/9/9/12; alt satir ahsap dudagi),
-#      hud_console_plate{,_hover,_pressed}.png (kabarik ahsap dugme, 9 dilim 9), hud_icon_bag.png (renkli canta 12x11 sanat px x3)
+#      hud_console_plate{,_hover,_pressed}.png (kabarik ahsap dugme, 9 dilim 9); hud_icon_bag.png artik KULLANICI CIZIMI (tools/chest_sanat)
 #   3) hud_minimap_tray.png 48x48 (9 dilim payi 12): yan kutunun yalniz CERCEVESI (dis hat + ahsap + koyu ic cizgi), ici SAYDAM -
 #      masaustu kare minimapin cercevesi (madde 478; hud.gd _apply_tray_minimap, harita icini doldurur)
 # Boyutlar hud.gd'deki dikdortgenlerle ayni (panel yereli, dock 0,92 olcekli; doku 1:1 cizilir).
@@ -82,10 +82,6 @@ RIM_LO = (0x4b, 0x33, 0x20, 255)
 DOCK_INSET = (0x1c, 0x12, 0x0b, 255)
 DEEP = (0x14, 0x0e, 0x09, 255)
 PROF = {0: [], 1: [1], 2: [2, 1]}
-BAG = ["...oooooo...", "..o......o..", "..o......o..", ".oooooooooo.", "o1111111112o", "o1222222223o", "ooooo44ooooo",
-       "o1222442223o", "o1222222223o", "o2333333333o", ".oooooooooo."]
-BAG_PAL = {"o": (0x2e, 0x1b, 0x0c, 255), "1": (0xe8, 0xc4, 0x8c, 255), "2": (0xc0, 0x8a, 0x50, 255), "3": (0x8a, 0x5a, 0x30, 255),
-           "4": (0xf6, 0xd2, 0x7e, 255)}
 
 
 def rr(px, x0, y0, w, h, col, k):
@@ -127,14 +123,8 @@ def console_parts():
         for y in range(2, 6):
             px[1, y] = hi
         x3(art).save(os.path.join(KIT, "hud_console_plate%s.png" % name))
-    art = Image.new("RGBA", (12, 11), (0, 0, 0, 0))
-    px = art.load()
-    for y, row in enumerate(BAG):
-        for x, ch in enumerate(row):
-            if ch in BAG_PAL:
-                px[x, y] = BAG_PAL[ch]
-    x3(art).save(os.path.join(KIT, "hud_icon_bag.png"))
-    print("yazildi hud_console_well / plate / plate_hover / plate_pressed / hud_icon_bag")
+    ## hud_icon_bag.png (envanter cantasi) artik kullanici cizimi: tools/chest_sanat/gen_sandik.py yazar (madde 557).
+    print("yazildi hud_console_well / plate / plate_hover / plate_pressed")
 
 
 if __name__ == "__main__":

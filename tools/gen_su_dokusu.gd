@@ -22,7 +22,10 @@ func _initialize() -> void:
 func _run() -> void:
 	await process_frame
 	var WaterFx: GDScript = load("res://scripts/water_fx.gd")
-	var harita: Node = load("res://scenes/harita_baked.tscn").instantiate()
+	## `-- col` = Altın Kumlar (madde 631): aynı hesap, çöl sahnesi, doku alanı Su katmanının kullanılan alanı + 4 hücre (yazdırılır, harita_profili "su_doku"ya girilir),
+	## çıktı assets/map/col_su_mesafe.png + col_su_akis.png.
+	var col_mode: bool = "col" in OS.get_cmdline_user_args()
+	var harita: Node = load("res://scenes/col_baked.tscn" if col_mode else "res://scenes/harita_baked.tscn").instantiate()
 	root.add_child(harita)
 	await process_frame
 	var TC: GDScript = load("res://scripts/terrain_collision.gd")
@@ -31,9 +34,12 @@ func _run() -> void:
 	var wofs: Vector2 = helper.cell_origin(water)
 	var origin: Vector2 = WaterFx.TEX_ORIGIN
 	var wsize: Vector2 = WaterFx.TEX_WORLD_SIZE
+	var used: Rect2i = water.get_used_rect()
 	var cell0 := Vector2i(roundi((origin.x - wofs.x) / 16.0), roundi((origin.y - wofs.y) / 16.0))
 	var rect := Rect2i(cell0, Vector2i(int(wsize.x) / 16, int(wsize.y) / 16))
-	var used: Rect2i = water.get_used_rect()
+	if col_mode:
+		rect = used.grow(4)
+		print("COL_SU_DOKU origin=Vector2(%d, %d) size=Vector2(%d, %d)" % [wofs.x + rect.position.x * 16, wofs.y + rect.position.y * 16, rect.size.x * 16, rect.size.y * 16])
 	if not rect.encloses(used):
 		push_error("Su katmanı doku alanının dışına taşıyor: kullanılan %s, doku %s - water_fx.gd TEX_ORIGIN/TEX_WORLD_SIZE büyüt" % [used, rect])
 	var w: int = rect.size.x * 8
@@ -41,7 +47,10 @@ func _run() -> void:
 	var cache: Dictionary = {}
 	## 1. geçiş: hücre (Su ızgarası) -> {base, vis, oran}
 	var cells: Dictionary = {}
-	for wl: TileMapLayer in [water, harita.get_node(WaterFx.WATER_NOCOL_PATH) as TileMapLayer]:
+	var water_layers: Array = [water]
+	if harita.get_node_or_null(WaterFx.WATER_NOCOL_PATH) != null:
+		water_layers.append(harita.get_node(WaterFx.WATER_NOCOL_PATH))
+	for wl: TileMapLayer in water_layers:
 		var lofs: Vector2 = helper.cell_origin(wl)
 		var lshift := Vector2i(roundi((lofs.x - wofs.x) / 16.0), roundi((lofs.y - wofs.y) / 16.0))
 		var details: Array = []
@@ -85,7 +94,7 @@ func _run() -> void:
 	for key: Vector2i in cells:
 		var c: Dictionary = cells[key]
 		var vis: PackedByteArray = c["vis"]
-		if float(c["oran"]) < 0.4 and _between_water(cells, key):
+		if not col_mode and float(c["oran"]) < 0.4 and _between_water(cells, key):
 			vis = c["base"]
 			bridged += 1
 		var mc: Vector2i = key - rect.position
@@ -105,7 +114,7 @@ func _run() -> void:
 	var code: int = -1
 	for py: String in ["python", "py", "python3"]:
 		output.clear()
-		code = OS.execute(py, [script_path, mask_abs, out_dir], output, true)
+		code = OS.execute(py, [script_path, mask_abs, out_dir] + (["col_"] if col_mode else []), output, true)
 		if code != -1 and code != 9009 and not "".join(output).contains("is not recognized"):
 			break
 	print("".join(output))

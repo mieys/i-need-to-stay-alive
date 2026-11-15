@@ -19,6 +19,7 @@ extends RefCounted
 ## ==============================================================================
 
 const PaladinDome := preload("res://scripts/paladin_dome.gd") ## Şovalye kubbesi alanı (elips)
+const GroundSlotScript := preload("res://scripts/ground_slot.gd") ## zemin yuvası: "Harita"nın hemen arkası (place_on_ground)
 const FxScript := preload("res://scripts/fx_enemy_ability.gd")
 const MinotaurChargeScript := preload("res://scripts/minotaur_charge.gd")
 const PumpkinBossScript := preload("res://scripts/pumpkin_boss.gd")
@@ -26,6 +27,10 @@ const WendigoBossScript := preload("res://scripts/wendigo_boss.gd")
 const BansheeBossScript := preload("res://scripts/banshee_boss.gd")
 const DemonBossScript := preload("res://scripts/demon_boss.gd")
 const PumpkinMinionsScript := preload("res://scripts/pumpkin_minions.gd")
+const GoncaBossScript := preload("res://scripts/gonca_boss.gd") ## madde 682
+const GoncaFilizScript := preload("res://scripts/gonca_filiz.gd")
+const MedusaBossScript := preload("res://scripts/medusa_boss.gd")
+const KardesBossScript := preload("res://scripts/kardes_boss.gd") ## Üç Kardeş (ana harita K10)
 const VisionFogScript := preload("res://scripts/vision_fog.gd")
 const GHOST_FRAMES := preload("res://assets/fx/enemy_abilities/ghost_frames.tres")
 const VAMPIRE_FRAMES := preload("res://assets/fx/enemy_abilities/vampire_frames.tres")
@@ -75,6 +80,14 @@ const FIREBALL_COOLDOWN_MAX := 8.0
 const FIREBALL_RANGE := 420.0
 const FIREBALL_SPEED := 230.0
 const FIREBALL_DAMAGE_MULT := 1.0 ## isabet anı; yanma player.gd ENEMY_BURN_* (isabet hasarının %25'i/sn, 3 sn)
+## İblis KADEMELERİ (madde 597, 2026-11-11; kullanıcı: "kademeye göre yetenek"): iblis1 yukarıdaki düz ateş topu (değişmedi);
+##   iblis2 "Kor Yağmuru"  : havaya kor topu fırlatır, hedefin O ANKİ noktasına EMBER.flight sn'de iner (yerde daralan uyarı halkası + düşen top
+##                           + büyüyen gölge), inişte EMBER.radius içine %110 + 3 sn yanma ("ember" -> player.gd apply_enemy_burn). Yana adımla kaçılır.
+##   iblis3 "Alev Küreleri": durur, çevresinde 3 alev küresi döner (ORBS.windup), sonra ORBS.gap arayla birer birer o anki hedefe ateş topu olarak
+##                           fırlar (%55 her biri, normal "fireball": yanma + Talon çemberi/kalkan/kubbe kuralları aynı). Kürelerde donarsa/ölürse kalanı atılmaz.
+## Görseller creature_nova.gd "ember"/"orbs" stilleri (kodla çizilir, ek dosya/ağ mesajı yok: mevcut "creature_nova" + "fireball" kanalları).
+const EMBER := {"cd_min": 6.0, "cd_max": 9.0, "range": 380.0, "min": 50.0, "flight": 0.8, "radius": 40.0, "mult": 1.1, "lock": 0.45}
+const ORBS := {"cd_min": 7.0, "cd_max": 10.0, "range": FIREBALL_RANGE, "windup": 0.9, "count": 3, "gap": 0.2, "mult": 0.55}
 
 ## --- Ağaç canavarı ("rasgele aralıklarla bulunduğun konuma yerden diken çıkarsın ... 10 saniye bekleme süresi ...
 ## normal saldırısı kadar hasar ... diken çıkarmadan önce çıkaracağı yerde uyarı çıksın").
@@ -108,7 +121,40 @@ const ZOMBIE_LUNGE := {"cd_min": 8.0, "cd_max": 11.0, "range_min": 70.0, "range_
 const SLIME_HOP := {"cd_min": 3.5, "cd_max": 6.0, "range_min": 40.0, "range_max": 220.0, "windup": 0.28, "force": 400.0, "thrust": 0.06, "alert": false}
 ## 2026-10-24 (kullanıcı: "1. seviye slimeların zıplama özelliği olmasın, 1. seviye iskeletlerin kemik fırlatma özelliği olmasın"): bu iki yaratık
 ## (creature_id) yeteneksiz kalır; aynı ailenin üst seviyeleri (slime2.., iskelet2..) yeteneklerini korur.
-const NO_ABILITY_IDS := ["slime1", "iskelet1"]
+const NO_ABILITY_IDS := ["slime1", "iskelet1", "goblin1", "gnoll1", "kertenkele1"] ## madde 575: yeni ailelerin 1. kademesi düz
+
+## ==============================================================================
+## YENİ HAVUZ (madde 575, 2026-11-11; kullanıcı: "4 yaratık ... kademesi yüksek olanlar için yeni özel efektler"): aile + KADEME (creature_id'nin
+## sondaki rakamı, _lvl) yeteneği seçer. 1. kademeler düz (Bomba Pelte hariç: sanatı zaten fitil + patlama). Dünya efektleri iki genel betik:
+## creature_shot.gd (mermi: "spear"/"spit"/"crystal") ve creature_nova.gd (uyarı + alan: "scythe"/"fire"/"fuse"/"blast"/"howl"), ikisi de
+## spawn_world_fx/_broadcast_world_fx ile istemcilere görsel kopya olarak gider. Sayaç deseni zombi/slime ile aynı (_cd, _pending, _thrust_left).
+##   goblin2  Mızrak Hamlesi   : "!" + kısa atılış (lunge)
+##   goblin3  Mızrak Fırlatma  : düz uçan mızrak (temas hasarının %80'i)
+##   gnoll2   Yırtıcı Sıçrayış : "!" + uzun atılış
+##   gnoll3   Kan Uluması      : kızıl ses dalgası, HOWL_RADIUS içindeki gnoll'lar (kendisi dahil) öfkelenir (enemy.gd _enter_rage_mode, ağda eşli)
+##   kertenkele2 Zehir Tükürüğü: hedefin noktasına inen damla (%50) + 2,5 sn zehir gölü (enemy_acid_pool.gd)
+##   kertenkele3 Tırpan Kasırgası: 0,6 sn uyarı halkası, sonra çevresinde dönen iki hilal (%140)
+##   pelte1   Fitil            : yakına gelince durur, 0,8 sn fitil halkası, PATLAR (%250, alan) ve ÖDÜLSÜZ dağılır; fitil sırasında öldürülürse patlamaz.
+##                               Yakın dövüşü yoktur (saldırı klibi patlamanın kendisi).
+##   pelte2   Alev Halkası     : 0,7 sn uyarı, alev halkası (%120) + yanma ("firenova" -> player.gd apply_enemy_burn)
+##   pelte3   Kristal Saçması  : saldırı klibi + 6 kristal kıymığı dairesel (%60 her biri)
+const GOBLIN_LUNGE := {"cd_min": 6.0, "cd_max": 9.0, "range_min": 60.0, "range_max": 200.0, "windup": 0.4, "force": 400.0, "thrust": 0.12, "alert": true}
+const GNOLL_POUNCE := {"cd_min": 7.0, "cd_max": 10.0, "range_min": 80.0, "range_max": 300.0, "windup": 0.45, "force": 400.0, "thrust": 0.22, "alert": true}
+const SPEAR := {"cd_min": 5.5, "cd_max": 8.5, "range": 340.0, "min": 80.0, "speed": 270.0, "mult": 0.8, "lock": 0.35}
+const SPIT := {"cd_min": 6.0, "cd_max": 9.0, "range": 300.0, "min": 60.0, "speed": 210.0, "mult": 0.5, "lock": 0.4, "acid": 0.35}
+const HOWL_COOLDOWN_MIN := 12.0
+const HOWL_COOLDOWN_MAX := 16.0
+const HOWL_RANGE := 320.0 ## hedef bu kadar yakınken ulur
+const HOWL_RADIUS := 280.0 ## öfkelenen sürü yarıçapı
+const HOWL_LOCK := 0.6
+const SCYTHE := {"cd_min": 7.0, "cd_max": 10.0, "trigger": 95.0, "warn": 0.6, "radius": 80.0, "mult": 1.4}
+const FIRE_NOVA := {"cd_min": 6.0, "cd_max": 9.0, "trigger": 85.0, "warn": 0.7, "radius": 68.0, "mult": 1.2}
+const BOMB_TRIGGER := 54.0
+const BOMB_FUSE := 0.8
+const BOMB_RADIUS := 66.0
+const BOMB_MULT := 2.5
+const BOMB_CLIP_LEAD := 0.26 ## fitilin son bu kadar saniyesinde saldırı klibi (kare 0-2 kıvılcım) oynar; kare 3+ patlama efektinde
+const CRYSTAL := {"cd_min": 6.0, "cd_max": 9.0, "range": 240.0, "windup": 0.35, "count": 6, "speed": 200.0, "mult": 0.6}
 
 ## --- Minotaur (Kademe 3 bossu, kullanıcı isteği 2026-10-08): boynuz hücumu + boğa koşusu - tüm mantık minotaur_charge.gd, sayılar minotaur_math.gd.
 
@@ -128,11 +174,17 @@ var _thrust_left: float = -1.0 ## itki evresinin kalan süresi (> 0 iken her kar
 var _entry_delay: float = -1.0 ## menzile girince/bekleme bitince yeteneği hemen atmayıp rastgele bekleme (toplu yığılma olmasın)
 var _minotaur = null ## MinotaurCharge (RefCounted) - sadece "minotaur" ailesinde
 var _boss_kit = null ## PumpkinBoss / PumpkinMinions (RefCounted) - "balkabagi" / "kabak" / "yarasa" ailelerinde (2026-10-09)
+var _lvl: int = 1 ## yeni havuz (madde 575): creature_id'nin kademe rakamı (goblin3 -> 3)
+var _orbs_left: int = 0 ## İblis 3 "Alev Küreleri": daha fırlatılmamış küre sayısı (_pending = sıradaki atışa kalan süre)
+var _orb_fx: WeakRef = null ## host'taki küre görseli; uyarıda sahibi donunca kendini siler -> kalan küreler atılmaz (istemci kopyasıyla aynı kural)
+var _orb_dir: Vector2 = Vector2.RIGHT ## son nişan yönü (hedef bir anlığına kaybolursa küre bu yöne gider)
 
 
 func setup(owner_enemy: Node2D, fam: String) -> void:
 	e = owner_enemy
 	family = fam
+	var cid: String = str(e.get_meta("creature_id", "")) if e != null else ""
+	_lvl = int(cid.substr(fam.length())) if cid.length() > fam.length() else 1
 	match family:
 		"hayalet":
 			_cd = randf_range(1.5, 5.0)
@@ -168,6 +220,22 @@ func setup(owner_enemy: Node2D, fam: String) -> void:
 		"kabak", "yarasa":
 			_boss_kit = PumpkinMinionsScript.new()
 			_boss_kit.setup(e, family)
+		"gonca":
+			_boss_kit = GoncaBossScript.new()
+			_boss_kit.setup(e)
+		"filiz":
+			_boss_kit = GoncaFilizScript.new()
+			_boss_kit.setup(e)
+		"medusa":
+			_boss_kit = MedusaBossScript.new()
+			_boss_kit.setup(e)
+		"kardes_kilic", "kardes_ok", "kardes_buyu": ## Üç Kardeş (ana harita K10)
+			_boss_kit = KardesBossScript.new()
+			_boss_kit.setup(e, family)
+		"goblin", "gnoll", "kertenkele":
+			_cd = randf_range(2.0, 6.0)
+		"pelte":
+			_cd = 0.0 if _lvl == 1 else randf_range(2.0, 6.0)
 
 
 ## Bu yaratık seviyesi (creature_id, ör. "slime1") yetenekten çıkarılmış mı? (aile yeteneği ayrıca family_has_ability)
@@ -176,11 +244,14 @@ static func id_is_without_ability(creature_id: String) -> bool:
 
 
 static func family_has_ability(fam: String) -> bool:
-	return fam in ["hayalet", "vampire", "rontgen", "iblis", "agac", "iskelet", "zombie", "slime", "minotaur", "balkabagi", "kabak", "yarasa", "wendigo", "banshee", "ucansetan"]
+	return fam in ["hayalet", "vampire", "rontgen", "iblis", "agac", "iskelet", "zombie", "slime", "minotaur", "balkabagi", "kabak", "yarasa", "wendigo", "banshee", "ucansetan",
+			"goblin", "gnoll", "kertenkele", "pelte", "gonca", "filiz", "medusa", "kardes_kilic", "kardes_ok", "kardes_buyu"]
 
 
 ## Yetenek şu an yaratığın yakın dövüş (temas) vuruşunu bastırıyor mu? (Minotaur hücum/toparlanma sırasında - bkz. enemy.gd _ew_on_event)
 func melee_blocked() -> bool:
+	if family == "pelte" and _lvl == 1:
+		return true ## Bomba Pelte'nin saldırı klibi patlamanın kendisi: düz temas vuruşu yok, fitille patlar (madde 575)
 	if _boss_kit != null and _boss_kit.has_method("blocks_melee") and _boss_kit.blocks_melee():
 		return true
 	return _minotaur != null and _minotaur.blocks_melee()
@@ -214,7 +285,13 @@ func process(delta: float, player: Node2D, dist: float) -> void:
 		"rontgen":
 			_process_laser(delta, player, dist)
 		"iblis":
-			_process_fireball(delta, player, dist)
+			match _lvl:
+				2:
+					_process_ember(delta, player, dist)
+				3:
+					_process_orbs(delta, player, dist)
+				_:
+					_process_fireball(delta, player, dist)
 		"agac":
 			_process_thorns(delta, player, dist)
 		"iskelet":
@@ -225,8 +302,31 @@ func process(delta: float, player: Node2D, dist: float) -> void:
 			_process_lunge(delta, player, dist, SLIME_HOP)
 		"minotaur":
 			_minotaur.process(delta, player, dist)
-		"balkabagi", "kabak", "yarasa", "wendigo", "banshee", "ucansetan":
+		"balkabagi", "kabak", "yarasa", "wendigo", "banshee", "ucansetan", "gonca", "filiz", "medusa", "kardes_kilic", "kardes_ok", "kardes_buyu":
 			_boss_kit.process(delta, player, dist)
+		"goblin":
+			if _lvl == 2:
+				_process_lunge(delta, player, dist, GOBLIN_LUNGE)
+			else:
+				_process_shot(delta, player, dist, SPEAR, "spear")
+		"gnoll":
+			if _lvl == 2:
+				_process_lunge(delta, player, dist, GNOLL_POUNCE)
+			else:
+				_process_howl(delta, player, dist)
+		"kertenkele":
+			if _lvl == 2:
+				_process_shot(delta, player, dist, SPIT, "spit")
+			else:
+				_process_nova(delta, player, dist, SCYTHE, "scythe")
+		"pelte":
+			match _lvl:
+				1:
+					_process_bomb(delta, player, dist)
+				2:
+					_process_nova(delta, player, dist, FIRE_NOVA, "fire")
+				_:
+					_process_crystal(delta, player, dist)
 
 
 ## Hızlı yol (2026-10-18, FPS): enemy.gd _ew_tick yaratık "sessizken" (durum etkisi / vuruş parlaması / donma / saldırı yok) önce bunu dener. Bekleme sayacı sürerken yeteneğin o
@@ -255,11 +355,11 @@ func process_fast(delta: float) -> bool:
 			if _pending - delta > 0.0:
 				_pending -= delta
 				return true
-		"rontgen", "iblis", "agac", "iskelet":
+		"rontgen", "agac", "iskelet":
 			if _cd - delta > 0.0:
 				_cd -= delta
 				return true
-		"zombie", "slime":
+		"zombie", "slime", "goblin", "gnoll", "kertenkele", "pelte", "iblis": ## iblis: Alev Küreleri dizisi _pending kullanır (madde 597)
 			if _pending >= 0.0 or _thrust_left > 0.0:
 				return false ## uyarı duraklaması / itki evresi sürüyor: asıl işi process yapar
 			if _cd - delta > 0.0:
@@ -279,9 +379,9 @@ func quiet_remaining() -> float:
 			if _cd > 0.0:
 				return _cd
 			return _vision_check if _pending < 0.0 else _pending
-		"rontgen", "iblis", "agac", "iskelet":
+		"rontgen", "agac", "iskelet":
 			return _cd
-		"zombie", "slime":
+		"zombie", "slime", "goblin", "gnoll", "kertenkele", "pelte", "iblis":
 			return -1.0 if (_pending >= 0.0 or _thrust_left > 0.0) else _cd
 	return -1.0
 
@@ -302,7 +402,7 @@ func fast_forward(dt: float) -> void:
 				_vision_check -= dt
 			else:
 				_pending -= dt
-		"rontgen", "iblis", "agac", "iskelet", "zombie", "slime":
+		"rontgen", "iblis", "agac", "iskelet", "zombie", "slime", "goblin", "gnoll", "kertenkele", "pelte":
 			_cd -= dt
 
 
@@ -452,6 +552,96 @@ func _process_fireball(delta: float, player: Node2D, dist: float) -> void:
 	_entry_delay = -1.0
 
 
+## İblis 2 "Kor Yağmuru" (madde 597): kısa duraklama + saldırı klibi, kor topu hedefin O ANKİ noktasına ateşlenir. Uçuş, iniş uyarısı ve
+## hasar creature_nova.gd "ember" stilinde (yere konan düğüm; iblis atıştan sonra donsa/ölse de top iner - zaten havada).
+func _process_ember(delta: float, player: Node2D, dist: float) -> void:
+	_cd -= delta
+	if _cd > 0.0:
+		return
+	if not _valid_target(player) or dist > float(EMBER["range"]) or dist < float(EMBER["min"]):
+		_entry_delay = -1.0
+		_cd = 0.3
+		return
+	if not _entry_gate(delta):
+		return
+	if not bool(e.call("_has_line_of_sight", player)):
+		_cd = 0.5
+		return
+	var land: Vector2 = player.global_position
+	var to_p: Vector2 = land - e.global_position
+	e.set("ability_move_lock", float(EMBER["lock"]))
+	if to_p.length() > 0.1:
+		e.call("_update_facing", to_p.normalized())
+	e.call("_play_ability_attack_anim")
+	var launch: Vector2 = e.global_position + Vector2(0.0, -10.0)
+	var data: Dictionary = {"style": "ember", "warn": float(EMBER["flight"]), "radius": float(EMBER["radius"]), "from": launch - land}
+	spawn_world_fx(e.get_tree(), "creature_nova", land, data, true, e, float(e.get("contact_damage")) * float(EMBER["mult"]))
+	_broadcast_world_fx("creature_nova", land, data)
+	_cd = randf_range(float(EMBER["cd_min"]), float(EMBER["cd_max"]))
+	_entry_delay = -1.0
+
+
+## İblis 3 "Alev Küreleri" (madde 597): evre 1 durur + küre görseli ("orbs", windup + (n-1) x gap uyarı); evre 2 her `gap` sn'de bir küre o anki
+## hedefe düz ateş topu olarak fırlar (görsel aynı anda o küreyi gizler - iki taraf da kendi saatine bakar). Görsel iptal olduysa (sahibi küre
+## dönerken dondu/sersemledi) kalan küreler atılmaz.
+func _process_orbs(delta: float, player: Node2D, dist: float) -> void:
+	if _pending >= 0.0:
+		_pending -= delta
+		if _pending > 0.0:
+			return
+		if e.get("is_dead") == true or (e.has_method("is_incapacitated_now") and bool(e.call("is_incapacitated_now"))) \
+				or (_orb_fx != null and _orb_fx.get_ref() == null):
+			_orbs_left = 0
+			_pending = -1.0
+			_orb_fx = null
+			return
+		if _valid_target(player):
+			var to_p: Vector2 = player.global_position - e.global_position
+			if to_p.length() > 0.1:
+				_orb_dir = to_p.normalized()
+		e.call("_update_facing", _orb_dir)
+		if _orbs_left == int(ORBS["count"]):
+			e.call("_play_ability_attack_anim")
+		var pos: Vector2 = e.global_position + _orb_dir * 14.0
+		var fdata: Dictionary = {"dir": _orb_dir, "speed": FIREBALL_SPEED}
+		spawn_world_fx(e.get_tree(), "fireball", pos, fdata, true, e, float(e.get("contact_damage")) * float(ORBS["mult"]))
+		_broadcast_world_fx("fireball", pos, fdata)
+		_orbs_left -= 1
+		if _orbs_left > 0:
+			_pending = float(ORBS["gap"])
+		else:
+			_pending = -1.0
+			_orb_fx = null
+		return
+	_cd -= delta
+	if _cd > 0.0:
+		return
+	if not _valid_target(player) or dist > float(ORBS["range"]):
+		_entry_delay = -1.0
+		_cd = 0.3
+		return
+	if not _entry_gate(delta):
+		return
+	if not bool(e.call("_has_line_of_sight", player)):
+		_cd = 0.5
+		return
+	var to_t: Vector2 = player.global_position - e.global_position
+	_orb_dir = to_t.normalized() if to_t.length() > 0.1 else Vector2.RIGHT
+	var n: int = int(ORBS["count"])
+	var windup: float = float(ORBS["windup"])
+	var gap: float = float(ORBS["gap"])
+	_orbs_left = n
+	_pending = windup
+	e.set("ability_move_lock", windup + gap * float(n - 1) + 0.2)
+	e.call("_update_facing", _orb_dir)
+	var data: Dictionary = {"style": "orbs", "warn": windup + gap * float(n - 1), "first": windup, "gap": gap, "count": n, "src": _net_id()}
+	var fx: Node2D = spawn_world_fx(e.get_tree(), "creature_nova", e.global_position, data, true, e, 0.0)
+	_orb_fx = weakref(fx) if fx != null else null
+	_broadcast_world_fx("creature_nova", e.global_position, data)
+	_cd = randf_range(float(ORBS["cd_min"]), float(ORBS["cd_max"]))
+	_entry_delay = -1.0
+
+
 # ---------------------------------------------------------------------------------------------------- ağaç
 func _process_thorns(delta: float, player: Node2D, dist: float) -> void:
 	_cd -= delta
@@ -547,6 +737,177 @@ func _lunge_fire(params: Dictionary) -> void:
 	_thrust_left = float(params["thrust"])
 
 
+# ---------------------------------------------------------------------------------------------------- yeni havuz (madde 575)
+## Mermi: Goblin 3 mızrağı / Kertenkele Adam 2 tükürüğü. İskelet kemiğiyle aynı akış (bekleme, menzil, görüş, kısa duraklama).
+func _process_shot(delta: float, player: Node2D, dist: float, params: Dictionary, style: String) -> void:
+	_cd -= delta
+	if _cd > 0.0:
+		return
+	if not _valid_target(player) or dist > float(params["range"]) or dist < float(params["min"]):
+		_entry_delay = -1.0
+		_cd = 0.3
+		return
+	if not _entry_gate(delta):
+		return
+	if not bool(e.call("_has_line_of_sight", player)):
+		_cd = 0.5
+		return
+	var to_p: Vector2 = player.global_position - e.global_position
+	var dir: Vector2 = to_p.normalized() if to_p.length() > 0.1 else Vector2.RIGHT
+	var contact: float = float(e.get("contact_damage"))
+	e.set("ability_move_lock", float(params["lock"]))
+	e.call("_update_facing", dir)
+	e.call("_play_ability_attack_anim")
+	var pos: Vector2 = e.global_position + dir * 14.0
+	var data: Dictionary = {"style": style, "dir": dir, "speed": float(params["speed"])}
+	if style == "spit":
+		data["dist"] = maxf(to_p.length() - 14.0, 20.0) ## hedefin O ANKİ noktasına iner
+		data["acid"] = contact * float(params["acid"])
+	spawn_world_fx(e.get_tree(), "creature_shot", pos, data, true, e, contact * float(params["mult"]))
+	_broadcast_world_fx("creature_shot", pos, data)
+	_cd = randf_range(float(params["cd_min"]), float(params["cd_max"]))
+	_entry_delay = -1.0
+
+
+## Gnoll 3 "Kan Uluması": durur, ulur (saldırı klibi + kızıl dalga + "!"), HOWL_RADIUS içindeki gnoll'lar kalıcı öfkeye girer
+## (enemy.gd _enter_rage_mode: ton + hız, istemcilere "rage_start" ile gider; zaten öfkeli olan atlanır).
+func _process_howl(delta: float, player: Node2D, dist: float) -> void:
+	_cd -= delta
+	if _cd > 0.0:
+		return
+	if not _valid_target(player) or dist > HOWL_RANGE:
+		_entry_delay = -1.0
+		_cd = 0.3
+		return
+	if not _entry_gate(delta):
+		return
+	e.set("ability_move_lock", HOWL_LOCK)
+	e.call("_play_ability_attack_anim")
+	e.call("show_brush_alert")
+	var pos: Vector2 = e.global_position
+	var data: Dictionary = {"style": "howl", "radius": HOWL_RADIUS * 0.5, "src": _net_id()}
+	spawn_world_fx(e.get_tree(), "creature_nova", pos, data, true, e, 0.0)
+	_broadcast_world_fx("creature_nova", pos, data)
+	## load (preload değil): enemy_query -> köprü -> enemy.gd -> bu betik döngüsel önyükleme olmasın
+	var query: GDScript = load("res://scripts/enemy_world/enemy_query.gd")
+	for other in query.candidates(e.get_tree(), pos, HOWL_RADIUS):
+		var o := other as Node2D
+		if o == null or not is_instance_valid(o) or o.get("is_dead") == true or o.get("is_raging") == true:
+			continue
+		if not o.has_method("creature_family") or str(o.call("creature_family")) != "gnoll":
+			continue
+		if o.global_position.distance_to(pos) <= HOWL_RADIUS:
+			o.call("_enter_rage_mode")
+	_cd = randf_range(HOWL_COOLDOWN_MIN, HOWL_COOLDOWN_MAX)
+	_entry_delay = -1.0
+
+
+## Uyarılı alan: Kertenkele Adam 3 tırpanı / Ateş Pelte alev halkası. Evre 1: hedef yakınken durur, uyarı halkası doğar (_pending = uyarı).
+## Evre 2: uyarı bitince saldırı klibi oynar (hasarı creature_nova.gd verir; sahibi uyarıda donarsa halka kendini iptal eder).
+func _process_nova(delta: float, player: Node2D, dist: float, params: Dictionary, style: String) -> void:
+	if _pending >= 0.0:
+		_pending -= delta
+		if _pending <= 0.0:
+			_pending = -1.0
+			if e.get("is_dead") != true and not (e.has_method("is_incapacitated_now") and bool(e.call("is_incapacitated_now"))):
+				e.call("_play_ability_attack_anim")
+		return
+	_cd -= delta
+	if _cd > 0.0:
+		return
+	if not _valid_target(player) or dist > float(params["trigger"]):
+		_entry_delay = -1.0
+		_cd = 0.25
+		return
+	var warn: float = float(params["warn"])
+	_pending = warn
+	e.set("ability_move_lock", warn + 0.3)
+	var pos: Vector2 = e.global_position
+	var data: Dictionary = {"style": style, "warn": warn, "radius": float(params["radius"]), "src": _net_id()}
+	spawn_world_fx(e.get_tree(), "creature_nova", pos, data, true, e, float(e.get("contact_damage")) * float(params["mult"]))
+	_broadcast_world_fx("creature_nova", pos, data)
+	_cd = randf_range(float(params["cd_min"]), float(params["cd_max"]))
+
+
+## Bomba Pelte: hedef BOMB_TRIGGER'a girince durur (fitil halkası), son BOMB_CLIP_LEAD sn'de saldırı klibi (kıvılcım kareleri), fitil bitince
+## "blast" (bombanın kendi patlama kareleri + alan hasarı) ve ödülsüz dağılma ("boss_event" k=pop: gövde anında gizlenir, ağda eşli).
+func _process_bomb(delta: float, player: Node2D, dist: float) -> void:
+	if _pending >= 0.0:
+		var before: float = _pending
+		_pending -= delta
+		e.set("ability_move_lock", maxf(float(e.get("ability_move_lock")), 0.2))
+		if before > BOMB_CLIP_LEAD and _pending <= BOMB_CLIP_LEAD:
+			e.call("_play_ability_attack_anim")
+		if _pending <= 0.0:
+			_pending = -1.0
+			_bomb_explode()
+		return
+	_cd -= delta
+	if _cd > 0.0:
+		return
+	_cd = 0.12 ## saniyede ~8 kez mesafe bak (uykuya girebilsin)
+	if not _valid_target(player) or dist > BOMB_TRIGGER:
+		return
+	_pending = BOMB_FUSE
+	e.set("ability_move_lock", BOMB_FUSE + 0.2)
+	var to_p: Vector2 = player.global_position - e.global_position
+	if to_p.length() > 0.1:
+		e.call("_update_facing", to_p.normalized())
+	var pos: Vector2 = e.global_position
+	var data: Dictionary = {"style": "fuse", "warn": BOMB_FUSE, "radius": BOMB_RADIUS, "src": _net_id()}
+	spawn_world_fx(e.get_tree(), "creature_nova", pos, data, true, e, 0.0)
+	_broadcast_world_fx("creature_nova", pos, data)
+
+
+func _bomb_explode() -> void:
+	if e == null or not is_instance_valid(e) or e.get("is_dead") == true:
+		return
+	if e.has_method("is_incapacitated_now") and bool(e.call("is_incapacitated_now")):
+		_cd = 0.5 ## donmuşken patlamaz; çözülünce fitil yeniden başlar
+		return
+	var pos: Vector2 = e.global_position
+	var data: Dictionary = {"style": "blast", "warn": 0.0, "radius": BOMB_RADIUS}
+	spawn_world_fx(e.get_tree(), "creature_nova", pos, data, true, e, float(e.get("contact_damage")) * BOMB_MULT)
+	_broadcast_world_fx("creature_nova", pos, data)
+	e.call("emit_ability_vfx", "boss_event", {"k": "pop"})
+
+
+## Kristal Pelte: saldırı klibi (diken kareleri) + CRYSTAL.windup sonra 6 kıymık dairesel (ilk kıymık hedefe bakar).
+func _process_crystal(delta: float, player: Node2D, dist: float) -> void:
+	if _pending >= 0.0:
+		_pending -= delta
+		if _pending <= 0.0:
+			_pending = -1.0
+			if e.get("is_dead") == true or (e.has_method("is_incapacitated_now") and bool(e.call("is_incapacitated_now"))):
+				return
+			var n: int = int(CRYSTAL["count"])
+			var dmg: float = float(e.get("contact_damage")) * float(CRYSTAL["mult"])
+			for i in range(n):
+				var dir: Vector2 = _lunge_dir.rotated(float(i) / float(n) * TAU)
+				var pos: Vector2 = e.global_position + dir * 10.0
+				var data: Dictionary = {"style": "crystal", "dir": dir, "speed": float(CRYSTAL["speed"])}
+				spawn_world_fx(e.get_tree(), "creature_shot", pos, data, true, e, dmg)
+				_broadcast_world_fx("creature_shot", pos, data)
+		return
+	_cd -= delta
+	if _cd > 0.0:
+		return
+	if not _valid_target(player) or dist > float(CRYSTAL["range"]):
+		_entry_delay = -1.0
+		_cd = 0.3
+		return
+	if not _entry_gate(delta):
+		return
+	var to_p: Vector2 = player.global_position - e.global_position
+	_lunge_dir = to_p.normalized() if to_p.length() > 0.1 else Vector2.RIGHT
+	_pending = float(CRYSTAL["windup"])
+	e.set("ability_move_lock", _pending + 0.25)
+	e.call("_update_facing", _lunge_dir)
+	e.call("_play_ability_attack_anim")
+	_cd = randf_range(float(CRYSTAL["cd_min"]), float(CRYSTAL["cd_max"]))
+	_entry_delay = -1.0
+
+
 # ---------------------------------------------------------------------------------------------------- ortak
 ## Bekleme bitmiş + hedef menzilde: ilk kez hazır olunca rastgele bir gecikme çekilir, dolunca true döner. Menzilden çıkınca
 ## çağıran _entry_delay'i -1'e sıfırlar. Böylece aynı anda menzile giren yaratıklar yeteneği aynı karede atmaz.
@@ -640,6 +1001,22 @@ static func spawn_world_fx(tree: SceneTree, kind: String, pos: Vector2, data: Di
 			script_path = "res://scripts/wendigo_vine.gd"
 		"wendigo_rock":
 			script_path = "res://scripts/wendigo_rock.gd"
+		"creature_shot":
+			script_path = "res://scripts/creature_shot.gd" ## madde 575
+		"creature_nova":
+			script_path = "res://scripts/creature_nova.gd" ## madde 575
+		"gonca_seed":
+			script_path = "res://scripts/gonca_seed.gd" ## madde 682
+		"gonca_ring":
+			script_path = "res://scripts/gonca_ring.gd"
+		"gonca_drain":
+			script_path = "res://scripts/gonca_drain.gd"
+		"medusa_gaze":
+			script_path = "res://scripts/medusa_gaze.gd"
+		"kardes_shot":
+			script_path = "res://scripts/kardes_shot.gd" ## Üç Kardeş
+		"kardes_zone":
+			script_path = "res://scripts/kardes_zone.gd"
 		_:
 			return null
 	var node := Node2D.new()
@@ -653,7 +1030,7 @@ static func spawn_world_fx(tree: SceneTree, kind: String, pos: Vector2, data: Di
 	node.position = pos
 	tree.current_scene.add_child(node)
 	node.global_position = pos
-	if kind == "acid" or kind == "charge_lane": ## zemin etkileri: yaratık/oyuncunun ALTINDA çizilsin
+	if kind == "acid" or kind == "charge_lane" or kind == "creature_nova" or kind == "kardes_zone": ## zemin etkileri: yaratık/oyuncunun ALTINDA (nova patlaması kendi z'sini yükseltir)
 		place_on_ground(tree, node)
 	return node
 
@@ -661,15 +1038,10 @@ static func spawn_world_fx(tree: SceneTree, kind: String, pos: Vector2, data: Di
 ## DÜZELTME (kullanıcı bildirimi: "zehirler yaratıkların üstünde görünüyor zeminde görünmüyor"): sahnede y-sort yok,
 ## aynı z'deki kardeşler AĞAÇ SIRASIYLA çizilir. Yaratıklar current_scene'e çalışma anında eklendiği için sona
 ## eklenen bir zemin efekti o ana kadar doğmuş HER yaratığın üstünde kalıyordu. Zemin efektini haritanın ("Harita")
-## hemen arkasına taşı: zeminin üstünde, sonradan eklenen tüm yaratık/oyuncuların altında çizilir.
-static func place_on_ground(tree: SceneTree, node: Node) -> void:
-	var root: Node = tree.current_scene
-	if root == null or node.get_parent() != root:
-		return
-	var harita: Node = root.get_node_or_null("Harita")
-	if harita == null:
-		return
-	root.move_child(node, harita.get_index() + 1)
+## hemen arkasına taşı: zeminin üstünde, sonradan eklenen tüm yaratık/oyuncuların altında çizilir. Kural tek yerde:
+## ground_slot.gd (z'ye dokunmaz; z -1 haritanın ALTINDA kalır - zemin efekti z 0 olmalı, GroundSlot.place ikisini birden yapar).
+static func place_on_ground(_tree: SceneTree, node: Node) -> void:
+	GroundSlotScript.move_after_map(node)
 
 
 ## Hasar alabilecek oyuncular: yerel oyuncu + (host'ta) uzak oyuncu kuklaları. Kukladaki take_special_damage hasarı

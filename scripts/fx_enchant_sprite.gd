@@ -15,6 +15,13 @@ extends Node2D
 ##   loop_sfx   (2026-10-11) SÜREKLİ efektin döngü sesi (res:// .wav): efekt yaşadıkça çalar, efektle birlikte solar. Veri RPC'yle
 ##              gittiği için diğer oyuncularda da aynı ses (Ateş Asası püskürtmesi: assets/audio/fire_staff_spray_loop.wav).
 ##   sfx_db     loop_sfx ses seviyesi (dB, varsayılan LOOP_SFX_DB)
+##   flip_left  (madde 639) sola bakarken sayfa dikey aynalanır (yukarı kabaran alev bulutu hep yukarıda kalsın), ofsetin y'si de döner
+##   bright     (madde 639) sprite parlaklığı (1 = aynen; Ateş Asası Isınan Nefes)
+##   bend_len   (madde 640) > 0: alev BÜKÜLÜR - asa dönünce uç geride kalıp kavis çizer (flame_bend.gd + shaders/flame_bend.gdshader).
+##              AnimatedSprite gizli kalır (zamanlama/kare onda), çizimi ağız merkezli büyük bir dörtlü yapar. Her ekran kendi gördüğü
+##              yönü kaydeder (ağ alanı yok). Değer = alevin boyu (sanat px).
+## Sayfada "start" / "end" animasyonu varsa (madde 639, Ateş Asası flamethrower): döngülü efekt önce "start"ı oynar, sonra "loop";
+## ömrü bitince solmak yerine "end"i oynar ve silinir (end sürerken aynı anahtarla gelen istek YENİ efekt açar = yine "start"tan).
 
 const WeaponTip := preload("res://scripts/weapon_tip.gd")
 const EnchantLayer := preload("res://scripts/enchant_layer.gd")
@@ -39,6 +46,11 @@ const GLOW := {
 	"spray_fire": [Color(1.0, 0.55, 0.2), 0.85, 0.7, 70.0], "spray_ice": [Color(0.55, 0.85, 1.0), 0.8, 0.7, 70.0],
 	## Kullanıcının ateş püskürtme sanatı (tools/import_flame_spray.py): 51 px boyunca çizgi ışık.
 	"flame_fire": [Color(1.0, 0.55, 0.2), 0.85, 0.7, 51.0], "flame_ice": [Color(0.55, 0.85, 1.0), 0.8, 0.7, 51.0],
+	## Alev Sağanağı (madde 550, tools/gen_alev_saganagi_fx.py): damlaların vardığı boy kadar çizgi ışık.
+	"flame_shower_fire": [Color(1.0, 0.55, 0.2), 0.85, 0.7, 137.0], "flame_shower_ice": [Color(0.55, 0.85, 1.0), 0.8, 0.7, 137.0],
+	"flame_shower_fire_big": [Color(1.0, 0.55, 0.2), 0.85, 0.6, 201.0], "flame_shower_ice_big": [Color(0.55, 0.85, 1.0), 0.8, 0.6, 201.0],
+	## Ateş Asası flamethrower (madde 639, tools/gen_flamethrower_fx.py): alev boyu (177 sanat px) kadar çizgi ışık.
+	"flamethrower_fire": [Color(1.0, 0.55, 0.2), 0.85, 0.55, 177.0], "flamethrower_ice": [Color(0.55, 0.85, 1.0), 0.8, 0.55, 177.0],
 	"spray_fire_big": [Color(1.0, 0.55, 0.2), 0.85, 0.7, 140.0], "spray_ice_big": [Color(0.55, 0.85, 1.0), 0.8, 0.7, 140.0],
 	"lava_pool": [Color(1.0, 0.5, 0.18), 0.85, 1.5], "frost_ground": [Color(0.55, 0.85, 1.0), 0.75, 1.4],
 	"radiation": [Color(0.7, 1.0, 0.35), 0.85, 1.5], "void_hole": [Color(0.7, 0.45, 1.0), 0.75, 1.3],
@@ -72,6 +84,18 @@ var glow_energy: float = 1.0
 var night_glow_off: bool = true
 var _glow_size: float = 1.0
 var _glow_cone_px: float = 0.0
+var flip_left: bool = false
+var _flipped: bool = false
+var bright: float = 1.0
+var _ending: bool = false ## "end" animasyonu oynuyor (bkz. dosya başı)
+const FLIP_EPS := 0.15 ## dikey bakışta aynalama titremesin (cos eşik payı)
+const FlameBend := preload("res://scripts/weapon_traits/flame_bend.gd")
+const FlameShape := preload("res://scripts/weapon_traits/flamethrower_shape.gd")
+const BEND_SHADER := preload("res://shaders/flame_bend.gdshader")
+var bend_len: float = 0.0
+var _bend: RefCounted = null ## FlameBend (yön geçmişi)
+var _bend_spr: Sprite2D = null
+static var _bend_quads: Dictionary = {} ## kare boyu -> boş doku (dörtlü)
 
 ## SİLAH TAKİBİ (data "follow_slot" + "follow_peer"): düğüm silah ikonunun EBEVEYNİNE (yerelde weapon.gd kökü, uzakta
 ## RemotePlayer kuklası) bağlanır ve her karede ikonun çizili UCUNA oturur (weapon_tip.gd) - oyuncu yürüyüp asa dönerken
@@ -90,6 +114,14 @@ var follow_fwd_deg: float = 0.0
 var _world_rot: float = 0.0
 var follow_aim: bool = false ## true: yön = asanın bakışı + aim_rot_offset (bkz. yukarıdaki 2026-10-08 notu)
 var aim_rot_offset: float = 0.0
+## DÜNYA TAKİBİ (data "under": true; madde 550, kullanıcı: "ateş asası ... karakterin üstünü de kapatıyor"): düğüm silahın
+## çocuğu DEĞİL, sahne kökünde efsun katmanında (EnchantLayer.Z = oyuncuların ALTI) durur ve her karede asanın ucuna + bakışına
+## konur. Silahın çocuğuyken oyuncunun altına inemez: mutlak z 0 verilse bile Player sahne kökünün 0. çocuğu olduğu için
+## haritadan ÖNCE çizilir = zeminin altında kalır (madde 510 tuzağı). Sahne kökündeki düğüm fizik interpolasyonu almaz ->
+## uç konumuna sahibin (oyuncu / kukla) çizilen-ham konum farkı eklenir (PhysicsInterp.visual_position), yoksa yürürken titrer.
+var follow_world: bool = false
+var _follow_holder: Node2D = null
+const PhysicsInterp := preload("res://scripts/physics_interp.gd")
 
 var _spr: AnimatedSprite2D = null
 var _t: float = 0.0
@@ -147,7 +179,12 @@ static func spawn(tree: SceneTree, pos: Vector2, data: Dictionary) -> Node2D:
 	var k: String = str(data.get("key", ""))
 	if k != "":
 		var live = _live.get(k) ## tipsiz: silinmiş düğüm tipli değişkene atanırken hata verirdi
-		if is_instance_valid(live) and not live.is_queued_for_deletion():
+		## Silaha yapışık efektin silahı silinmişse (asa değişti / yeniden alındı, aynı slot = aynı anahtar) eski düğüm sahipsiz kalır:
+		## onu yenilemek yerine kapat, yeni silaha yeni efekt aç (madde 639; eskiden finalde anahtar değiştiği için görünmüyordu).
+		if is_instance_valid(live) and data.has("follow_slot") and live.get("follow_icon") == null:
+			live.queue_free()
+			_live.erase(k)
+		elif is_instance_valid(live) and not live.is_queued_for_deletion():
 			live.call("_refresh", pos, data)
 			return live
 	var n: Node2D = (load("res://scripts/fx_enchant_sprite.gd") as GDScript).new()
@@ -159,6 +196,9 @@ static func spawn(tree: SceneTree, pos: Vector2, data: Dictionary) -> Node2D:
 	n.sprite_scale = sc if sc is Vector2 else Vector2.ONE * float(sc)
 	n.sprite_offset = Vector2(data.get("offset", Vector2.ZERO))
 	n.ground = bool(data.get("ground", false))
+	n.flip_left = bool(data.get("flip_left", false))
+	n.bright = float(data.get("bright", 1.0))
+	n.bend_len = float(data.get("bend_len", 0.0))
 	n.rotation = float(data.get("rot", 0.0))
 	n._target_rot = n.rotation
 	if k != "":
@@ -191,7 +231,13 @@ static func spawn(tree: SceneTree, pos: Vector2, data: Dictionary) -> Node2D:
 			if fpeer > 0 and NetworkManager.is_multiplayer_active and tree.root.multiplayer.has_multiplayer_peer() \
 					and fpeer != tree.root.multiplayer.get_unique_id():
 				n.ally_alpha = AllyFxDensity.mult_for(n, NetworkManager._find_remote_player(fpeer))
-			(info[0] as Node).get_parent().add_child(n)
+			if bool(data.get("under", false)):
+				n.follow_world = true
+				n.z_index = EnchantLayer.Z
+				n._follow_holder = _interp_holder(info[0])
+				tree.current_scene.add_child(n)
+			else:
+				(info[0] as Node).get_parent().add_child(n)
 			n._follow_update()
 			return n
 	n.position = pos
@@ -223,9 +269,12 @@ func _refresh(pos: Vector2, data: Dictionary) -> void:
 	sprite_scale = sc if sc is Vector2 else Vector2.ONE * float(sc)
 	if _spr:
 		_spr.scale = sprite_scale * TEXEL
+	if _bend_spr:
+		_bend_spr.scale = sprite_scale * TEXEL
 	sprite_offset = Vector2(data.get("offset", sprite_offset))
+	bright = float(data.get("bright", 1.0))
 	if _spr:
-		_spr.offset = sprite_offset
+		_apply_flip()
 	loop_time = _t + maxf(0.05, float(data.get("loop_time", loop_time - _t)))
 	if follow_icon == null:
 		global_position = pos
@@ -233,9 +282,13 @@ func _refresh(pos: Vector2, data: Dictionary) -> void:
 
 ## Döngü sesi: wav çalışma anında döngüye alınır (.import ayarı gerekmez, atmosphere.gd ile aynı yol). Ses düğümü efekte bağlı
 ## (follow_slot'lu alev asayla yürür) - efekt silinince ses de biter.
+## Başlangıçlı döngü (2026-11-13, Ateş Asası): .import'ta loop_mode/loop_begin AYARLIYSA (edit/loop_mode=2) dosyanın başı tek seferlik
+## "başlangıç" sesidir, sonra loop_begin..loop_end döner - o zaman ayar korunur ve ses BAŞTAN çalar.
 func _start_loop_sfx() -> void:
 	var stream: AudioStream = load(loop_sfx)
-	if stream is AudioStreamWAV:
+	var intro: bool = stream is AudioStreamWAV and (stream as AudioStreamWAV).loop_mode != AudioStreamWAV.LOOP_DISABLED \
+			and (stream as AudioStreamWAV).loop_begin > 0
+	if stream is AudioStreamWAV and not intro:
 		var wav := (stream as AudioStreamWAV).duplicate() as AudioStreamWAV
 		wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
 		wav.loop_begin = 0
@@ -247,7 +300,10 @@ func _start_loop_sfx() -> void:
 	_sfx.volume_db = sfx_db - 30.0
 	_sfx.max_distance = 1500.0
 	add_child(_sfx)
-	_sfx.play(randf() * maxf(0.0, stream.get_length() - 0.1)) ## rastgele noktadan: iki asa aynı anda çalınca üst üste binmesin
+	if intro:
+		_sfx.play() ## başlangıç sesi duyulsun
+	else:
+		_sfx.play(randf() * maxf(0.0, stream.get_length() - 0.1)) ## rastgele noktadan: iki asa aynı anda çalınca üst üste binmesin
 
 
 func _exit_tree() -> void:
@@ -265,9 +321,28 @@ static func icon_aim_angle(icon: Sprite2D, forward_deg: float) -> float:
 	return icon.global_rotation + ((PI - f) if icon.flip_h else f)
 
 
+## İkonun fizik interpolasyonlu sahibi (yerel Player / uzak kukla): çizilen konumu PhysicsInterp.visual_position verir.
+static func _interp_holder(icon: Node) -> Node2D:
+	var p: Node = icon.get_parent()
+	while p != null:
+		if p is Node2D and "_interp_prev_pos" in p:
+			return p as Node2D
+		p = p.get_parent()
+	return null
+
+
 func _follow_update() -> void:
 	if not is_instance_valid(follow_icon):
 		follow_icon = null
+		return
+	if follow_world:
+		var tip: Vector2 = WeaponTip.tip_global(follow_icon, follow_fwd_deg)
+		if is_instance_valid(_follow_holder):
+			tip += PhysicsInterp.visual_position(_follow_holder) - _follow_holder.global_position
+		global_position = tip
+		if follow_aim:
+			_world_rot = icon_aim_angle(follow_icon, follow_fwd_deg) + aim_rot_offset
+		global_rotation = _world_rot
 		return
 	var par: Node2D = get_parent() as Node2D
 	if par == null:
@@ -294,7 +369,13 @@ func _ready() -> void:
 		return
 	if loop_sfx != "" and loop_time > 0.0 and ResourceLoader.exists(loop_sfx) and DisplayServer.get_name() != "headless":
 		_start_loop_sfx()
-	if loop_time > 0.0 and _spr.sprite_frames.has_animation(&"loop"):
+	if bend_len > 0.0:
+		_setup_bend()
+	_apply_flip()
+	if loop_time > 0.0 and _spr.sprite_frames.has_animation(&"start"):
+		_spr.play(&"start")
+		_spr.animation_finished.connect(_on_anim_finished)
+	elif loop_time > 0.0 and _spr.sprite_frames.has_animation(&"loop"):
 		_spr.play(&"loop")
 	elif _spr.sprite_frames.has_animation(&"play"):
 		_spr.play(&"play")
@@ -315,6 +396,98 @@ func _ready() -> void:
 		_place_on_ground.call_deferred()
 
 
+## flip_left / bright uygulaması (bkz. dosya başı). Aynalama eşik paylı: dik bakışta her karede dönüp titremesin.
+func _apply_flip() -> void:
+	if _spr == null:
+		return
+	if flip_left:
+		var c: float = cos(global_rotation if is_inside_tree() else rotation)
+		if c < -FLIP_EPS:
+			_flipped = true
+		elif c > FLIP_EPS:
+			_flipped = false
+	_spr.flip_v = _flipped
+	_spr.offset = Vector2(sprite_offset.x, -sprite_offset.y if _flipped else sprite_offset.y)
+	_spr.self_modulate = Color(bright, bright, bright, 1.0)
+	if _bend_spr:
+		_bend_spr.self_modulate = _spr.self_modulate
+
+
+## Bükülen alev (bkz. dosya başı "bend_len"): gizli AnimatedSprite karesini ağız merkezli dörtlüye shader'la çizer.
+func _setup_bend() -> void:
+	var tex: Texture2D = _spr.sprite_frames.get_frame_texture(_spr.animation if _spr.sprite_frames.has_animation(_spr.animation) else &"loop", 0)
+	if not (tex is AtlasTexture):
+		bend_len = 0.0
+		return
+	var at := tex as AtlasTexture
+	var side: int = int(ceil(bend_len + 16.0)) * 2
+	var quad: Texture2D = _bend_quads.get(side)
+	if quad == null:
+		## OPAK BEYAZ: Godot 4'te canvas shader'ındaki COLOR dörtlünün kendi doku rengiyle ÇARPILMIŞ gelir - saydam yer tutucu
+		## alevi tamamen siliyordu (başsız testte görünmez, gerçek çizicide alev yoktu).
+		var img: Image = Image.create(side, side, false, Image.FORMAT_RGBA8)
+		img.fill(Color.WHITE)
+		quad = ImageTexture.create_from_image(img)
+		_bend_quads[side] = quad
+	_bend_spr = Sprite2D.new()
+	_bend_spr.name = "Bend"
+	_bend_spr.texture = quad
+	_bend_spr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_bend_spr.scale = sprite_scale * TEXEL
+	var mat := ShaderMaterial.new()
+	mat.shader = BEND_SHADER
+	mat.set_shader_parameter("sheet", at.atlas)
+	mat.set_shader_parameter("sheet_size", Vector2(at.atlas.get_size()))
+	## Ortalı sprite ofseti (sanat px) = kare yarısı - ağız -> ağız = kare yarısı - ofset.
+	mat.set_shader_parameter("nozzle", at.region.size * 0.5 - sprite_offset)
+	mat.set_shader_parameter("quad_px", Vector2(side, side))
+	mat.set_shader_parameter("flen", bend_len)
+	_bend_spr.material = mat
+	add_child(_bend_spr)
+	_spr.visible = false ## kare/zamanlama onda sürer, çizim Bend'de
+	_bend = FlameBend.new()
+	_bend.call("reset", Time.get_ticks_msec() / 1000.0, global_rotation if is_inside_tree() else rotation)
+	_update_bend()
+
+
+func _update_bend() -> void:
+	if _bend_spr == null or _spr == null:
+		return
+	var now: float = Time.get_ticks_msec() / 1000.0
+	_bend.call("push", now, global_rotation)
+	var mat := _bend_spr.material as ShaderMaterial
+	var tex: Texture2D = _spr.sprite_frames.get_frame_texture(_spr.animation, _spr.frame)
+	if tex is AtlasTexture:
+		var r: Rect2 = (tex as AtlasTexture).region
+		mat.set_shader_parameter("region", Vector4(r.position.x, r.position.y, r.size.x, r.size.y))
+	mat.set_shader_parameter("flip_y", -1.0 if _flipped else 1.0)
+	mat.set_shader_parameter("bend", _bend.call("angles", now, bend_len))
+
+
+func _on_anim_finished() -> void:
+	if _spr == null:
+		return
+	if _ending:
+		queue_free()
+	elif _spr.animation == &"start" and _spr.sprite_frames.has_animation(&"loop"):
+		_spr.play(&"loop")
+
+
+## Ömür bitti: "end" animasyonu varsa onu oynat (anahtar boşalır: yeni istek yeni efekt açar), yoksa sil.
+func _begin_end() -> bool:
+	if _ending:
+		return true
+	if _spr == null or not _spr.sprite_frames.has_animation(&"end"):
+		return false
+	_ending = true
+	if key != "" and _live.get(key) == self:
+		_live.erase(key)
+	if not _spr.animation_finished.is_connected(_on_anim_finished):
+		_spr.animation_finished.connect(_on_anim_finished)
+	_spr.play(&"end")
+	return true
+
+
 ## Gece ışığı kancaları (night_glow.gd). Güç: sayfanın GLOW gücü (katalogdaki tabanla çarpılır).
 func get_night_glow_energy() -> float:
 	return glow_energy
@@ -325,12 +498,41 @@ func get_night_glow_energy() -> float:
 func get_glow_segment() -> Array:
 	if _spr == null or not is_instance_valid(_spr):
 		return [global_position, global_position]
+	if _bend_spr != null and _bend != null and _glow_cone_px > 0.0:
+		return _bent_glow_path()
 	if _glow_cone_px > 0.0:
 		var dir: Vector2 = Vector2.from_angle(global_rotation)
 		var along: float = _glow_cone_px * TEXEL * absf(sprite_scale.x)
 		return [global_position + dir * along * 0.15, global_position + dir * along]
 	var c: Vector2 = _spr.global_transform * _spr.offset
 	return [c, c]
+
+
+## Bükülen alevin (madde 640) gece ışığı: düz çizgi yerine alevin ORTA ÇİZGİSİ boyunca çok noktalı yol (madde 647). Her x'te alevin
+## [üst, alt] bandının ortası (uçtaki yukarı kabaran bulut ışığı da yukarı çeker) + shader'daki aynı büküm: P = R(theta(x)) * (x, y).
+## Başlangıç animasyonunda alev henüz kısadır: yol karenin ulaştığı boyda biter. Dönüş: [p0, p1, ...] dünya konumları (>= 3 nokta).
+func _bent_glow_path() -> Array:
+	var length: float = FlameShape.LENGTH
+	var reach: float = length
+	if _spr != null and _spr.animation == &"start":
+		reach = minf(length, float(FlameShape.INTRO_REACH[clampi(_spr.frame, 0, FlameShape.INTRO_REACH.size() - 1)]))
+	var bend: PackedFloat32Array = _bend.call("angles", Time.get_ticks_msec() / 1000.0, bend_len)
+	var rot: float = global_rotation
+	var fwd: Vector2 = Vector2.from_angle(rot)
+	var side: Vector2 = Vector2(-fwd.y, fwd.x)
+	var unit: float = TEXEL * absf(sprite_scale.x)
+	var out: Array = []
+	var from_x: float = reach * 0.12
+	const POINTS := 9
+	for i in POINTS:
+		var x: float = lerpf(from_x, reach, float(i) / float(POINTS - 1))
+		var band: Vector2 = FlameShape.band_at(x)
+		var y: float = (band.x + band.y) * 0.5
+		if _flipped:
+			y = -y
+		var p: Vector2 = Vector2(x, y).rotated(FlameBend.theta_at(bend, x, length))
+		out.append(global_position + (fwd * p.x + side * p.y) * unit)
+	return out
 
 
 func _place_on_ground() -> void:
@@ -354,12 +556,27 @@ func _process(delta: float) -> void:
 			rotation = lerp_angle(rotation, _target_rot, w)
 	if follow_icon != null:
 		_follow_update()
-	if loop_time > 0.0:
-		modulate.a = clampf(minf(_t / 0.12, (loop_time - _t) / FADE), 0.0, 1.0) * ally_alpha
+	if flip_left and _spr:
+		_apply_flip()
+	if _bend_spr:
+		_update_bend()
+	if _ending:
+		## "end" animasyonu kendi söner; ses kısılır, güvenlik için SAFETY.
+		modulate.a = ally_alpha
+		if _sfx != null:
+			_sfx.volume_db = maxf(-80.0, _sfx.volume_db - delta * 120.0)
+		if _t >= loop_time + SAFETY:
+			queue_free()
+	elif loop_time > 0.0:
+		var staged: bool = _spr != null and _spr.sprite_frames != null and _spr.sprite_frames.has_animation(&"end")
+		if staged:
+			modulate.a = ally_alpha ## start/end animasyonu görünüp kaybolmayı kendi çizer
+		else:
+			modulate.a = clampf(minf(_t / 0.12, (loop_time - _t) / FADE), 0.0, 1.0) * ally_alpha
 		if _sfx != null:
 			var a: float = clampf(minf(_t / LOOP_SFX_FADE_IN, (loop_time - _t) / FADE), 0.0, 1.0)
 			_sfx.volume_db = sfx_db + linear_to_db(maxf(a, 0.001))
-		if _t >= loop_time:
+		if _t >= loop_time and not _begin_end():
 			queue_free()
 	elif _t >= SAFETY:
 		queue_free()

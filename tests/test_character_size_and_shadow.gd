@@ -131,7 +131,7 @@ func test_matthew_growth_kept_feet_on_ground_and_scaled_shadow() -> void:
 ## Kullanıcı isteği (2026-10-20): "şovalye adamın boyutunu %10 arttır" - scale 2.2368375 x1.1, gölge (ekran pikseli) AYNI oranda.
 func test_sovalye_growth_scaled_body_and_shadow() -> void:
 	var def: Dictionary = Characters.get_def(7)
-	assert(str(def["name"]) == "Şovalye Adam", "id 7 Şovalye Adam olmalı, bulunan: %s" % str(def["name"]))
+	assert(str(def["name"]) == "Aldric", "id 7 Aldric olmalı, bulunan: %s" % str(def["name"]))
 	var expected_scale: float = 2.2368375 * 1.1
 	assert(absf(float(def["scale"].x) - expected_scale) < 0.001,
 		"Şovalye ölçeği %%10 büyümemiş: %s (beklenen %s)" % [def["scale"].x, expected_scale])
@@ -190,7 +190,7 @@ func test_player_really_applies_the_new_size_offset_and_shadow() -> void:
 ## (gölgesi yine de tanımlı kalır).
 func test_vampir_size_change_was_reverted() -> void:
 	var def: Dictionary = Characters.get_def(13)
-	assert(str(def["name"]) == "Vampir Çocuk", "id 13 Vampir Çocuk olmalı, bulunan: %s" % str(def["name"]))
+	assert(str(def["name"]) == "Nox", "id 13 Nox olmalı, bulunan: %s" % str(def["name"]))
 	assert(absf(float(def["scale"].x) - 2.09797) < 0.001,
 		"Vampir ölçeği eski hâline dönmemiş: %s (beklenen 2.09797)" % def["scale"].x)
 	assert(def["offset"] == Vector2(0, 0),

@@ -83,6 +83,22 @@ func test_reset_keeps_players_and_clears_ready_and_session_flags() -> void:
 	_restore_network_state()
 
 
+## Hata (kullanıcı: "oyunu yeniden başlatınca diğer oyuncular harita seçim ekranında takılı kaldı"): istemci harita oylaması bayrağını
+## oyun başlayınca da, yeniden başlatma sıfırlamasında da temizlemeli; yoksa lobby_menu bayat bayrakla oylama ekranını açar.
+func test_stale_world_map_vote_does_not_leak_into_restart_lobby() -> void:
+	NetworkManager.world_map_open = true
+	NetworkManager.world_map_vote_winner = "col"
+	NetworkManager.world_map_votes = {77: "col"}
+	NetworkManager._reset_for_restart_lobby()
+	assert(not NetworkManager.world_map_open, "Yeniden başlatma sonrası harita oylaması açık kalmamalı")
+	assert(NetworkManager.world_map_vote_winner == "" and NetworkManager.world_map_votes.is_empty(), "Eski oylama sonucu temizlenmeli")
+	_restore_network_state()
+
+	var src: String = FileAccess.get_file_as_string("res://scripts/network_manager.gd")
+	var start_fn: String = _body(src, "func _rpc_start_game(", "\n\n\n")
+	assert(start_fn.contains("world_map_open = false"), "_rpc_start_game istemcide de harita oylamasını kapatmalı")
+
+
 ## Lobi ekranı bağlıyken açılınca bilgi mesajını göstermeli ve bayrağı tüketmeli.
 func test_lobby_shows_the_restart_notice_once() -> void:
 	var src: String = FileAccess.get_file_as_string("res://scripts/lobby_menu.gd")

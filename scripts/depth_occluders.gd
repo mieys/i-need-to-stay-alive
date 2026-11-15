@@ -115,6 +115,10 @@ var _creature_frame: int = 0
 static var _body_cache: Dictionary = {} ## "doku|hframes|vframes" -> opak alan boyu (px, ölçeksiz)
 ## Bulunan/kurulan ön katmanlar (testler ve hata ayıklama için): [{"layer": asıl, "front": kopya, "mode": "tree"|"building"|"object"}]
 var fronts: Array = []
+## Zindan haritaları (2026-11-12, kullanıcı: "necropoliste Y ekseni ve sıralama sorunu"): serbest sütun 4 karo (başlık, gövde, AYNI gövde, taban);
+## alt alta AYNI karo nesneyi ikiye bölüyordu -> üst yarının kökü sütunun ortasında kalıyor, arkasındaki karakter üst yarının ÜSTÜNDE çiziliyordu.
+## true: alt alta aynı karo (aynı kaynak + atlas + çevirme) da aynı nesne sayılır. Yalnız DungeonManager._setup_map açar (ev içi/ana harita/collision aynı).
+var join_vertical_repeats: bool = false
 
 
 ## main.gd çağırır (TreeSway.setup'tan SONRA: ağaç materyalleri hazır olmalı). Harita/katmanlar yoksa sessizce hiçbir şey yapmaz.
@@ -375,7 +379,7 @@ func object_bases(layer: TileMapLayer) -> Dictionary:
 		var down: Vector2i = cell + Vector2i(0, 1)
 		if info.has(down):
 			var c: Array = info[down]
-			if c[0] == a[0] and c[2] == a[2] and c[1] == a[1] + Vector2i(0, 1):
+			if c[0] == a[0] and c[2] == a[2] and (c[1] == a[1] + Vector2i(0, 1) or (join_vertical_repeats and c[1] == a[1] and c[3] == a[3])):
 				_union(parent, cell, down)
 	var ofset: Vector2 = _cell_origin(layer)
 	var group_base: Dictionary = {}
@@ -997,7 +1001,7 @@ func update_creatures() -> void:
 		var found: Array = []
 		var seen: Dictionary = {}
 		var cand: Array = EnemyQueryScript.candidates(get_tree(), center, view.z)
-		for group_name in ["player_ally", "player_allies", "depth_props"]: ## depth_props: Oakley çiçeği + zemin efekti (oakley_flower.gd DERİNLİK notu)
+		for group_name in ["player_ally", "pvp_rivals", "player_allies", "depth_props"]: ## depth_props: Oakley çiçeği + zemin efekti (oakley_flower.gd DERİNLİK notu)
 			cand = cand + get_tree().get_nodes_in_group(group_name)
 		var half: Vector2 = Vector2(view.z, view.z)
 		var cam: Camera2D = get_viewport().get_camera_2d()

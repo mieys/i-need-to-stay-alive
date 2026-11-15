@@ -3,6 +3,11 @@ extends Node2D
 ## Yaratıkların duvar dolanma yol ızgarası (bkz. _ready / enemy_pathing.gd).
 const EnemyPathingScript: GDScript = preload("res://scripts/enemy_pathing.gd")
 const EventSfx := preload("res://scripts/event_sfx.gd")
+const BaseZonesScript := preload("res://scripts/pvp/base_zones.gd") ## PvPvE takım üssü (madde 607)
+const GameModeScript := preload("res://scripts/pvp/game_mode.gd") ## 2v2 PvP: zafer = K10 bossunun son vuruşunu yapan takım, zorluk iki takımın yüksek seviyesine bakar (madde 617)
+const PvpNetScript := preload("res://scripts/pvp/pvp_net.gd")
+const BASE_SPAWN_MARGIN := 300.0 ## doğuş noktası üs yarıçapı + bu kadar içine düşmez (team_bases.gd SPAWN_MARGIN)
+const BalanceLogScript: GDScript = preload("res://scripts/balance_log.gd") ## boss dövüş süresi kaydı (madde 597)
 
 ## Full 15-Kademe (+ Final Kademe) creature roster, built from
 ## visuals/yaratıklar/. Every id here matches scenes/creatures/enemy_<id>.tscn.
@@ -56,15 +61,36 @@ const SCENES := {
 	"iblis1": preload("res://scenes/creatures/enemy_iblis1.tscn"),
 	"iblis2": preload("res://scenes/creatures/enemy_iblis2.tscn"),
 	"iblis3": preload("res://scenes/creatures/enemy_iblis3.tscn"),
-	"minotaur1": preload("res://scenes/creatures/enemy_minotaur1.tscn"), ## Kademe 3 bossu (bkz. NEW_BOSS_TIERS)
+	"minotaur1": preload("res://scenes/creatures/enemy_minotaur1.tscn"), ## Ana harita Kademe 5 bossu (bkz. NEW_BOSS_TIERS)
 	"underground1": preload("res://scenes/creatures/enemy_underground1.tscn"), ## Kademe 5 bossu: Yeraltı Canavarı (görünmez havuz)
 	"sandworm1": preload("res://scenes/creatures/enemy_sandworm1.tscn"), ## Yeraltı Canavarı'nın solucan uzvu (bkz. LIMB_IDS)
-	"balkabagi1": preload("res://scenes/creatures/enemy_balkabagi1.tscn"), ## Kademe 8 bossu: Balkabağı Kafa (bkz. NEW_BOSS_TIERS)
-	"wendigo1": preload("res://scenes/creatures/enemy_wendigo1.tscn"), ## Kademe 12 bossu: Wendigo (bkz. NEW_BOSS_TIERS)
-	"banshee1": preload("res://scenes/creatures/enemy_banshee1.tscn"), ## Kademe 15 bossu: Banshee (bkz. NEW_BOSS_TIERS, NIGHT_BOSS_TIERS)
-	"ucansetan1": preload("res://scenes/creatures/enemy_ucansetan1.tscn"), ## FİNAL bossu: Uçan Şeytan (bkz. NEW_FINAL_BOSSES)
+	"balkabagi1": preload("res://scenes/creatures/enemy_balkabagi1.tscn"), ## Balkabağı Kafa bossu (Bataklık haritası K5, Aşama 3; ana haritada doğmaz)
+	"wendigo1": preload("res://scenes/creatures/enemy_wendigo1.tscn"), ## Wendigo: ana harita Kademe 10 (SON) bossu (bkz. NEW_BOSS_TIERS)
+	"banshee1": preload("res://scenes/creatures/enemy_banshee1.tscn"), ## Banshee: gece bossu (bkz. NIGHT_BOSS_IDS), Bataklık haritası K10 bossu (Aşama 3)
+	"ucansetan1": preload("res://scenes/creatures/enemy_ucansetan1.tscn"), ## Uçan Şeytan: Altın Kumlar haritası K10 bossu (Aşama 3)
 	"kabak1": preload("res://scenes/creatures/enemy_kabak1.tscn"), ## Balkabağı Kafa'nın patlayan balkabağı minyonu (bkz. SUMMON_STATS)
 	"yarasa1": preload("res://scenes/creatures/enemy_yarasa1.tscn"), ## Balkabağı Kafa'nın kanatan yarasası (bkz. SUMMON_STATS)
+	"gonca1": preload("res://scenes/creatures/enemy_gonca1.tscn"), ## Zehirli Gonca: Kara Bataklık K5 bossu (madde 682, gonca_boss.gd)
+	"filiz1": preload("res://scenes/creatures/enemy_filiz1.tscn"), ## Zehirli Gonca'nın tohumdan çıkan yavrusu (bkz. SUMMON_STATS, gonca_filiz.gd)
+	"medusa1": preload("res://scenes/creatures/enemy_medusa1.tscn"), ## Medusa: Altın Kumlar K10 (son) bossu (madde 682, medusa_boss.gd)
+	## ÜÇ KARDEŞ (2026-11-14): ana haritanın K10 (son) bossu, üçü tek boss (kardes_boss.gd; ortak 3 parçalı bar boss_bar_top.gd)
+	"kardes_kilic1": preload("res://scenes/creatures/enemy_kardes_kilic1.tscn"),
+	"kardes_ok1": preload("res://scenes/creatures/enemy_kardes_ok1.tscn"),
+	"kardes_buyu1": preload("res://scenes/creatures/enemy_kardes_buyu1.tscn"),
+	## YENİ HAVUZ (madde 575, 2026-11-11, kullanıcı: "4 yaratık, her birinin 3 kademesi ... spawnlama olayını henüz ayarlama"): TIER_ROSTER/ELITE_BY_TIER'da YOK,
+	## yalnız debug menüsünden doğar. Yetenekler enemy_abilities.gd (goblin/gnoll/kertenkele/pelte: 1. kademe düz, 2-3 kendi yeteneği).
+	"goblin1": preload("res://scenes/creatures/enemy_goblin1.tscn"),
+	"goblin2": preload("res://scenes/creatures/enemy_goblin2.tscn"), ## Mızrak Hamlesi (atılış)
+	"goblin3": preload("res://scenes/creatures/enemy_goblin3.tscn"), ## Mızrak Fırlatma
+	"gnoll1": preload("res://scenes/creatures/enemy_gnoll1.tscn"),
+	"gnoll2": preload("res://scenes/creatures/enemy_gnoll2.tscn"), ## Yırtıcı Sıçrayış
+	"gnoll3": preload("res://scenes/creatures/enemy_gnoll3.tscn"), ## Kan Uluması (sürüyü öfkelendirir)
+	"kertenkele1": preload("res://scenes/creatures/enemy_kertenkele1.tscn"),
+	"kertenkele2": preload("res://scenes/creatures/enemy_kertenkele2.tscn"), ## Zehir Tükürüğü
+	"kertenkele3": preload("res://scenes/creatures/enemy_kertenkele3.tscn"), ## Tırpan Kasırgası
+	"pelte1": preload("res://scenes/creatures/enemy_pelte1.tscn"), ## Bomba Pelte: fitil + kendini patlatır
+	"pelte2": preload("res://scenes/creatures/enemy_pelte2.tscn"), ## Ateş Pelte: Alev Halkası
+	"pelte3": preload("res://scenes/creatures/enemy_pelte3.tscn"), ## Kristal Pelte: Kristal Saçması
 }
 
 ## hp/dmg multiplier per family, used only to compute a fresh, tier-appropriate
@@ -80,6 +106,9 @@ const FAMILY_MULT := {
 	"demon": {"hp": 1.6, "dmg": 1.3}, "hayalet": {"hp": 0.85, "dmg": 1.1},
 	"rontgen": {"hp": 1.15, "dmg": 1.2}, "vampire": {"hp": 1.15, "dmg": 1.25},
 	"iblis": {"hp": 0.8, "dmg": 1.0},
+	"goblin": {"hp": 0.75, "dmg": 0.9}, "gnoll": {"hp": 1.15, "dmg": 1.2},
+	"kertenkele": {"hp": 1.3, "dmg": 1.25}, "pelte": {"hp": 0.8, "dmg": 0.9},
+	"filiz": {"hp": 1.2, "dmg": 1.0},
 }
 
 ## Which family each id belongs to (for the FAMILY_MULT lookup above).
@@ -102,14 +131,24 @@ const ID_FAMILY := {
 	"iblis1": "iblis", "iblis2": "iblis", "iblis3": "iblis",
 	"minotaur1": "minotaur",
 	"underground1": "underground", "sandworm1": "sandworm",
+	"goblin1": "goblin", "goblin2": "goblin", "goblin3": "goblin",
+	"gnoll1": "gnoll", "gnoll2": "gnoll", "gnoll3": "gnoll",
+	"kertenkele1": "kertenkele", "kertenkele2": "kertenkele", "kertenkele3": "kertenkele",
+	"pelte1": "pelte", "pelte2": "pelte", "pelte3": "pelte",
 	"balkabagi1": "balkabagi", "kabak1": "kabak", "yarasa1": "yarasa", "wendigo1": "wendigo", "banshee1": "banshee", "ucansetan1": "ucansetan",
+	"gonca1": "gonca", "filiz1": "filiz", "medusa1": "medusa", ## madde 682
+	"kardes_kilic1": "kardes_kilic", "kardes_ok1": "kardes_ok", "kardes_buyu1": "kardes_buyu", ## Üç Kardeş
 }
 
-## Regular spawn roster per Kademe (1-15) - NOT cumulative: only the current
-## tier's own list spawns as "trash" enemies, matching the curated per-tier
-## chapters the creature folders were organized into (Kademe 9 is an all-slime
-## swarm, Kademe 10-12 is forest monsters, Kademe 13-15 is the undead/demon
-## chapter, etc). Tier 1 = starting enemies, tier 15 = hardest regular tier.
+## HARİTA İÇERİĞİ (madde 597, docs/harita_icerik/PLAN.md, 2026-11-11): oyun TÜM haritalarda 10 kademe. Kademe 5'te 1. boss, Kademe 10'da 2. (SON) boss;
+## 2. boss ölünce zafer. Ayrı "Final kademesi" (16) yok; 11+ yalnız sonsuz modun ölçek kademeleridir (EndlessMath.BASE_TIER = LAST_TIER).
+## "15" varsayımı olan her yer bu sabite bağlıdır (grep: LAST_TIER).
+const LAST_TIER := 10
+
+## Regular spawn roster per Kademe (1-LAST_TIER) - NOT cumulative: only the current
+## tier's own list spawns as "trash" enemies. Seçim eşit olasılıklı, tekrar = ağırlık.
+## ANA HARİTA (madde 597): K1-8 bugünkü tablo, K9 = eski K10 (orman yaratıkları), K10 = eski K11-12 + 3. haller. Eski K9 slime sürüsü ve
+## K13-15 (demon/hayalet/röntgen/vampir/iblis) ana haritadan çıktı (Aşama 2'de diğer haritaların havuzlarına girecek).
 const TIER_ROSTER := {
 	## Madde 368 (kullanıcı: "K1-K2'ye ikinci bir yaratık türü"): K1'e kemik atan İskelet eklendi; seçim eşit olasılıklı olduğundan slime iki kez yazıldı (~%67 slime / %33 iskelet).
 	1: ["slime1", "slime1", "iskelet1"],
@@ -120,13 +159,8 @@ const TIER_ROSTER := {
 	6: ["ork1", "slime1", "zombie3", "iskelet2"],
 	7: ["lich1", "lich2", "ork1", "ork2", "iskelet2"],
 	8: ["lich2", "ork2", "ork3", "slime2", "iskelet3"],
-	9: ["slime1", "slime2", "slime3", "slime4", "slime5", "slime6"],
-	10: ["agac1", "bitki1", "golem1", "mantar1"],
-	11: ["agac1", "agac2", "bitki1", "bitki2", "mantar2"],
-	12: ["agac2", "bitki3", "golem2", "mantar2"],
-	13: ["demon1", "hayalet1", "rontgen1", "vampire1", "iblis1"],
-	14: ["demon1", "hayalet1", "hayalet2", "vampire1", "vampire2", "iblis1", "iblis2"],
-	15: ["demon2", "hayalet3", "slime7", "vampire3", "iblis3"],
+	9: ["agac1", "bitki1", "golem1", "mantar1"],
+	10: ["agac2", "bitki2", "bitki3", "golem2", "golem3", "mantar2", "mantar3"],
 }
 
 ## Kullanıcı isteği (2026-09-27): "oyun başlangıcındaki kademe 1 slimelar 90 saniye sonra doğmaya başlasın" - oyunun ilk
@@ -143,33 +177,21 @@ func _spawnable_roster(tier: int) -> Array:
 	return roster.filter(func(id: String) -> bool: return not id.begins_with("slime"))
 
 
-## Boss Kademe: one guaranteed tough spawn near the end of that tier's time
-## window (see boss_trigger_fraction). Stats are computed from the tier
-## number itself (e.g. İskelet 3's tier-3 boss uses tier=3, not its later
-## regular appearance's P=8) so each boss is scaled to when it shows up.
-const BOSS_TIERS := {
-	3: ["iskelet3"],
-	6: ["lich3"],
-	8: ["ork3"],
-	12: ["agac3", "golem3"],
-	15: ["rontgen2", "rontgen3"],
-}
-
-## YENİ BOSSLAR (kullanıcı isteği 2026-10-08: eski bosslar elit oldu, yeni bosslar tek tek veriliyor). GameManager.bosses_enabled KAPALIYKEN
-## (varsayılan) SADECE bu tablodaki kademelerin bossu doğar; Final, zafer ve sonsuz boss dalgası kapalı kalır. Kademe -> [yaratık kimlikleri].
-## Yeni boss geldikçe buraya satır ekle (+ FIXED_BOSS_STATS'a statları, + boss_bar_art.gd NAMES'e adı). bosses_enabled AÇIKKEN eski
-## BOSS_TIERS (yukarıdaki eski bosslar) çalışır - o akışı sınayan testler içindir; tüm yeni bosslar gelince BOSS_TIERS bununla değiştirilecek.
+## KADEME BOSSLARI (madde 597): her haritada TAM 2 boss - Kademe 5'te 1. boss, Kademe 10'da (LAST_TIER) 2. ve SON boss. Boss, kademesinin
+## süresinin boss_trigger_fraction'ında (%75) doğar; kademe saati o kademenin sonunda boss ölene kadar bekler (_tier_time). SON bossun
+## ölümü ZAFERDİR (_check_victory; "Sonsuza Devam Et" -> sonsuz mod). Eski ayrı Final kademesi (16, 13 bosslu BOSS_TIERS/FINAL_CREATURES,
+## GameManager.bosses_enabled yolu) KALDIRILDI. Kademe -> [yaratık kimlikleri]. Yeni boss geldikçe FIXED_BOSS_STATS'a statları, boss_bar_art.gd NAMES'e adı.
+## Bu tablo ANA HARİTANIN bossları (ve kendi tablosu olmayan haritaların); diğer haritalar profillerindeki `bosslar` ile gelir (madde 682, bkz. boss_tiers_for_map).
+const MapProfilesScript := preload("res://scripts/map_profiles.gd")
 const NEW_BOSS_TIERS := {
-	3: ["minotaur1"],
-	5: ["underground1"],
-	8: ["balkabagi1"],
-	12: ["wendigo1"],
-	15: ["banshee1"],
+	5: ["minotaur1"],
+	10: ["kardes_kilic1", "kardes_ok1", "kardes_buyu1"], ## ÜÇ KARDEŞ (2026-11-14, kullanıcı: "ana haritanın en büyük bossu"; eski K10 Wendigo çıktı, dosyaları duruyor). Üçü ölünce zafer.
 }
 
-## Gece bossları (Banshee, 2026-10-09: "zifiri gece olduğunda doğar, var olduğu sürece asla gündüz olmaz"): bu kademelerin bossu doğmadan önce atmosphere.gd gece kilidi istenir ve DERİN GECE
-## olunca doğar (gündüzse saat hızla geceye akar, ~10 sn). Kilit, boss ölünce (ya da kalmayınca) kendiliğinden açılır.
-const NIGHT_BOSS_TIERS := [15]
+## Gece bossları (Banshee, 2026-10-09: "zifiri gece olduğunda doğar, var olduğu sürece asla gündüz olmaz"): bu KİMLİKLERDEN biri doğacaksa
+## boss doğmadan önce atmosphere.gd gece kilidi istenir ve DERİN GECE olunca doğar (gündüzse saat hızla geceye akar, ~10 sn). Kilit, boss ölünce
+## (ya da kalmayınca) kendiliğinden açılır. (Eskiden kademe numarasına bağlıydı [15]; haritaya göre kademe değiştiği için kimliğe bağlandı, madde 597.)
+const NIGHT_BOSS_IDS := ["banshee1"]
 
 ## Elle belirlenmiş NİHAİ statlı bosslar (kullanıcı isteği 2026-10-08, Minotaur: "Canı 80.000, Kalkanı 90.000, Kalkan Soğurması %80, Hasarı 100",
 ## sonra aynı gün "Kalkanını ve canını %60 azalt" -> can 32.000, kalkan 36.000).
@@ -195,7 +217,69 @@ const FIXED_BOSS_STATS := {
 	## 2026-10-10 (kullanıcı: "banshee çok güçsüzdü, boyutunu %30 küçültüp daha agresif daha hızlı olmalı, hasarını 2 kat arttır"): scale 3.0 -> 2.1, atılış 120 -> 240 (çığlık 130 -> 260 banshee_boss.gd).
 	## 2026-10-19 (kullanıcı: "bansheenin boyutunu %30 küçültüp hasarını %40 arttır"): scale 2.1 -> 1.47, atılış 240 -> 336 (çığlık 260 -> 364).
 	"banshee1": {"health": 300000.0, "shield": 480000.0, "protection": 0.9, "damage": 336.0, "reward_ref": "rontgen3", "scale": 1.47},
+	## ZEHİRLİ GONCA (madde 682, 2026-11-14, Kara Bataklık K5; kullanıcı: "oldukça zor bir boss olmalı"): can/kalkan yuva tablosundan (BOSS_SLOT_OVERRIDES), soğurma %92
+	## (doğrudan vuruş zayıf: asıl yol yavrularını öldürmek - her Filiz ölümü canından VE kalkanından pay keser, gonca_boss.gd DRAIN_*). Normal saldırı = ısırık + zehir.
+	"gonca1": {"health": 50000.0, "shield": 60000.0, "protection": 0.92, "damage": 90.0, "reward_ref": "iskelet3", "scale": 1.4},
+	## MEDUSA (madde 682, 2026-11-14, Altın Kumlar K10 = son boss; kullanıcı: "çok zor olsun öldürmesi"): yuva değerinin üstünde (BOSS_SLOT_OVERRIDES), soğurma %90,
+	## normal saldırı (yılan ısırığı) 180; bakış / yılan kırbacı hasarları medusa_boss.gd'de.
+	"medusa1": {"health": 360000.0, "shield": 480000.0, "protection": 0.9, "damage": 180.0, "reward_ref": "rontgen3", "scale": 1.9},
+	## ÜÇ KARDEŞ (2026-11-14, ana harita K10 = son boss; kullanıcı: "oyundaki en zor boss olmalı"): kardeş başına can/kalkan BOSS_SLOT_OVERRIDES'ta (toplam 420.000 / 540.000 =
+	## Medusa'nın %17 / %12 üstü, üç ayrı gövdeye bölünmüş). Normal saldırı = temas (Kılıç 160, Ok 120, Büyü 130); yetenek hasarları kardes_boss.gd. Bir kardeş ölünce kalanlar öfkelenir.
+	## scale 2.2: 64 px'lik insan sprite'ı Goblin 3'ün ~2 katı; 1 sanat px ~ 2 dünya px (efektler kardes_sheet_fx.gd ART ile aynı yoğunlukta)
+	"kardes_kilic1": {"health": 140000.0, "shield": 180000.0, "protection": 0.9, "damage": 160.0, "reward_ref": "rontgen3", "scale": 2.2},
+	"kardes_ok1": {"health": 140000.0, "shield": 180000.0, "protection": 0.9, "damage": 120.0, "reward_ref": "rontgen3", "scale": 2.2},
+	"kardes_buyu1": {"health": 140000.0, "shield": 180000.0, "protection": 0.9, "damage": 130.0, "reward_ref": "rontgen3", "scale": 2.2},
 }
+
+## KADEME YUVASI BOSS STATLARI (madde 597, PLAN bölüm 2/5b; BAŞLANGIÇ DEĞERLERİ = planı yazanın tahmini, gerçek koşu kayıtlarından hesaplandı, kullanıcı oynayıp ayarlar):
+## boss HANGİ kademede doğarsa o yuvanın can/kalkanı geçerli (FIXED_BOSS_STATS'taki eski kademeye göre yazılı sayıların yerine). Soğurma/boyut/ödül referansı
+## FIXED_BOSS_STATS'ta bossun KENDİSİNDE kalır. Sonsuz dalga bossları (kademe > LAST_TIER) bu tabloya girmez: FIXED_BOSS_STATS sayılarını + dalga çarpanını kullanır.
+const BOSS_SLOT_STATS := {
+	5: {"health": 50000.0, "shield": 60000.0},
+	10: {"health": 300000.0, "shield": 400000.0},
+}
+## Yuva değerini bossa özel ezen satırlar: boss kimliği -> kademe -> {health, shield}. (Yeraltı Canavarı: kayıtlarda K5'teki 8 kalıcı ölümün 8'i bu bossun uzvundan.)
+const BOSS_SLOT_OVERRIDES := {
+	"underground1": {5: {"health": 36000.0, "shield": 44000.0}},
+	"medusa1": {10: {"health": 360000.0, "shield": 480000.0}}, ## madde 682: son boss yuvanın %20 üstünde ("çok zor olsun")
+	## Üç Kardeş: kardeş başına (üçü birlikte 420.000 / 540.000)
+	"kardes_kilic1": {10: {"health": 140000.0, "shield": 180000.0}},
+	"kardes_ok1": {10: {"health": 140000.0, "shield": 180000.0}},
+	"kardes_buyu1": {10: {"health": 140000.0, "shield": 180000.0}},
+}
+## Boss betiklerindeki hasar sabitleri ESKİ kademeye göre yazılı; yeni yuvaya göre hasar = eski x (3 + 2,2 x yeni) / (3 + 2,2 x eski) (oyuncu canı büyümesiyle örtüşür:
+## vuruş başına can yüzdesi eski kademesindekiyle aynı kalır). Çarpan TEK tabloda: boss betikleri `boss_damage_mult` metasından okur (sabitleri tek tek elle değiştirme).
+const BOSS_HOME_TIER := {
+	"minotaur1": 3, "underground1": 5, "balkabagi1": 8, "wendigo1": 12, "banshee1": 15, "ucansetan1": 16,
+	"gonca1": 5, "medusa1": 10, ## madde 682: sabitleri kendi yuvalarına göre yazıldı (çarpan 1,0)
+	"kardes_kilic1": 10, "kardes_ok1": 10, "kardes_buyu1": 10, ## Üç Kardeş: kardes_boss.gd sabitleri K10'a göre
+}
+## Boss kimliği başına yuva hasar çarpanına EK elle çarpan (Yeraltı Canavarı uzuvları x0,8: asit 110 -> 88, savurma 130 -> 104; kimliğin yuvaya göre çarpanına çarpılır).
+const BOSS_SLOT_EXTRA_DAMAGE := {
+	"underground1": {5: 0.8},
+}
+
+
+## Boss `id`'nin `slot_tier` kademesindeki hasar çarpanı (betiklerdeki sabit hasarlara çarpılır). Yuva dışı kademede (sonsuz dalga, test) 1,0.
+static func boss_slot_damage_mult(id: String, slot_tier: int) -> float:
+	if not BOSS_SLOT_STATS.has(slot_tier) or not BOSS_HOME_TIER.has(id):
+		return 1.0
+	var home: float = float(BOSS_HOME_TIER[id])
+	var mult: float = (3.0 + 2.2 * float(slot_tier)) / (3.0 + 2.2 * home)
+	return mult * float(BOSS_SLOT_EXTRA_DAMAGE.get(id, {}).get(slot_tier, 1.0))
+
+
+## Bossun `slot_tier` kademesinde kullanılacak nihai stat satırı: FIXED_BOSS_STATS + yuva can/kalkanı + yuva hasar çarpanı. Host (_setup_boss_enemy) ve istemci AYNI işlevi çağırır.
+static func boss_fixed_stats(id: String, slot_tier: int) -> Dictionary:
+	var fixed: Dictionary = FIXED_BOSS_STATS.get(id, {}).duplicate()
+	if fixed.is_empty() or not BOSS_SLOT_STATS.has(slot_tier):
+		return fixed
+	var slot: Dictionary = BOSS_SLOT_OVERRIDES.get(id, {}).get(slot_tier, BOSS_SLOT_STATS[slot_tier])
+	fixed["health"] = float(slot["health"])
+	fixed["shield"] = float(slot["shield"])
+	fixed["damage"] = float(fixed["damage"]) * boss_slot_damage_mult(id, slot_tier)
+	return fixed
+
 
 ## BOSS MİNYONLARI (kullanıcı isteği 2026-10-09, Balkabağı Kafa): stat çarpanları - can/kalkan = o kademedeki sıradan yaratığın ("hp" oranı), hız = sıradan yaratığa göre ("speed" çarpanı).
 ## Doğuş spawn_summon'da: sıradan yaratık gibi kademe ölçeği + kalkan + global çarpan, sonra bu oranlar; ödüller küçültülür ("reward").
@@ -203,22 +287,17 @@ const SUMMON_STATS := {
 	## 2026-10-19 (kullanıcı: "balkabağı kafanın balkabakları ve yarasaları tek yiyor, güçlerini 2 katına çıkar"): hp 0.7 -> 1.4 (kabak), 0.3 -> 0.6 (yarasa); kalkan da aynı oranda. Hasar/hız/ödül AYNI.
 	"kabak1": {"hp": 1.4, "speed": 1.2, "reward": 0.3},
 	"yarasa1": {"hp": 0.6, "speed": 1.3, "reward": 0.3, "damage": 4.0}, ## damage: ısırık hasarı çarpanı (2026-10-10: Balkabağı hasarı x2; 2026-10-19: x4 = bir kat daha, kanama 10/sn aynı)
+	## Filiz (madde 682, Zehirli Gonca'nın tohumundan): yerinden kıpırdamaz (hız 0), sıradan yaratıktan dayanıklı, ısırığı x2 + zehir (gonca_filiz.gd).
+	"filiz1": {"hp": 1.6, "speed": 0.0, "reward": 0.25, "damage": 2.0},
 }
 
 ## Boss havuzuna bağlı solucan UZUVLARI: sıradan yaratık değil - tier ölçeği / kalkan / global çarpan / ödül YOK (kendi eşiği sahnede, hasarı bossa gider; bkz. worm_limb.gd).
 ## Hem host (underground_boss.gd _spawn_limb) hem istemci (_rpc_client_spawn_creature) bu kimlikleri çarpansız kurar.
 const LIMB_IDS := ["sandworm1"]
 
-## Final Kademe: every boss-tier creature spawns at once, all 13 together.
-const FINAL_TIER := 16
-## YENİ FİNAL (2026-10-09, kullanıcı: "Uçan Şeytan tüm kademeler bittikten sonra ortaya çıkar; final bossu öldürdükten sonra sonsuz mod açılacak"): GameManager.bosses_enabled KAPALIYKEN de
-## Final bu listedeki boss(lar)la gelir (eski 13'lü FINAL_CREATURES değil); ölünce zafer penceresi -> "Sonsuza Devam Et" -> sonsuz mod. `new_final_enabled` kapatılırsa eski davranış (Kademe XV bitince doğrudan sonsuz).
-const NEW_FINAL_BOSSES := ["ucansetan1"]
-var new_final_enabled: bool = true
-const FINAL_CREATURES := [
-	"agac3", "demon3", "golem3", "hayalet3", "lich3", "mantar3", "ork3",
-	"slime2", "rontgen3", "vampire3", "zombie3", "iblis3", "iskelet3",
-]
+## ESKİ ayrı Final kademesi (16) madde 597'de KALDIRILDI: son boss artık LAST_TIER'ın bossu (NEW_BOSS_TIERS[LAST_TIER]); ölünce zafer.
+## (FINAL_TIER / NEW_FINAL_BOSSES / FINAL_CREATURES / new_final_enabled / Final kapısı yok; "Final" geçen alan adları [_final_spawned, _final_bosses]
+## artık "son boss doğdu / son bossların düğümleri" anlamında.)
 
 ## Kademe atlama hızı %200 yavaşlatıldı (yani her kademe eskisinin 3 katı
 ## sürüyor, 50 -> 150) - oyun çok hızlı ilerleyip bosslar aniden geliyordu.
@@ -472,6 +551,20 @@ static func late_durability_mult(tier: int) -> float:
 	return LATE_TIER_DURABILITY_MULT if tier >= LATE_TIER_DAMAGE_MIN_TIER else 1.0
 
 
+## KADEMEYLE ARTAN DAYANIKLILIK (2026-11-15, kullanıcı: "oyun kolay olmasın" + "yaratık sayısını çok arttırmak istemiyorum, onun yerine
+## dayanıklılıklarını arttırsak"; koşu kayıtları: 5 kişilik oyunda boss sonrası kademelerde neredeyse hiç düşme yok, takım aynı kademede bir
+## önceki günün 2,5-4 katı hasar veriyor). BOSS OLMAYAN her yaratığın (sıradan + elit) can ve kalkanı Kademe 1'de x1,0'dan son kademede
+## x(1 + TIER_TOUGHNESS_AT_LAST_TIER)'e doğrusal büyür: K2 x1,04, K5 x1,18, K8 x1,31, K10 x1,40 (kademe başına ~+%4,4). Hasar, hız, sayı,
+## ödül aynı. Geri alınan kalabalık eğrisi düzeltmesinin (K10'da +%37 yaratık) karşılığı. Sonsuz modda (kademe 11+) x1,40'ta kalır -
+## oranın üstüne sonsuz modun kendi bileşik artışı biner. Bosslar x1,0 (kendi yuva tabloları var).
+const TIER_TOUGHNESS_AT_LAST_TIER := 0.40
+
+static func tier_toughness_mult(tier: int) -> float:
+	if tier <= 1:
+		return 1.0
+	return 1.0 + TIER_TOUGHNESS_AT_LAST_TIER * clampf(float(tier - 1) / float(LAST_TIER - 1), 0.0, 1.0)
+
+
 ## Boss can/hasar çarpanı (bkz. BOSS_PACING). Tabloda olmayan Kademe için 1.0.
 static func boss_health_pacing(tier: int) -> float:
 	return float((BOSS_PACING.get(tier, [1.0, 1.0]) as Array)[0])
@@ -492,8 +585,38 @@ static func boss_base_stats(id: String, tier: int) -> Dictionary:
 	}
 
 
+## K6-K10 YARATIK BASKISI AYARI (madde 597, PLAN bölüm 5b): güçlü 4 kişilik takım K6-K12'yi rahat geçiyordu; veri gelince (kullanıcı ~10 gerçek oyun oynayınca,
+## kullanıcı onayıyla) buradan kademe başına can ve hasar çarpanı sıkılır. BAŞLANGIÇ = hepsi 1,0 (kendiliğinden 1,0'dan farklı YAZMA; her değişiklik BALANCE_REV).
+## Kademe ölçeğinden SONRA, kalkandan ÖNCE uygulanır (_enable_regular_shield içinde: tüm doğuş yolları + istemci aynı yerden geçer).
+const LATE_PRESSURE := {
+	6: {"hp": 1.0, "dmg": 1.0}, 7: {"hp": 1.0, "dmg": 1.0}, 8: {"hp": 1.0, "dmg": 1.0},
+	9: {"hp": 1.0, "dmg": 1.0}, 10: {"hp": 1.0, "dmg": 1.0},
+}
+
+
+static func late_pressure(tier: int) -> Dictionary:
+	return LATE_PRESSURE.get(tier, {"hp": 1.0, "dmg": 1.0})
+
+
+func _apply_late_pressure(enemy: Node, tier: int) -> void:
+	var lp: Dictionary = late_pressure(tier)
+	var hp_mult: float = float(lp["hp"])
+	var dmg_mult: float = float(lp["dmg"])
+	if hp_mult == 1.0 and dmg_mult == 1.0:
+		return
+	if enemy.has_method("_ew_wake"):
+		enemy._ew_wake() ## uyuyan yaratığa stat yazmadan önce uyandır (CLAUDE.md, madde 267/278)
+	enemy.max_health *= hp_mult
+	enemy.health = enemy.max_health
+	enemy.contact_damage *= dmg_mult
+	if enemy.ranged_damage > 0.0:
+		enemy.ranged_damage *= dmg_mult
+	enemy.health_changed.emit(enemy.health, enemy.max_health)
+
+
 ## Normal yaratığa (Kademe `tier` için) kalkanını verir - tüm doğuş yolları (normal, görev dalgası, debug, istemci RPC) buradan geçer.
 func _enable_regular_shield(enemy: Node, tier: int) -> void:
+	_apply_late_pressure(enemy, tier)
 	if tier >= REGULAR_SHIELD_MIN_TIER and enemy.has_method("enable_item_shield"):
 		enemy.enable_item_shield(regular_shield_protection(tier), REGULAR_SHIELD_RATIO)
 const BOSS_SHIELD_RATIO := 1.3 * 0.9 / 0.85 ## (BEŞİNCİ tur: can ×0.85, kalkan ×0.9 - bkz. BOSS_HEALTH_MULT üstündeki not) eskiden 1.3. Kullanıcı isteği: "bossların kalkanlarını canlarından %30 daha fazla olacak şekilde dengele" - shield = health * 1.3 (eskiden 6.24, ~6.2x can)
@@ -616,27 +739,31 @@ const DEBUG_RAMP_TEST_TARGET := 200
 var _debug_ramp_elapsed: float = 0.0
 var _network_sync_timer: float = 0.0
 var _next_network_enemy_id: int = 1
-## ELİT HAVUZU (kullanıcı 2026-10-08: "tüm bosslar bundan sonra elit yaratıkların yerine geçsin; hafif büyük ve yıldızlı"): eski bossların 14 yaratığı.
-## Her Kademe'nin TEK eliti artık rastgele roster yaratığı değil bu havuzdan gelir (elite_candidates: Kademe roster'ının ailelerine uyanlar;
-## hiçbiri uymazsa komşu kademelere genişler - ör. sadece slime olan Kademe 9). Boss sistemi kapalıdır (GameManager.bosses_enabled).
-const ELITE_POOL := [
-	"iskelet3", "lich3", "ork3", "agac3", "golem3", "rontgen2", "rontgen3",
-	"demon3", "hayalet3", "mantar3", "slime2", "vampire3", "zombie3", "iblis3",
-]
+## ELİT TABLOSU (madde 597, kullanıcı: "haritanın kendi 5 eliti, zayıftan güçlüye"): kademe -> elit kimliği. 2026-11-13 kullanıcı: "elitler her kademede gelsin,
+## 2 kademede 1 değil" -> HER kademede 1 elit; çift kademede tablodaki, TEK kademede bir sonraki çift kademenin eliti (elite_candidates). Bu tablo ANA HARİTANIN elitleri; Aşama 2'de harita profiline (`elitler`) taşınır.
+## Elit çarpanları (enemy.gd make_elite: can/kalkan x15, hasar x1,5, boy x1,5) AYNI; elit tabanı = pool_stats(kimlik, kademe, true) (P = kademe + 2).
+## (Eskiden kademe başına 1 elit, 14 kimlikli ELITE_POOL + aileye göre elite_candidates idi.)
+const ELITE_BY_TIER := {
+	2: "iskelet3",
+	4: "zombie3",
+	6: "lich3",
+	8: "ork3",
+	10: "agac3",
+}
 var _boss_tiers_spawned: Dictionary = {}
 var _final_spawned: bool = false
 
 ## ==============================================================================
-## ZAFER + SONSUZ MOD (kullanıcı isteği 2026-10-05: "Final'in 13 bossunu yenince Hayatta Kaldın penceresi, Sonsuza Devam Et").
+## ZAFER + SONSUZ MOD (kullanıcı isteği 2026-10-05: "Final'in 13 bossunu yenince Hayatta Kaldın penceresi, Sonsuza Devam Et"; madde 597: Final = LAST_TIER'ın bossu).
 ## Hepsi HOST'ta (tek oyunculu = host) çalışır; durum NetworkManager.broadcast_victory / broadcast_endless_* ile herkese
 ## iletilir. Hesaplar endless_math.gd'de (tek yerde, testler de oradan okur).
-##  NORMAL  -> Final'in doğan bosslarının (_final_bosses) HEPSİ ölünce _check_victory -> VICTORY
+##  NORMAL  -> SON kademenin (LAST_TIER) doğan bosslarının (_final_bosses) HEPSİ ölünce _check_victory -> VICTORY
 ##  VICTORY -> yaratıklar dağılır (dismiss_without_reward: ödül/öldürme yok), doğuş durur, zafer penceresi açık;
 ##             host "Sonsuza Devam Et"e basınca begin_endless -> ENDLESS
-##  ENDLESS -> her tier_duration saniyede yeni KAT: yeni doğan yaratıkların istatistik kademesi 15 + kat (16, 17, ...),
-##             ROSTER 15'te kalır (TIER_ROSTER'da 16+ yok, bilinmeyen kademe 1. kademeye düşerdi); her 3 katta bir boss dalgası;
+##  ENDLESS -> her tier_duration saniyede yeni KAT: yeni doğan yaratıkların istatistik kademesi LAST_TIER + kat (11, 12, ...),
+##             ROSTER LAST_TIER'da kalır (TIER_ROSTER'da LAST_TIER+1.. yok, bilinmeyen kademe 1. kademeye düşerdi); her 3 katta bir boss dalgası;
 ##             her katta 1 elit. Kademe boss kapısı (_tier_time tutma) sonsuzda YOK.
-## Kademe saati/kapısı/bildirimi (_tier_time, _check_tier_announcement) bu bloktan etkilenmez - Final'den sonra aynen donuk kalır.
+## Kademe saati/kapısı/bildirimi (_tier_time, _check_tier_announcement) bu bloktan etkilenmez - zaferden sonra aynen donuk kalır.
 ## ==============================================================================
 const EndlessMathScript: GDScript = preload("res://scripts/endless_math.gd")
 const CameraShakeScript: GDScript = preload("res://scripts/camera_shake.gd")
@@ -649,7 +776,8 @@ var _endless_bosses_spawned: Dictionary = {} ## kat -> true
 var _endless_elite_due: Dictionary = {} ## kat -> katın içindeki en erken elit anı (sonsuz mod başından saniye)
 var _endless_elite_spawned: Dictionary = {} ## kat -> true
 
-## ELİT YARATIK (kullanıcı isteği 2026-10-02 - kurallar enemy.gd make_elite üstünde): her Kademe'de TAM 1 elit. Kademe'nin
+## ELİT YARATIK (kullanıcı isteği 2026-10-02 - kurallar enemy.gd make_elite üstünde; madde 597: yalnız ELITE_BY_TIER'daki ÇİFT kademelerde TAM 1 elit,
+## boss kademesinde [LAST_TIER] elit ilk yarıda gelir, boss sonda). Kademe'nin
 ## ilk sıradan doğumunda o Kademe için Kademe saatinde (_tier_time) rastgele bir "vade" seçilir - ilk doğumdan
 ## ELITE_WINDOW_MIN..MAX x tier_duration sonra, ama Kademe bitmeden ELITE_END_MARGIN sn önceyi geçmeyecek şekilde (vade
 ## Kademe'nin dışına düşüp o Kademe'nin eliti hiç doğmamasın). Vadeden sonraki ilk sıradan doğum (rastgele seçilmiş
@@ -750,21 +878,20 @@ func export_handover() -> Dictionary:
 	for t in _elite_spawned_tiers.keys():
 		if not living_elite_tiers.has(int(t)):
 			done_elite_tiers.append(int(t))
-	return {"boss_tiers": done_boss_tiers, "elite_tiers": done_elite_tiers, "final_spawned": _final_spawned, "final_gate_opened": _final_gate_opened,
+	return {"boss_tiers": done_boss_tiers, "elite_tiers": done_elite_tiers, "final_spawned": _final_spawned,
 		"run_phase": _run_phase, "held_total": _held_total, "spawn_tier": _spawn_tier, "announced_tier": _announced_tier,
 		"endless_start": _endless_start_time, "endless_layer": _endless_layer, "endless_bosses": _endless_bosses_spawned.keys(),
 		"endless_elite": _endless_elite_spawned.keys()}
 
 
-## export_handover'ın tersi (yeni host'un Main'inde, oyun saati geri yüklendikten SONRA). Final: koşu zaferden önceyse bosslar yeni Main'de yok
-## -> Final yeniden doğar (_final_spawned false); zaferden sonraysa (VICTORY/ENDLESS) bayrak kalır.
+## export_handover'ın tersi (yeni host'un Main'inde, oyun saati geri yüklendikten SONRA). SON boss: koşu zaferden önceyse bosslar yeni Main'de yok
+## -> son boss yeniden doğar (_final_spawned false, `boss_tiers`'a yalnız ölüler girer); zaferden sonraysa (VICTORY/ENDLESS) bayrak kalır.
 func import_handover(d: Dictionary) -> void:
 	for t in d.get("boss_tiers", []):
 		_boss_tiers_spawned[int(t)] = true
 	for t in d.get("elite_tiers", []):
 		_elite_spawned_tiers[int(t)] = true
 	_run_phase = int(d.get("run_phase", RunPhase.NORMAL))
-	_final_gate_opened = bool(d.get("final_gate_opened", false))
 	_final_spawned = bool(d.get("final_spawned", false)) and _run_phase != RunPhase.NORMAL
 	_held_total = float(d.get("held_total", 0.0))
 	## (Varsayılan değerleri .get'in içinde hesaplama: _current_tier() -> _tier_time() _held_total'ı game_time'a göre sıfırlayabilir.)
@@ -835,16 +962,22 @@ func _on_became_host() -> void:
 	## çakışarak) yeniden doğardı. Zamanı henüz gelmemiş olanlara dokunulmuyor,
 	## normal akışta kendi zamanında doğarlar.
 	var t: float = GameManager.game_time
-	_announced_tier = mini(1 + int(_tier_time() / tier_duration), FINAL_TIER) ## yeni host geçmiş Kademeleri yeniden duyurmasın
+	_announced_tier = mini(1 + int(_tier_time() / tier_duration), LAST_TIER) ## yeni host geçmiş Kademeleri yeniden duyurmasın
 	_spawn_tier = _current_tier() ## kapı (bkz. KADEME KAPISI): yeni host'ta eski kademenin sayımı yok, kademe başlamış sayılır
 	for tier in _active_boss_tiers().keys():
 		var trigger_time: float = (tier - 1) * tier_duration + tier_duration * boss_trigger_fraction
 		if t >= trigger_time:
+			if int(tier) == LAST_TIER and not (GameManager.victory_reached or GameManager.endless_active):
+				## SON boss (ölümü zafer): doğmuş sayılması için yaşayan düğümlerinin bulunması şart (zafer _final_bosses'a bakar). Yaşayan yoksa
+				## ve zafer de gelmediyse yeniden doğurulur (tetik zamanı geçtiği için hemen).
+				var living: Array = _living_bosses_of(_active_boss_tiers()[tier])
+				if not living.is_empty():
+					_boss_tiers_spawned[tier] = true
+					_final_spawned = true
+					_final_bosses = living
+					_tier_bosses[tier] = living
+				continue
 			_boss_tiers_spawned[tier] = true
-	var final_trigger_time: float = (FINAL_TIER - 1) * tier_duration
-	if t >= final_trigger_time:
-		_final_spawned = true
-		_final_gate_opened = true
 	## Elit: hâlâ yaşayan elitlerin kademeleri "doğdu" sayılır (yeni host aynı kademede ikinci bir elit doğurmasın).
 	for enemy: Node in get_tree().get_nodes_in_group("elite_enemies"):
 		if is_instance_valid(enemy):
@@ -927,7 +1060,7 @@ func _process(delta: float) -> void:
 		if _gate_check_accum >= GATE_CHECK_SECONDS:
 			_gate_check_accum = 0.0
 			_check_boss_tiers()
-			_check_final_tier()
+			_check_auto_endless()
 			_check_endless_boss_wave()
 
 
@@ -1050,18 +1183,16 @@ static func hp_must_send(sent: Dictionary, net_id: int, hp: float, shield: float
 	return false
 
 
-## Which Kademe (1-15) the run is currently in, based on elapsed game_time.
-## Clamped at 15 so TIER_ROSTER lookups stay valid even once the Final Kademe
-## has been reached (tier 15's roster keeps providing "trash" spawns
-## alongside the one-time Final Kademe boss dump).
+## Which Kademe (1-LAST_TIER) the run is currently in, based on elapsed game_time.
+## Clamped at LAST_TIER so TIER_ROSTER lookups stay valid (son kademenin rosteri, son boss doğduktan / zaferden sonra da sıradan yaratık vermeye devam eder).
 func _current_tier() -> int:
 	var tier: int = 1 + int(_tier_time() / tier_duration)
-	return clamp(tier, 1, 15)
+	return clamp(tier, 1, LAST_TIER)
 
 
 ## Kademe bildirimi (kullanıcı isteği 2026-10-04): Kademe saati (boss kapısı dahil - _tier_time) yeni bir Kademe'ye geçince
-## host numarayı herkese yayar (NetworkManager.broadcast_creature_tier_reached -> main.gd toast). Final Kademe (16) de
-## kendi numarasıyla gelir (_current_tier 15'te kısıldığı için burada ham değer okunur).
+## host numarayı herkese yayar (NetworkManager.broadcast_creature_tier_reached -> main.gd toast). LAST_TIER'dan sonra bildirim yok
+## (sonsuz mod katları kendi bildirimiyle gelir, broadcast_endless_layer).
 ## KULLANICI İSTEĞİ (2026-10-05): "kademe atlamaları önceki kademenin yaratıkları tamamen öldüğünde başlamalı" - bir Kademe artık
 ## SAAT dolunca değil, KAPI açılınca (önceki kademenin yaratıkları ölünce, bkz. KADEME KAPISI bloğu) başlar: bildirim, yeni roster,
 ## o kademenin bossu ve Final hep kapıya bağlı. Saat (_tier_time) yine akar; sadece "başlama" bekler.
@@ -1073,25 +1204,20 @@ var _gate_check_accum: float = GATE_CHECK_SECONDS ## ilk karede hemen bak
 
 
 func _check_tier_announcement() -> void:
-	var top_tier: int = FINAL_TIER if _final_active() else FINAL_TIER - 1 ## Final yokken "Kademe XVI" bildirimi yok
-	var time_tier: int = mini(1 + int(_tier_time() / tier_duration), top_tier)
+	var time_tier: int = mini(1 + int(_tier_time() / tier_duration), LAST_TIER) ## LAST_TIER'dan sonra "Kademe XI" bildirimi yok
 	if time_tier < _announced_tier: ## yeni oyun: saat sıfırlandı
 		_announced_tier = time_tier
 		_spawn_tier = mini(_spawn_tier, _current_tier())
-		_final_gate_opened = false
 		_gate_wait_started_msec = 0
-		_final_gate_wait_started_msec = 0
 		return
 	var now_msec: int = Time.get_ticks_msec()
-	if (_gate_wait_started_msec != 0 or _final_gate_wait_started_msec != 0) and now_msec - _announce_poll_msec < ANNOUNCE_POLL_MSEC:
+	if _gate_wait_started_msec != 0 and now_msec - _announce_poll_msec < ANNOUNCE_POLL_MSEC:
 		return
 	_announce_poll_msec = now_msec
 	_resolve_spawn_tier() ## kapı açıksa _spawn_tier zaman kademesine yetişir
 	_gate_rush_tick()
 	_boss_hold_rescue_tick()
 	var started: int = _spawn_tier
-	if _final_active() and time_tier >= FINAL_TIER and _final_gate_open():
-		started = FINAL_TIER
 	if started > _announced_tier:
 		_announced_tier = started
 		NetworkManager.broadcast_creature_tier_reached.rpc(started)
@@ -1100,7 +1226,7 @@ func _check_tier_announcement() -> void:
 ## ==============================================================================
 ## KADEME BOSS KAPISI (kullanıcı isteği: "mevcut kademenin boss'unu öldürmeden diğer kademeye atlanmamalı")
 ## Kademe (roster, ölçekleme, sonraki bossların ve Final Kademe'nin tetik zamanı) artık ham game_time'a değil,
-## _tier_time()'a bağlı: game_time ile birlikte akar AMA bir kademenin (BOSS_TIERS) boss'u/bosslarından biri
+## _tier_time()'a bağlı: game_time ile birlikte akar AMA bir kademenin (NEW_BOSS_TIERS) boss'u/bosslarından biri
 ## HÂLÂ SAĞKEN o kademenin bitiş sınırında (kademe N için N * tier_duration) DURUR - boss(lar) ölene kadar
 ## kademe N'de kalınır (yeni kademenin yaratıkları, sonraki kademenin bossu, Final gelmez), ölünce saat kaldığı
 ## yerden devam eder (kademe atlamaz, birden fazla kademe birden atlanmaz). Boss sınırdan ÖNCE öldürülürse
@@ -1160,10 +1286,20 @@ func _player_count() -> int:
 ## 0.35 -> 0.25 (solo oyun başında 70 -> 50 yaratık) VE tavan artık Kademe sınırlarında basamak basamak
 ## zıplamıyor: Kademe saatine (_tier_time, boss kapısında durur) göre SÜREKLİ büyüyor, Kademe 15'in başında
 ## (14 x tier_duration) tam tavana ulaşıyor. Nihai tavan (max_concurrent_enemies) değişmedi.
+## 2026-11-15: eğri hâlâ 15 kademelik oyuna göre (CROWD_FULL_TIER_SPANS = 14); oyun 10 kademeye inince (rev 151) tavan K10'un başında %73'te,
+## K8'de %63'te kalıyor (5 oyuncu: 300 yerine en çok ~220 yaratık). Bunu 10 kademeye göre düzeltmek denendi ve AYNI GÜN GERİ ALINDI
+## (kullanıcı: "yaratık sayısını çok arttırmak istemiyorum, onun yerine dayanıklılıklarını arttırsak") - eğri BİLEREK eski hâlinde,
+## zorluk yerine kademeyle artan dayanıklılıktan gelir (bkz. tier_toughness_mult). Sayıyı artırma.
 const TIER_1_CAP_SCALE := 0.25
+const CROWD_FULL_TIER_SPANS := 14.0 ## tavanın tam dolduğu kademe saati = bu x tier_duration (Kademe 15'in başı)
 
 func _tier_crowding_scale() -> float:
-	var progress: float = clampf(_tier_time() / (14.0 * tier_duration), 0.0, 1.0)
+	return crowding_scale_at(_tier_time(), tier_duration)
+
+
+## Saf işlev (testli): kademe saatine göre tavan oranı, TIER_1_CAP_SCALE -> 1,0.
+static func crowding_scale_at(tier_time: float, tier_dur: float) -> float:
+	var progress: float = clampf(tier_time / (CROWD_FULL_TIER_SPANS * maxf(tier_dur, 0.001)), 0.0, 1.0)
 	return lerp(TIER_1_CAP_SCALE, 1.0, progress)
 
 ## Tavan sayımı: kenar bekçileri (guard_camps.gd, "guards" grubu) ve boss minyonları ("summons") sayılmaz - 60+ bekçi sıradan doğuşu tavanda kilitlerdi.
@@ -1187,7 +1323,7 @@ func _scaled_enemy_cap() -> int:
 	return cap
 
 
-## Oyuncu sayısına göre NİHAİ (Kademe 15) yaratık tavanı: 1->120, 2->165, 3->210, 4->255, 5->300 (2026-11-09; eski 105/135/165/195/225 2026-11-07; 2026-10-17'de 105 + 21/oyuncu, 2026-10-19'da +50/oyuncu, 2026-10-10'da 150 + 30/oyuncu, ondan önce 250 + 50/oyuncu, bkz.
+## Oyuncu sayısına göre NİHAİ (son kademe, bkz. crowding_scale_at) yaratık tavanı: 1->120, 2->165, 3->210, 4->255, 5->300 (2026-11-09; eski 105/135/165/195/225 2026-11-07; 2026-10-17'de 105 + 21/oyuncu, 2026-10-19'da +50/oyuncu, 2026-10-10'da 150 + 30/oyuncu, ondan önce 250 + 50/oyuncu, bkz.
 ## max_concurrent_enemies notu). Erken kademelerde bu tavan _tier_crowding_scale ile ayrıca kısılır (değişmedi).
 ## Yaratık canı/kalkanı oyuncu sayısından BAĞIMSIZ olarak ayrı ölçeklenir - burası sadece sayı.
 func player_enemy_cap(players: int) -> int:
@@ -1326,7 +1462,10 @@ func _anchor_movement_direction(anchor: Node) -> Vector2:
 ## "beklenenden" ne kadar yüksek seviyedeyse o kadar ekstra yaratık.
 func _power_extra_spawn_count() -> int:
 	var expected_level: float = float(_current_tier()) * POWER_LEVEL_PER_TIER
-	var levels_over: float = float(GameManager.team_level) - expected_level
+	var team_lvl: int = GameManager.team_level
+	if GameModeScript.is_pvp():
+		team_lvl = maxi(team_lvl, PvpNetScript.top_team_level()) ## iki takımın ayrı seviyesi var: zorluk yükseğine göre
+	var levels_over: float = float(team_lvl) - expected_level
 	if levels_over <= 0.0:
 		return 0
 	return clampi(int(levels_over / POWER_EXTRA_SPAWN_PER_LEVELS_OVER), 0, POWER_MAX_EXTRA_SPAWNS)
@@ -1338,7 +1477,7 @@ func _power_extra_spawn_count() -> int:
 ## Kademe zamana göre ilerler (_current_tier) ama SPAWN kademesi (_spawn_tier) ona ancak önceki kademelerin
 ## SAĞ KALAN normal yaratıkları öldürülünce yetişir. Kapı kapalıyken yeni yaratık HİÇ doğmaz (eski kademeyi
 ## sonsuz doğurmak temizlemeyi imkânsız kılardı); son yaratık ölünce yeni kademenin listesiyle spawn başlar.
-## Bosslar bu kapıya tabi DEĞİL: kendi zaman tetikleyicileriyle (BOSS_TIERS/FINAL_TIER) gelmeye devam eder ve
+## Bosslar bu kapıya tabi DEĞİL: kendi zaman tetikleyicileriyle (NEW_BOSS_TIERS) gelmeye devam eder ve
 ## sağ kalan bir boss kapıyı tutmaz. Oyun süresi/boss zamanlaması hiçbir zaman durmaz - en kötü ihtimalle
 ## (ör. ulaşılamayan tek bir eski yaratık) yeni yaratık gelmez, oyun kilitlenmez.
 ## Sağ kalan yaratık "spawn_tier" meta'sıyla (bkz. _spawn_regular_enemy) işaretlenir; meta'sı olmayanlar
@@ -1427,13 +1566,11 @@ func _boss_hold_rescue_tick() -> void:
 ## _check_tier_announcement'tan çağrılır (kapı beklerken 250 ms'de bir, bekleme yokken her kare ama hemen çıkar).
 func _gate_rush_tick() -> void:
 	var now_msec: int = Time.get_ticks_msec()
-	var wait_started: int = _gate_wait_started_msec if _gate_wait_started_msec != 0 else _final_gate_wait_started_msec
+	var wait_started: int = _gate_wait_started_msec
 	var waiting: bool = wait_started != 0 and now_msec - wait_started >= GATE_RUSH_DELAY_MSEC
 	if not waiting and not _gate_rush_active:
 		return
 	var gate_tier: int = _current_tier()
-	if _gate_wait_started_msec == 0 and _final_gate_wait_started_msec != 0:
-		gate_tier = FINAL_TIER ## Final kapısı: 1-15. kademenin hepsi eski sayılır (bkz. _final_gate_open)
 	var anchors: Array[Vector2] = _living_player_positions()
 	var vision_r: float = VisionFogScript.current_radius(get_tree())
 	var any_rushed: bool = false
@@ -1517,49 +1654,7 @@ func _resolve_spawn_tier() -> int:
 				_gate_wait_started_msec = 0
 	else:
 		_gate_wait_started_msec = 0
-	if _final_pending():
-		return 0 ## Final, 15. kademenin son yaratığını bekliyor: yeni yaratık doğmaz (yoksa sayım hiç sıfırlanmazdı)
 	return _spawn_tier if _spawn_tier >= time_tier else 0
-
-
-## FİNAL KAPISI: Final Kademe (16) de diğer kademeler gibi önceki kademelerin (1-15) sağ kalan yaratıkları ölünce başlar.
-## Bekleme süresince _resolve_spawn_tier yeni yaratık doğurmaz; aynı güvenlik (yakınlık süzgeci + GATE_MAX_WAIT_MSEC) geçerli.
-var _final_gate_opened: bool = false
-var _final_gate_wait_started_msec: int = 0
-
-
-## Final var mı: eski 13'lü Final (bosses_enabled) ya da yeni tek bossluk Final (new_final_enabled).
-func _final_active() -> bool:
-	return GameManager.bosses_enabled or (new_final_enabled and not NEW_FINAL_BOSSES.is_empty())
-
-
-func _final_ids() -> Array:
-	return FINAL_CREATURES if GameManager.bosses_enabled else NEW_FINAL_BOSSES
-
-
-func _final_pending() -> bool:
-	if not _final_active():
-		return false ## Final yok: yeni yaratık doğumu 15. kademeden sonra durmaz
-	return not _final_gate_opened and not _final_spawned and _tier_time() >= (FINAL_TIER - 1) * tier_duration
-
-
-func _final_gate_open() -> bool:
-	if _final_gate_opened or _final_spawned:
-		return true
-	if _tier_time() < (FINAL_TIER - 1) * tier_duration:
-		return false
-	if _older_tier_survivor_count(FINAL_TIER) == 0:
-		_final_gate_opened = true
-		_final_gate_wait_started_msec = 0
-		return true
-	var now_msec: int = Time.get_ticks_msec()
-	if _final_gate_wait_started_msec == 0:
-		_final_gate_wait_started_msec = now_msec
-	elif now_msec - _final_gate_wait_started_msec >= GATE_MAX_WAIT_MSEC:
-		_final_gate_opened = true
-		_final_gate_wait_started_msec = 0
-		return true
-	return false
 
 
 ## Yeni kademe şu an eski kademenin sağ kalanlarını mı bekliyor (HUD/test için).
@@ -1596,6 +1691,9 @@ func _outdoor_living_players() -> Array[Node]:
 static func _underground(n: Node) -> bool:
 	if n.get("in_limbo") == true: ## ruh hâlindeki oyuncu (madde 438) da doğuş çapası olmaz - dünyada değil
 		return true
+	## PvPvE takım üssündeki oyuncu (madde 607) satıcı bölgesindeki gibi doğuş çapası olmaz: kasılmak için üsten çıkmak gerekir.
+	if n is Node2D and BaseZonesScript.shelters((n as Node2D).global_position):
+		return true
 	var v: Variant = n.get("in_dungeon")
 	return v != null and str(v) != ""
 
@@ -1618,7 +1716,7 @@ func _ambush_spawn_position(center: Vector2, bias_dir: Vector2) -> Variant:
 		var angle: float = bias_dir.angle() + randf_range(-half_arc, half_arc)
 		var dist: float = randf_range(min_spawn_distance, max_spawn_distance + AMBUSH_EXTRA_DISTANCE)
 		var pos: Vector2 = center + Vector2(cos(angle), sin(angle)) * dist
-		if GameManager.is_position_blocked_by_terrain(pos):
+		if _spawn_point_invalid(pos):
 			continue
 		if EnemyPathingScript.line_blocked(center, pos):
 			return pos
@@ -1631,7 +1729,7 @@ func _ambush_pack_member_position(base: Vector2, index: int) -> Vector2:
 		return base
 	for _attempt in range(6):
 		var candidate: Vector2 = base + Vector2.from_angle(randf() * TAU) * randf_range(20.0, AMBUSH_PACK_SPREAD)
-		if not GameManager.is_position_blocked_by_terrain(candidate):
+		if not _spawn_point_invalid(candidate):
 			return candidate
 	return base
 
@@ -1667,10 +1765,9 @@ func _spawn_regular_enemy() -> void:
 	for i in range(spawn_count):
 		if _regular_enemy_count() >= cap:
 			return
-		## ELİT önce atılır: elitse yaratık kimliği ELİT HAVUZUNDAN (eski bosslar) seçilir, değilse roster'dan.
+		## ELİT önce atılır: elitse yaratık kimliği ELİT TABLOSUNDAN (ELITE_BY_TIER; sonsuzda 5 elitten biri) seçilir, değilse roster'dan.
 		var elite: bool = _roll_elite_for(tier)
-		var elite_ids: Array = elite_candidates(tier) if elite else []
-		var id: String = (elite_ids[randi() % elite_ids.size()] if elite else roster[randi() % roster.size()])
+		var id: String = (_pick_elite_id(tier) if elite else roster[randi() % roster.size()])
 		var spawn_pos: Vector2
 		if ambush_pos != null:
 			spawn_pos = _ambush_pack_member_position(Vector2(ambush_pos), i)
@@ -1684,6 +1781,7 @@ func _spawn_regular_enemy() -> void:
 				_unroll_elite(tier)
 			continue
 		enemy.set_meta("spawn_tier", tier) ## bkz. Kademe kapısı notu (_older_tier_survivor_count) - ROSTER kademesi, ölçek değil
+		_apply_base_stats(enemy, pool_stats(id, scale_tier, elite)) ## hesaplanan taban (elit: P = kademe + 2), kademe ölçeğinden ÖNCE
 		if enemy.has_method("apply_tier_scaling"):
 			enemy.apply_tier_scaling(scale_tier)
 		_enable_regular_shield(enemy, tier)
@@ -1699,9 +1797,32 @@ func _spawn_regular_enemy() -> void:
 
 
 
-## Şu an doğabilecek kademe bossları: bosses_enabled kapalıyken sadece yeni bosslar (NEW_BOSS_TIERS), açıkken eski tablo (BOSS_TIERS).
+## Şu an doğabilecek kademe bossları (kademe -> kimlikler): seçili haritanın profilindeki "bosslar" tablosu (madde 682; Aşama 3'ün boss
+## dağıtımı), tablosu olmayan harita (ana, Ayaz Dağı) ANA HARİTANIN tablosunu (NEW_BOSS_TIERS) kullanır.
 func _active_boss_tiers() -> Dictionary:
-	return BOSS_TIERS if GameManager.bosses_enabled else NEW_BOSS_TIERS
+	return boss_tiers_for_map(MapProfilesScript.current_id())
+
+
+static func boss_tiers_for_map(map_id: String) -> Dictionary:
+	var t: Variant = MapProfilesScript.get_profile(map_id).get("bosslar", null)
+	return t if t is Dictionary and not (t as Dictionary).is_empty() else NEW_BOSS_TIERS
+
+
+## Bu kimlik listesinde gece bossu var mı (bkz. NIGHT_BOSS_IDS).
+static func needs_night(ids: Array) -> bool:
+	for id in ids:
+		if NIGHT_BOSS_IDS.has(str(id)):
+			return true
+	return false
+
+
+## Verilen kimliklerden sağ olan boss düğümleri ("boss" grubu).
+func _living_bosses_of(ids: Array) -> Array:
+	var out: Array = []
+	for b: Node in get_tree().get_nodes_in_group("boss"):
+		if is_instance_valid(b) and b.get("is_dead") != true and ids.has(str(b.get_meta("creature_id", ""))):
+			out.append(b)
+	return out
 
 
 func _check_boss_tiers() -> void:
@@ -1715,12 +1836,15 @@ func _check_boss_tiers() -> void:
 			continue
 		var trigger_time: float = (tier - 1) * tier_duration + tier_duration * boss_trigger_fraction
 		if t >= trigger_time:
-			if NIGHT_BOSS_TIERS.has(int(tier)) and not _night_ready_for_boss():
+			if needs_night(boss_tiers[tier]) and not _night_ready_for_boss():
 				continue ## gece kilidi istendi, derin geceyi bekliyor (bir sonraki bakışta tekrar)
 			_boss_tiers_spawned[tier] = true
 			var spawned: Array = _spawn_boss_group(boss_tiers[tier], tier)
 			if spawned.is_empty():
 				_boss_tiers_spawned.erase(tier) ## hiç doğmadı (ör. o an canlı oyuncu çapası yoktu): sonraki bakışta yeniden dene
+			elif int(tier) == LAST_TIER:
+				_final_spawned = true ## SON boss: hepsi ölünce zafer (bkz. _check_victory)
+				_final_bosses = spawned
 
 
 ## Gece bossu için gece hazır mı: atmosfer varsa gece kilidini ister ve derin gece olunca true döner; atmosfer yoksa (test/ana menü) hemen true.
@@ -1730,22 +1854,6 @@ func _night_ready_for_boss() -> bool:
 		return true
 	atmo.call("set_night_lock", true)
 	return bool(atmo.call("is_deep_night"))
-
-
-func _check_final_tier() -> void:
-	if not _final_active():
-		_check_auto_endless() ## boss/Final yok: Kademe XV bitince doğrudan sonsuz mod
-		return
-	if _final_spawned:
-		return
-	## 15. kademenin bossları ölmeden Final gelmez (bkz. _tier_time) VE 1-15. kademelerin yaratıkları ölmeden de gelmez (bkz. _final_gate_open)
-	if _final_gate_open():
-		_final_spawned = true
-		var spawned: Array = _spawn_boss_group(_final_ids(), FINAL_TIER)
-		if spawned.is_empty():
-			_final_spawned = false ## hiç doğmadı (ör. o an canlı oyuncu çapası yoktu): sonraki karede yeniden dene - yoksa Final ve zafer hiç gelmezdi
-		else:
-			_final_bosses = spawned ## hepsi ölünce zafer (bkz. _check_victory)
 
 
 ## Doğan boss düğümlerini döner (boş = hiçbiri doğmadı).
@@ -1824,6 +1932,7 @@ func _rpc_client_spawn_creature(id: String, pos: Vector2, tier: int, is_boss: bo
 		_apply_global_buff(enemy, player_count)
 		_apply_summon_stats(enemy, SUMMON_STATS[id])
 	else:
+		_apply_base_stats(enemy, pool_stats(id, tier, is_elite)) ## host (_spawn_regular_enemy) ile AYNI hesaplanan taban
 		if enemy.has_method("apply_tier_scaling"):
 			enemy.apply_tier_scaling(tier)
 		_enable_regular_shield(enemy, tier)
@@ -1836,7 +1945,10 @@ func _rpc_client_spawn_creature(id: String, pos: Vector2, tier: int, is_boss: bo
 ## bossu farklı statla doğardı). Sıra: boss statı -> kalkan -> global çarpanlar -> (varsa) elle belirlenmiş nihai stat -> çubuk (çubuk SON, güncel canı okusun).
 ## player_count: istemci doğuşunda host'un oyuncu sayısı (0 = kendin hesapla, bkz. _apply_global_buff).
 func _setup_boss_enemy(enemy: Node, id: String, tier: int, player_count: int = 0) -> void:
-	var fixed: Dictionary = FIXED_BOSS_STATS.get(id, {})
+	var fixed: Dictionary = boss_fixed_stats(id, tier) ## kademe yuvasına göre (K5 / K10), bkz. BOSS_SLOT_STATS
+	enemy.set_meta("boss_id", id) ## boss müziği parça seçimi (boss_music.gd)
+	enemy.set_meta("boss_damage_mult", boss_slot_damage_mult(id, tier)) ## özel saldırı sabitleri (boss betikleri) bunu çarpar
+	BalanceLogScript.note_boss_spawn(id, player_count if player_count > 0 else _player_count()) ## boss dövüş süresi kaydı (madde 597)
 	## Elle statlı bosslarda zincir referans bossun taban statıyla çalışır: ödül (altın/XP) o referansa eşit kalır, sağlık/kalkan/hasar aşağıda ezilir.
 	var base_stats: Dictionary = boss_base_stats(str(fixed.get("reward_ref", id)), tier)
 	if enemy.has_method("apply_boss_stats"):
@@ -1885,24 +1997,76 @@ func _apply_endless_boss_wave_mult(enemy: Node, scale_tier: int) -> void:
 	enemy.item_shield_changed.emit(enemy.item_shield_hp, enemy.item_shield_max)
 
 
+## Elit kimliği: normalde ELITE_BY_TIER[kademe]; sonsuz modda kat eliti = haritanın 5 elitinden rastgele (madde 597).
+func _pick_elite_id(roster_tier: int) -> String:
+	if _run_phase == RunPhase.ENDLESS:
+		var all_ids: Array = ELITE_BY_TIER.values()
+		return str(all_ids[randi() % all_ids.size()])
+	return str(elite_candidates(roster_tier)[0])
+
+
+## HESAPLANAN TABAN (madde 597, PLAN bölüm 5): yaratık sahnelerindeki taban değerler (10 + 9P) x aile can çarpanı, (3 + 2,2P) x aile hasar çarpanı,
+## 2 + 2P formüllerinden üretilmiş (P = güç seviyesi; boss_base_stats ile AYNI formül). ELİT için P = kademe + ELITE_POWER_OFFSET ve aile CAN çarpanı
+## en az 1,0 (zayıf aileler [slime/fare/goblin] elit olunca çok sünger kalmasın) -> elit canı kademeyle ARTAR. Sonra kademe ölçeği + make_elite biner.
+## `tier` = yaratığın ölçek kademesi (sonsuzda LAST_TIER'da kısılır). SIRADAN yaratık için boş sözlük = SAHNE DEĞERLERİYLE doğar (ana haritanın
+## bugünkü dengesi korunur; diğer haritalar için REF_P tablosu Aşama 2'de buraya gelir). Host doğuşu (_spawn_regular_enemy / spawn_mission_elite) ve
+## istemci kurulumu (_rpc_client_spawn_creature) AYNI işlevi çağırır - iki kopya ayrışmasın.
+const ELITE_POWER_OFFSET := 2
+static func pool_stats(id: String, tier: int, elite: bool) -> Dictionary:
+	if not elite:
+		return {}
+	var power: float = float(mini(maxi(tier, 1), LAST_TIER) + ELITE_POWER_OFFSET)
+	var mult: Dictionary = FAMILY_MULT.get(ID_FAMILY.get(id, ""), {"hp": 1.0, "dmg": 1.0})
+	return {
+		"health": (10.0 + 9.0 * power) * maxf(1.0, float(mult["hp"])),
+		"damage": (3.0 + 2.2 * power) * float(mult["dmg"]),
+		"xp": 2.0 + 2.0 * power,
+	}
+
+
+## pool_stats sonucunu yaratığa yazar (kademe ölçeğinden ÖNCE çağrılır). Menzilli hasar temas hasarıyla aynı oranda büyür/küçülür.
+func _apply_base_stats(enemy: Node, stats: Dictionary) -> void:
+	if stats.is_empty():
+		return
+	if enemy.has_method("_ew_wake"):
+		enemy._ew_wake() ## EnemyWorld yolu: uyuyan yaratığa stat yazmadan önce uyandır (CLAUDE.md, madde 267/278)
+	var old_contact: float = float(enemy.contact_damage)
+	var new_contact: float = float(stats["damage"])
+	if enemy.ranged_damage > 0.0 and old_contact > 0.0:
+		enemy.ranged_damage *= new_contact / old_contact
+	enemy.contact_damage = new_contact
+	enemy.max_health = float(stats["health"])
+	enemy.health = enemy.max_health
+	enemy.xp_value = float(stats["xp"])
+
+
 ## Host'ta (doğumda) ve istemcide (RPC) AYNI kurulum - bkz. enemy.gd make_elite.
 func _apply_elite(enemy: Node) -> void:
 	if enemy.has_method("make_elite"):
 		enemy.make_elite()
 
 
-## Bir roster kademesinin elit adayları: ELITE_POOL'dan, o kademenin roster'ındaki AİLELERE uyanlar. Hiçbiri uymazsa (Kademe 9 = sadece slime)
-## komşu kademelerin ailelerine (+-1, +-2, ...) genişler; hâlâ boşsa tüm havuz. Saf işlev (testli).
+## Bir roster kademesinin elit adayı (madde 597): ELITE_BY_TIER'da o kademe varsa onun eliti; yoksa (tek kademe) en yakın ALT elit kademesinin eliti
+## (K1 için ilk elit). Rastgele elit isteyen yerler (Ritüeli Boz cezası) bunu kullanır; normal doğuşta elit YALNIZ çift kademede (elite_tier). Saf işlev (testli).
 static func elite_candidates(roster_tier: int) -> Array:
-	for radius in range(0, 15):
-		var families: Dictionary = {}
-		for t in range(maxi(1, roster_tier - radius), mini(15, roster_tier + radius) + 1):
-			for rid in TIER_ROSTER.get(t, []):
-				families[ID_FAMILY.get(rid, "")] = true
-		var out: Array = ELITE_POOL.filter(func(id: String) -> bool: return families.has(ID_FAMILY.get(id, "")))
-		if not out.is_empty():
-			return out
-	return ELITE_POOL.duplicate()
+	if ELITE_BY_TIER.has(roster_tier):
+		return [ELITE_BY_TIER[roster_tier]]
+	## Tek kademe (2026-11-13, kullanıcı: "elitler her kademede gelsin"): bir SONRAKİ çift kademenin eliti (K1 iskelet3, K3 zombie3, K5 lich3, K7 ork3, K9 agac3);
+	## elit gücü yine kademeyle artar (pool_stats P = kademe + 2). Tablonun ötesindeki kademe en yakın ALT elitine düşer.
+	if ELITE_BY_TIER.has(roster_tier + 1):
+		return [ELITE_BY_TIER[roster_tier + 1]]
+	var tiers: Array = ELITE_BY_TIER.keys()
+	tiers.sort()
+	var pick: int = int(tiers[0])
+	for t in tiers:
+		if int(t) <= roster_tier:
+			pick = int(t)
+	return [ELITE_BY_TIER[pick]]
+
+
+## Bu kademede normal doğuşla elit çıkar mı: HER kademede (K1..LAST_TIER, kullanıcı 2026-11-13); kimlik elite_candidates'ten.
+static func elite_tier(roster_tier: int) -> bool:
+	return roster_tier >= 1 and roster_tier <= LAST_TIER
 
 
 ## Elit olarak seçilen doğum hiç gerçekleşmediyse (sahne yüklenemedi vb.) vadeyi geri verir: o kademenin/katın eliti kaybolmasın.
@@ -1915,11 +2079,13 @@ func _unroll_elite(roster_tier: int) -> void:
 
 ## Bu sıradan doğum, kademesinin elit yaratığı mı? (host, _spawn_regular_enemy). Kademe başına en fazla 1 kez true.
 func _roll_elite(tier: int) -> bool:
-	if _elite_spawned_tiers.has(tier):
-		return false
+	if not elite_tier(tier) or _elite_spawned_tiers.has(tier):
+		return false ## kademe başına en fazla 1 elit (2026-11-13: her kademede; eskiden yalnız çift kademe, madde 597)
 	var now: float = _tier_time()
 	if not _elite_due_time.has(tier):
 		var latest: float = float(tier) * tier_duration - ELITE_END_MARGIN
+		if _active_boss_tiers().has(tier):
+			latest = minf(latest, float(tier - 1) * tier_duration + 0.5 * tier_duration) ## boss kademesinde elit ilk yarıda, boss sonda
 		_elite_due_time[tier] = minf(now + randf_range(ELITE_WINDOW_MIN, ELITE_WINDOW_MAX) * tier_duration, latest)
 		if now < float(_elite_due_time[tier]):
 			return false
@@ -1961,7 +2127,16 @@ func _roll_endless_elite() -> bool:
 	return true
 
 
-## Final'in doğan 13 bossunun HEPSİ öldüyse (ya da silindiyse) zafer. Final hiç doğmadıysa (_final_bosses boş) asla tetiklenmez.
+## Son bosslardan en son vuranı bilinen (host): PvP zaferini bu oyuncunun takımı alır. Yoksa 0.
+func _final_boss_last_attacker() -> int:
+	var attacker: int = 0
+	for boss in _final_bosses:
+		if is_instance_valid(boss) and int(boss.get("last_attacker_peer_id")) > 0:
+			attacker = int(boss.get("last_attacker_peer_id"))
+	return attacker
+
+
+## SON kademenin (LAST_TIER) doğan bosslarının HEPSİ öldüyse (ya da silindiyse) zafer. Son boss hiç doğmadıysa (_final_bosses boş) asla tetiklenmez.
 func _check_victory() -> void:
 	if _run_phase != RunPhase.NORMAL or not _final_spawned or _final_bosses.is_empty():
 		return
@@ -1973,6 +2148,13 @@ func _check_victory() -> void:
 
 func _begin_victory() -> void:
 	_run_phase = RunPhase.VICTORY
+	if GameModeScript.is_pvp():
+		## 2v2 (plan K1): K10 bossu ölünce oyun biter, son vuruşu yapan takım kazanır; "sonsuza devam" yok (K13).
+		var pvp_net: Node = NetworkManager.get_node_or_null("PvpNet")
+		if pvp_net != null:
+			pvp_net.host_final_boss_killed(_final_boss_last_attacker())
+			_rpc_victory_dissolve.rpc()
+			return
 	NetworkManager.broadcast_victory.rpc(GameManager.game_time) ## herkeste zafer penceresi (main.gd)
 	_rpc_victory_dissolve.rpc() ## kalan yaratıklar herkeste ödülsüz kaybolur
 
@@ -1997,12 +2179,14 @@ func begin_endless() -> bool:
 	return true
 
 
-## Boss/Final KAPALIYKEN (GameManager.bosses_enabled = false) zafer penceresi yoktur: Kademe saati 15. kademeyi bitirince (host) oyun
-## doğrudan sonsuz modda devam eder (kullanıcı 2026-10-08: "Final ve zafer geçici kapansın"). Yaratık doğumu kesilmez (kapı/bekleme yok).
+## SON boss tanımlı DEĞİLSE (boss tablosunda LAST_TIER yok: test / boşaltılmış harita) zafer penceresi yoktur: Kademe saati LAST_TIER'ı bitirince (host)
+## oyun doğrudan sonsuz modda devam eder (eski "Final kapalı" davranışı). Yaratık doğumu kesilmez (kapı/bekleme yok).
 func _check_auto_endless() -> void:
 	if _run_phase != RunPhase.NORMAL:
 		return
-	if _tier_time() < float(FINAL_TIER - 1) * tier_duration:
+	if _active_boss_tiers().has(LAST_TIER):
+		return ## son boss (ölümü zafer) tanımlıysa sonsuz moda yalnız zaferden sonra "Sonsuza Devam Et" ile girilir (madde 597)
+	if _tier_time() < float(LAST_TIER) * tier_duration:
 		return
 	_enter_endless()
 
@@ -2040,15 +2224,38 @@ func _check_endless_boss_wave() -> void:
 	var elapsed: float = GameManager.game_time - _endless_start_time
 	if elapsed < EndlessMathScript.boss_trigger_elapsed(_endless_layer, tier_duration):
 		return
-	## Eski 13'lü sistem (bosses_enabled) FINAL_CREATURES'tan, yeni sistem elle statlı 6 bossluk havuzdan (madde 269) seçer.
-	var ids: Array
-	if GameManager.bosses_enabled:
-		ids = EndlessMathScript.pick_wave_ids(FINAL_CREATURES, EndlessMathScript.boss_wave_size(_endless_layer))
-	else:
-		ids = EndlessMathScript.pick_wave_ids(EndlessMathScript.WAVE_POOL, EndlessMathScript.pool_wave_size(_endless_layer))
+	## Dalga HARİTANIN KENDİ bosslarından kurulur (madde 597: ana harita = Minotaur + Üç Kardeş [2026-11-14, eskiden Wendigo]; eski 6'lı genel havuz ve 13'lü FINAL_CREATURES kalktı).
+	## Boyut hâlâ EndlessMath.pool_wave_size ile büyür ama havuzdan fazlası seçilemez (haritada 2 boss varsa en çok 2: ek zorluk can/hasar çarpanlarından gelir).
+	var pool: Array = _endless_wave_pool()
+	var ids: Array = EndlessMathScript.pick_wave_ids(pool, clampi(EndlessMathScript.pool_wave_size(_endless_layer), 1, pool.size()))
+	ids = with_whole_trio(ids)
 	var spawned: Array = _spawn_boss_group(ids, EndlessMathScript.scale_tier(_endless_layer))
 	if not spawned.is_empty():
 		_endless_bosses_spawned[_endless_layer] = true
+
+
+## ÜÇ KARDEŞ tek bosstur: listede bir kardeş varsa üçü birden doğar (sonsuz dalga alt küme seçse bile; sıra korunur, eksikler sona).
+static func with_whole_trio(ids: Array) -> Array:
+	var trio: Array = preload("res://scripts/boss_bar_art.gd").TRIO_IDS
+	var out: Array = ids.duplicate()
+	for id in ids:
+		if trio.has(id):
+			for t in trio:
+				if not out.has(t):
+					out.append(t)
+			break
+	return out
+
+
+## Sonsuz boss dalgasının havuzu: etkin haritanın kademe bossları (benzersiz); tablo boşsa genel EndlessMath.WAVE_POOL.
+func _endless_wave_pool() -> Array:
+	var out: Array = []
+	var table: Dictionary = _active_boss_tiers()
+	for tier in table.keys():
+		for id in table[tier]:
+			if not out.has(id):
+				out.append(id)
+	return out if not out.is_empty() else EndlessMathScript.WAVE_POOL.duplicate()
 
 
 ## Test/HUD için salt-okunur durum.
@@ -2120,13 +2327,13 @@ func _apply_summon_stats(enemy: Node, stats: Dictionary) -> void:
 
 ## KENAR BEKÇİSİ doğur (guard_camps.gd çağırır; sadece host/tekli): _spawn_regular_enemy ile AYNI kurulum (kademe ölçeği, kalkan, global çarpan, istemcilere yayın),
 ## fark: konum verilir, "guards" grubuna girer, "spawn_tier" meta'sı YOK (kademe kapısı ve kapı hızlandırması onları saymaz). Elit olmaz. Dönüş: yaratık ya da null.
-## tiers_ahead (guard_camps.gd "ahead"): bekçi o anki kademenin bu kadar kademe ÖTESİNİN rosterinden (15'te kısılır) doğar ve O KADEMENİN statlarıyla/kalkanıyla güçlenir
+## tiers_ahead (guard_camps.gd "ahead"): bekçi o anki kademenin bu kadar kademe ÖTESİNİN rosterinden (LAST_TIER'da kısılır) doğar ve O KADEMENİN statlarıyla/kalkanıyla güçlenir
 ## (sağ alt tehlikeli bölge: sonraki kademeden yaratıklar da var).
 func spawn_guard(pos: Vector2, tiers_ahead: int = 0) -> Node:
 	var tier: int = _resolve_spawn_tier()
 	if tier <= 0:
 		tier = _current_tier()
-	tier = mini(tier + maxi(tiers_ahead, 0), 15)
+	tier = mini(tier + maxi(tiers_ahead, 0), LAST_TIER)
 	var roster: Array = _spawnable_roster(tier)
 	if roster.is_empty():
 		return null
@@ -2158,7 +2365,7 @@ func spawn_dungeon_creature(id: String, pos: Vector2, tiers_ahead: int = 0, elit
 	var tier: int = _resolve_spawn_tier()
 	if tier <= 0:
 		tier = _current_tier()
-	tier = mini(tier + maxi(tiers_ahead, 0), 15)
+	tier = mini(tier + maxi(tiers_ahead, 0), LAST_TIER)
 	var scale_tier: int = _scale_tier_for(tier)
 	var network_id: int = _next_network_enemy_id
 	_next_network_enemy_id += 1
@@ -2353,6 +2560,7 @@ func spawn_mission_elite(pos: Vector2) -> Node:
 	if not enemy:
 		return null
 	enemy.set_meta("spawn_tier", tier)
+	_apply_base_stats(enemy, pool_stats(id, scale_tier, true))
 	if enemy.has_method("apply_tier_scaling"):
 		enemy.apply_tier_scaling(scale_tier)
 	_enable_regular_shield(enemy, tier)
@@ -2419,6 +2627,21 @@ func _sync_enemy_positions(tick: int, data: PackedByteArray) -> void:
 			enemy.update_network_state(net_pos, net_dead, net_health, net_shield, net_raging, net_chill, net_attacker_id)
 
 
+## BATIK NEKROPOL "ÇOK AZ YARATIK" (2026-11-14, kullanıcı: "yaratık az spawnlanıyor, çok sıkıcı"): normal doğuş yalnız GameManager.is_position_blocked_by_terrain'e
+## bakıyordu - zindan haritasında bu yalnız DUVAR hücresini eler; HARİTA DIŞI (halka noktalarının %17'si), su (%4) ve nesne (%1) hücresi "boş" görünüyordu.
+## Sonuç: doğuşların ~üçte biri oyuncuya hiç ulaşamayacak yere (haritanın dışı / sarnıç suyu / lahit) düşüp tavanı (cap) dolduruyor, gerçek akış %30-50 düşüyordu.
+## Görev dalgası (_mission_wave_spot, madde 496) bunu zaten çözmüştü; normal doğuş, pusu noktası ve takılı yaratık kurtarma aynı kuralı kullanır.
+## Ana haritada / açık hava haritalarında MissionSpots.active() false -> davranış birebir aynı.
+const DUNGEON_SPAWN_ATTEMPTS := 24
+var _spawn_rng := RandomNumberGenerator.new()
+
+
+func _spawn_point_invalid(p: Vector2) -> bool:
+	if GameManager.is_position_blocked_by_terrain(p):
+		return true
+	return MissionSpotsScript.active() and not MissionSpotsScript.is_reachable_world(p)
+
+
 ## Kullanıcı isteği: "haritamdaki 'su' ve 'ev' layerlarını collisionshape
 ## olarak atar mısın... yaratıklar orada spawnlanamaz" - bkz. GameManager.
 ## is_position_blocked_by_terrain. Su/ev üstüne düşen adaylar reddedilip
@@ -2428,7 +2651,9 @@ func _sync_enemy_positions(tick: int, data: PackedByteArray) -> void:
 ## son denenen konum kullanılır.
 func _random_spawn_position(center: Vector2, is_boss: bool = false, bias_dir: Vector2 = Vector2.ZERO) -> Vector2:
 	var pos: Vector2 = center
-	for _attempt in range(10):
+	var dungeon_map: bool = MissionSpotsScript.active()
+	## Zindan haritasında halka noktalarının yalnız ~%45'i ulaşılabilir zemin (duvarlar + harita dışı + su): 10 deneme dar semtte yetmiyor.
+	for _attempt in range(DUNGEON_SPAWN_ATTEMPTS if dungeon_map else 10):
 		var angle: float
 		if bias_dir != Vector2.ZERO and randf() < DIRECTIONAL_SPAWN_CHANCE:
 			var half_arc: float = deg_to_rad(DIRECTIONAL_SPAWN_ARC_DEG) * 0.5
@@ -2439,8 +2664,20 @@ func _random_spawn_position(center: Vector2, is_boss: bool = false, bias_dir: Ve
 		if is_boss:
 			dist += 120.0
 		pos = center + Vector2(cos(angle), sin(angle)) * dist
-		if not GameManager.is_position_blocked_by_terrain(pos):
+		## PvPvE takım üssü (madde 607): doğuş noktası hiçbir üssün yakınına düşmez (co-op'ta üs yok, sorgu hep false).
+		if not _spawn_point_invalid(pos) and not BaseZonesScript.near_any(pos, BASE_SPAWN_MARGIN):
 			return pos
+	## Zindan haritasında halkada ulaşılabilir nokta çıkmadıysa (harita kenarı / dar semt): oyuncudan YÜRÜME mesafesiyle ulaşılabilir bir zemin hücresi.
+	if dungeon_map:
+		var walk: PackedVector2Array = MissionSpotsScript.spots_around(_spawn_rng, center, 1, min_spawn_distance * 0.6, max_spawn_distance + (120.0 if is_boss else 0.0), 8.0, 0.0)
+		if not walk.is_empty():
+			return walk[0]
+	## 10 denemenin hepsi üsse yakın düştüyse (dar zindan / çapa üsse yakın) son nokta üssün payının dışına itilir.
+	for bz: Dictionary in BaseZonesScript.active:
+		var c: Vector2 = bz["center"]
+		var keep: float = BaseZonesScript.radius + BASE_SPAWN_MARGIN
+		if pos.distance_to(c) < keep:
+			pos = c + ((pos - c).normalized() if pos.distance_squared_to(c) > 1.0 else Vector2.RIGHT) * (keep + 8.0)
 	return pos
 
 
@@ -2486,6 +2723,8 @@ func _apply_global_buff(enemy: Node, player_count: int = 0) -> void:
 	var early_cut: float = early_durability_cut(enemy_tier) if (not enemy.is_boss and enemy_tier >= 1) else 1.0
 	var dmg_taper: float = tier_damage_mult(enemy_tier, bool(enemy.is_boss))
 	var late_cut: float = late_durability_mult(enemy_tier)
+	if not enemy.is_boss:
+		late_cut *= tier_toughness_mult(enemy_tier) ## 2026-11-15: sıradan + elit yaratık kademeyle dayanıklılaşır (boss ödül hesabı late_cut'ı böler: bossa girmez)
 	## Aile özellikleri (bkz. FAMILY_TRAITS) - kalkan çarpanı candan AYRI tutulur (zombide sadece can artar).
 	var fam_trait: Dictionary = FAMILY_TRAITS.get(Enemy.family_of_id(str(enemy.get_meta("creature_id", ""))), {})
 	var trait_health: float = float(fam_trait.get("health", 1.0))

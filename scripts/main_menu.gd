@@ -2,9 +2,8 @@ extends Control
 
 ## Ana menü. 2026-10-16 YENİDEN (kullanıcı: "ana menü için 4 prototip, yapay zeka kullanma, hafif koyu tonlar" -> sol panel yerleşimi;
 ## arka plan için "haritanın bir parçası yerine yeni sade bir arka plan, oyunun asset'leriyle" -> 4 sade sahneden "Ocak Başı" seçildi):
-##   arka plan = tools/proto_20261016/gen_ana_menu_bg.py --oyun -> assets/ui/ana_menu/ocak_basi.png (480x270, Ev içi karolarından elle
-##   dizilmiş oda, ışık sadece şömine + ayaklı lambada), üstünde CANLI şömine ateşi (ocak_ates.png 6 kare) + şömineye dönük oturan parti
-##   (gerçek sprite'lar, sit_ klipleri) + lambanın yanında uyuyan köpek; hepsi x4 tam kat.
+##   arka plan 2026-11-15'ten beri "Nehir Kenarı Kampı" (menu_camp_scene.gd): ana haritanın nehir kıyısında günbatımında kamp yapan
+##   parti (Şovalye, Matthew, Talon, Elara, Hadime, Oakley + köpek), kazanlı kamp ateşi + yiyecekler. Eski "Ocak Başı" (şömine) kodu kalktı.
 ##   sol: "D - Panelsiz Ateş Işığı" (2026-10-16, ilk düz koyu panel "ruhsuz ve sıradan" bulundu; 4 prototipten D seçildi): kutu yok,
 ##   sol taraf yumuşak kararır (sol_golge.png), büyük başlık + kiriş süsü, öğeler ikon + başlık + alt yazı, seçilide altın yazı (mum 2026-11-06 kalktı).
 ## AYARLAR: ortak settings_screen.gd (duraklatma menüsüyle aynı "Ateş Işığı" ekranı, madde 234) - açıkken tabela + menü gizlenir. Davranış (sahne geçişleri, ayarlar, debug modu) eskisiyle AYNI.
@@ -29,16 +28,8 @@ const LastLoadout := preload("res://scripts/last_loadout.gd")
 const TITLE := "POTPOURRI"
 const SCREEN := Vector2(1920, 1080)
 const COL_W := 560.0
-## Sahne: 480x270 tuval, x4 = 1920x1080. Konumlar tuval pikselinde (gen_ana_menu_bg.py bg_c ile aynı yerler).
-const ART_K := 4.0
-const FIRE_POS := Vector2(300, 70) ## şömine karesinin sol üstü (FIRE_X, base_y - 56)
-const FIRE_FRAME := Vector2(48, 64)
-const FIRE_FRAMES := 6
-const FIRE_FPS := 8.0
-const SCENE_TINT := Color(0.98, 0.78, 0.62) ## ateş ışığındaki karakterler (sahnenin sıcak ortamı)
-## [karakter id, klip, ayak ortası (tuval px)] - şömineye dönük halıda (sit_up = sırtı bize), Şovalye yandan.
-const PARTY := [[1, "sit_up", Vector2(300, 180)], [4, "sit_up", Vector2(324, 192)], [8, "sit_up", Vector2(348, 180)], [7, "sit_left", Vector2(374, 164)]]
-const DOG := ["kopek", "sleep_down", Vector2(262, 214)]
+## Arka plan sahnesi "Nehir Kenarı Kampı" (2026-11-15): menu_camp_scene.gd (menu_hearth_bg.gd de aynısını kurar).
+const CampScene := preload("res://scripts/menu_camp_scene.gd")
 
 var _settings_screen: Control = null
 var _records_screen: Control = null
@@ -53,90 +44,9 @@ var _stage: Control = null
 var _shard_label: Label = null
 
 
-## Bir sayfadaki kareleri (yatay şerit) sırayla oynatan piksel-tam çizim (şömine ateşi).
-class SheetAnim extends Control:
-	var tex: Texture2D = null
-	var frame_size: Vector2 = Vector2.ZERO
-	var count: int = 1
-	var fps: float = 8.0
-	var k: float = 4.0
-	var _t: float = 0.0
-
-	func _init(t: Texture2D, fsz: Vector2, n: int, speed: float, scale_k: float) -> void:
-		tex = t
-		frame_size = fsz
-		count = n
-		fps = speed
-		k = scale_k
-		mouse_filter = Control.MOUSE_FILTER_IGNORE
-		texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		custom_minimum_size = fsz * scale_k
-
-	func _process(delta: float) -> void:
-		_t += delta
-		queue_redraw()
-
-	func _draw() -> void:
-		if tex == null:
-			return
-		var i: int = int(_t * fps) % count
-		draw_texture_rect_region(tex, Rect2(Vector2.ZERO, frame_size * k), Rect2(Vector2(i * frame_size.x, 0), frame_size))
-
-
-## Gerçek SpriteFrames klibi, ayak ortası `foot`a oturur (tam kat k), altında piksel gölge; klip kendi hızında döner.
-## sit_ klipleri "oturma HAREKETİ" (kare 0 ayakta -> son kare oturmuş; ride_ klipleri de son kareyi kullanır): döngüde oynarsa karakter
-## kalkıp oturur -> sit_ için SON KARE sabit tutulur (hold).
-class SceneSprite extends Control:
-	var frames: SpriteFrames = null
-	var anim: StringName = &"idle_down"
-	var k: float = 4.0
-	var hold: int = -1 ## >= 0: bu kare sabit
-	var _t: float = 0.0
-	var _used: Rect2i = Rect2i()
-	var _fsize: Vector2 = Vector2.ZERO
-
-	func _init(sf: SpriteFrames, clip: String, scale_k: float) -> void:
-		frames = sf
-		anim = StringName(clip) if sf != null and sf.has_animation(clip) else &"idle_down"
-		k = scale_k
-		mouse_filter = Control.MOUSE_FILTER_IGNORE
-		texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		if frames != null:
-			if clip.begins_with("sit_"):
-				hold = frames.get_frame_count(anim) - 1
-			var img: Image = frames.get_frame_texture(anim, maxi(hold, 0)).get_image()
-			if img.is_compressed():
-				img.decompress()
-			_used = img.get_used_rect()
-			_fsize = Vector2(img.get_width(), img.get_height())
-		custom_minimum_size = _fsize * k
-
-	## Kontrolün sol üstü: ayak ortası foot (tuval px) olacak şekilde.
-	func place_at(foot: Vector2) -> void:
-		position = (foot - Vector2(_used.position.x + _used.size.x * 0.5, _used.end.y)).floor() * k ## sanat pikseli ızgarasında (arka planla hizalı)
-		size = _fsize * k
-
-	func _ready() -> void:
-		set_process(hold < 0)
-
-	func _process(delta: float) -> void:
-		_t += delta
-		queue_redraw()
-
-	func _draw() -> void:
-		if frames == null:
-			return
-		var n: int = frames.get_frame_count(anim)
-		var spd: float = frames.get_animation_speed(anim)
-		var i: int = hold if hold >= 0 else int(_t * spd) % maxi(1, n)
-		var sw: float = maxf(12.0, _used.size.x * 0.7)
-		var cx: float = _used.position.x + _used.size.x * 0.5
-		draw_rect(Rect2((cx - sw * 0.5) * k, (_used.end.y - 1) * k, sw * k, 2 * k), Color(0, 0, 0, 0.32))
-		draw_texture_rect(frames.get_frame_texture(anim, i), Rect2(Vector2.ZERO, _fsize * k), false)
-
-
 func _ready() -> void:
 	DisplayServer.window_set_title("Potpourri")
+	GameManager.content_unlock_mode = false ## "Debug Modu" düğmesiyle açılan kilit açık modu menüye dönünce biter (madde 614)
 	theme = MenuKit.theme()
 	_build_scene()
 	if MobileUIScript.enabled:
@@ -161,58 +71,18 @@ func _build_scene() -> void:
 	_stage.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(_stage)
 	_stage.size = SCREEN
-	_stage.add_child(scene_background())
+	CampScene.build(_stage)
 	var shade := TextureRect.new() ## sol menünün okunurluğu: yumuşak karartma (ışık değil), sahneyle birlikte ölçeklenir
 	shade.texture = load(FM.SHADE_PATH)
 	shade.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	shade.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	shade.stretch_mode = TextureRect.STRETCH_SCALE
 	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var fire := SheetAnim.new(load("res://assets/ui/ana_menu/ocak_ates.png"), FIRE_FRAME, FIRE_FRAMES, FIRE_FPS, ART_K)
-	_stage.add_child(fire)
-	fire.position = FIRE_POS * ART_K
-	fire.size = FIRE_FRAME * ART_K
-	var pet_spec: Array = PC.FRAMES.get(DOG[0], [])
-	if not pet_spec.is_empty():
-		_add_scene_sprite(load(str(pet_spec[0])) as SpriteFrames, str(DOG[1]), DOG[2])
-	var party: Array = PARTY.duplicate()
-	party.sort_custom(func(a: Array, b: Array) -> bool: return (a[2] as Vector2).y < (b[2] as Vector2).y)
-	for p: Array in party:
-		_add_scene_sprite(load(str(Characters.get_def(int(p[0])).get("frames", ""))) as SpriteFrames, str(p[1]), p[2])
 	_stage.add_child(shade)
 	shade.position = Vector2.ZERO
 	shade.size = SCREEN
 	layer.resized.connect(_fit_stage.bind(layer))
 	_fit_stage(layer)
-
-
-## Sahnenin arka plan resmi (SCREEN boyutunda, sahne katmanının ilk çocuğu). Doku IŞIKSIZ taban; şömine + lamba ışığı ve kenar karartması
-## ocak_basi_isik.gdshader'da ekran pikselinde yumuşak hesaplanır (2026-10-20: pişmiş Bayer basamakları "pixel pixel" bulundu).
-## menu_hearth_bg.gd de bunu kullanır.
-static func scene_background() -> TextureRect:
-	var bg := TextureRect.new()
-	bg.name = "SceneBg"
-	bg.texture = load("res://assets/ui/ana_menu/ocak_basi.png")
-	bg.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	bg.stretch_mode = TextureRect.STRETCH_SCALE
-	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var mat := ShaderMaterial.new()
-	mat.shader = load("res://shaders/ocak_basi_isik.gdshader")
-	mat.set_shader_parameter("lamp_tex", load("res://assets/ui/ana_menu/ocak_lamba.png"))
-	bg.material = mat
-	bg.position = Vector2.ZERO
-	bg.size = SCREEN
-	return bg
-
-
-func _add_scene_sprite(sf: SpriteFrames, clip: String, foot: Vector2) -> void:
-	if sf == null:
-		return
-	var s := SceneSprite.new(sf, clip, ART_K)
-	_stage.add_child(s)
-	s.place_at(foot)
-	s.modulate = SCENE_TINT
 
 
 func _fit_stage(layer: Control) -> void:
@@ -328,33 +198,73 @@ func _set_item_selected(it: Dictionary, on: bool) -> void:
 		(it["sub"] as Label).add_theme_color_override("font_color", C_SUB)
 
 
+## Başlık tabelası (2026-11-13, madde 660; kullanıcı: "şu bölümü ai kullanmadan daha iyi hale getirir misin" -> 3 prototip, seçim
+## "alternatif B kuru çiçek renkleri", tools/proto_20261113/menu_baslik/): m5x7 96 yazının yerine elle çizilmiş piksel logo (harf ızgaraları,
+## harf başına sönük taç yaprağı tonu - gül / altın / adaçayı / lavanta, potpourri = kuru çiçek karışımı - + hafif zıplama, üst kenar parlaması,
+## 2 px kahve derinlik, 1 px dış hat; gen_logo.py --oyun), aynı piksel yoğunluğu (1 sanat px = 6 ekran px). Altında logoya ortalı, harf aralığı
+## açık slogan. B'de yan silahlar yok (SIGN_WEAPONS; true = C: iki yanda aynı boy Bıçak / Ateş Asası). Eski kiriş süsü çubuğu kalktı.
+## Ad "TitleSign" korunur (ayarlar/rekorlar gizler, telefon sığdırır). Masaüstü + telefon aynı tabela.
+## Aynı gün: harfler hafifçe aşağı yukarı dalgalanır (potpourri_logo.gd; prototipteki sabit zıplamanın yerine), logo yükleme ekranında da var.
+const PotpourriLogo := preload("res://scripts/potpourri_logo.gd")
+const LOGO_K := PotpourriLogo.K
+const LOGO_FACE := Vector2(1.0, 11.0) ## logo dokusunda harf yüzünün ilk satırı + yüksekliği (dış hat 1, harf 11 satır)
+const SIGN_WEAPONS := false
+const SIGN_WEAPON_K := 3.0
+const SIGN_GAP := 6.0
+
+
+func _title_sign(tag_col: Color) -> Control:
+	var root := Control.new()
+	root.name = "TitleSign"
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var lsz: Vector2 = PotpourriLogo.TEX.get_size() * LOGO_K ## dalgasız logo (harfler bunun ± PotpourriLogo.art_top() kadar oynar)
+	var face_mid: float = (LOGO_FACE.x + LOGO_FACE.y * 0.5) * LOGO_K
+	var wpn: Array[TextureRect] = []
+	for key: String in (["dagger", "fire_staff"] if SIGN_WEAPONS else []):
+		var t: Texture2D = WC.icon(key)
+		var tr := TextureRect.new()
+		tr.texture = t
+		tr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		tr.stretch_mode = TextureRect.STRETCH_SCALE
+		tr.size = t.get_size() * SIGN_WEAPON_K
+		tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		root.add_child(tr)
+		wpn.append(tr)
+	var top: float = 0.0
+	var lx: float = 0.0
+	if not wpn.is_empty():
+		wpn[0].flip_h = true ## bıçağın ucu sola-yukarı, asanın taşı sağa-yukarı: ayna duruş
+		top = maxf(0.0, wpn[0].size.y * 0.5 - face_mid) ## silahlar logodan uzunsa logo aşağı kayar (hiçbir parça tabelanın üstüne taşmaz)
+		lx = wpn[0].size.x + SIGN_GAP
+	var logo: Control = PotpourriLogo.new()
+	logo.name = "Logo"
+	logo.position = Vector2(lx, top - PotpourriLogo.art_top()) ## dalgasız harflerin üstü = top
+	root.add_child(logo)
+	var right: float = lsz.x
+	if not wpn.is_empty():
+		wpn[0].position = Vector2(0.0, top + face_mid - wpn[0].size.y * 0.5).round()
+		wpn[1].position = Vector2(lx + lsz.x + SIGN_GAP, top + face_mid - wpn[1].size.y * 0.5).round()
+		right = wpn[1].position.x + wpn[1].size.x
+	var tag := _lbl("Eğlenceli olan her şey", DK.FS_BODY, tag_col) ## slogan 2026-11-13 (kullanıcı: "Everything that is fun"; eski "Hayatta kal. Birlikte.")
+	tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tag.vertical_alignment = VERTICAL_ALIGNMENT_TOP ## etiketin en küçük boyu yedek fontlarla 32'den uzun ölçülüyor: ortalanırsa slogan logodan kopar
+	var fv := FontVariation.new()
+	fv.base_font = tag.get_theme_font("font")
+	fv.spacing_glyph = 2 ## m5x7 32'de 1 yazı pikseli: slogan logonun altında seyrek, tabela gibi okunur
+	tag.add_theme_font_override("font", fv)
+	var tag_y: float = top + lsz.y + PotpourriLogo.art_top() - 2.0 ## en aşağı inen harfin altı
+	tag.position = Vector2(lx, tag_y)
+	tag.custom_minimum_size = Vector2(lsz.x, 0.0)
+	## Etiket logodan genişse (uzun çeviri) logonun ortasına göre ortalanır.
+	tag.resized.connect(func() -> void: tag.position = Vector2(roundf(lx + (lsz.x - tag.size.x) * 0.5), tag_y))
+	root.add_child(tag)
+	root.custom_minimum_size = Vector2(right, tag_y + DK.FS_BODY)
+	return root
+
+
 func _build_left_panel() -> void:
-	var logo := DK.v(0)
-	logo.name = "TitleSign"
-	var lh := DK.h(14)
-	var left_ic: CenterContainer = DK.icon(WC.icon("dagger"), 64)
-	if left_ic.get_child_count() > 0:
-		(left_ic.get_child(0) as TextureRect).flip_h = true
-	lh.add_child(left_ic)
-	var title := DK.lbl(TITLE, 96, C_GOLD)
-	title.add_theme_color_override("font_outline_color", Color(0.06, 0.04, 0.03, 1))
-	title.add_theme_constant_override("outline_size", 16)
-	title.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.6))
-	title.add_theme_constant_override("shadow_offset_y", 8)
-	title.add_theme_constant_override("shadow_outline_size", 16)
-	lh.add_child(title)
-	lh.add_child(DK.icon(WC.icon("fire_staff"), 64))
-	logo.add_child(lh)
-	logo.add_child(_lbl("Hayatta kal. Birlikte.", DK.FS_BODY, C_TAG))
-	logo.add_child(DK.sp(0, 14))
-	var trim := TextureRect.new()
-	trim.texture = load("res://assets/ui/ana_menu/kiris_suslu.png")
-	trim.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	trim.stretch_mode = TextureRect.STRETCH_TILE
-	trim.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	trim.custom_minimum_size = Vector2(480, 48)
-	trim.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	logo.add_child(trim)
+	var logo := _title_sign(C_TAG)
 	add_child(logo)
 	MenuKit.place(logo, Vector2(40, 80), Vector2(0, 0))
 
@@ -380,10 +290,10 @@ func _build_left_panel() -> void:
 	_settings_btn.pressed.connect(_on_settings_pressed)
 	_exit_btn.pressed.connect(_on_exit_pressed)
 
-	## Alt: şömine başındaki parti yüzleri + en iyi koşu.
+	## Alt: kamp ateşi başındaki parti yüzleri + en iyi koşu.
 	var bot := DK.h(10)
 	bot.name = "PartyLine"
-	for p: Array in PARTY:
+	for p: Array in CampScene.PARTY:
 		bot.add_child(DK.icon(_face_tex(int(p[0])), 48))
 	bot.add_child(DK.sp(6))
 	bot.add_child(_lbl(_record_text(), DK.FS_LABEL, C_TAG))
@@ -425,32 +335,8 @@ func _build_phone_menu() -> void:
 	shade.step_w = 80.0
 	shade.steps = 10
 	root.add_child(shade)
-	## Başlık: oyunun adı + slogan + kiriş süsü (masaüstü tabelasıyla aynı parçalar, B renkleri).
-	var logo := DK.v(0)
-	logo.name = "TitleSign"
-	var lh := DK.h(14)
-	var left_ic: CenterContainer = DK.icon(WC.icon("dagger"), 64)
-	if left_ic.get_child_count() > 0:
-		(left_ic.get_child(0) as TextureRect).flip_h = true
-	lh.add_child(left_ic)
-	var title := DK.lbl(TITLE, 96, DK.C_ACCENT)
-	title.add_theme_color_override("font_outline_color", HT.DEEP)
-	title.add_theme_constant_override("outline_size", 16)
-	title.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.6))
-	title.add_theme_constant_override("shadow_offset_y", 8)
-	lh.add_child(title)
-	lh.add_child(DK.icon(WC.icon("fire_staff"), 64))
-	logo.add_child(lh)
-	logo.add_child(PK.lbl("Hayatta kal. Birlikte.", PK.FS_SMALL, DK.C_DIM))
-	logo.add_child(DK.sp(0, 14))
-	var trim := TextureRect.new()
-	trim.texture = load("res://assets/ui/ana_menu/kiris_suslu.png")
-	trim.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	trim.stretch_mode = TextureRect.STRETCH_TILE
-	trim.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	trim.custom_minimum_size = Vector2(480, 48)
-	trim.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	logo.add_child(trim)
+	## Başlık: masaüstüyle aynı tabela (piksel logo + yanlarda silahlar + slogan, _title_sign).
+	var logo := _title_sign(DK.C_DIM)
 	logo.position = Vector2(PK.SIDE + 8.0, 40.0)
 	root.add_child(logo)
 	## Öğeler.
@@ -595,6 +481,8 @@ func _on_quick_start_pressed() -> void:
 ## debug_mode_unlocked notu). Normal "Tek Oyunculu" akışının BİREBİR aynısı, tek fark
 ## debug_mode_unlocked'ı sahne değişmeden ÖNCE true yapması - hud.gd _setup_debug_mode() bunu
 ## okuyup DEBUG butonunu baştan görünür kurar, chate "baykusseverim" yazmaya gerek kalmaz.
+## MADDE 614: düğme exportta da var ama artık TAM debug değil - tüm karakter/silah/evcil/ruhani kilitleri açık olarak ÇOK OYUNCULU oda listesini
+## açar (`GameManager.content_unlock_mode`); Q/E/R baştan açılmaz, debug menüsü yok.
 func _create_debug_mode_button() -> void:
 	var btn := Button.new()
 	btn.name = "DebugButton"
@@ -609,10 +497,8 @@ func _create_debug_mode_button() -> void:
 
 
 func _on_debug_mode_pressed() -> void:
-	NetworkManager.disconnect_from_room()
-	GameManager.reset()
-	GameManager.debug_mode_unlocked = true
-	get_tree().change_scene_to_file("res://scenes/character_select.tscn")
+	GameManager.content_unlock_mode = true ## ana menü her açılışta kapatır (_ready); oda listesinden geri dönmek de kapatır
+	_on_multiplayer_pressed() ## "Çok Oyunculu" ile aynı akış: oda listesi -> oda kur / odaya gir -> karakter seçimi
 
 
 func _on_start_pressed() -> void:

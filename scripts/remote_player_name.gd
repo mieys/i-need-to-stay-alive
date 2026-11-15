@@ -1,6 +1,9 @@
 extends Label
 
+const UiHideScript := preload("res://scripts/ui_hide.gd") ## F3 arayüzü gizle (madde 612): oyuncu isim etiketi de kapanır (`visibility_layer`)
+
 func _ready() -> void:
+	UiHideScript.mark_world(self)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	## #43 DÜZELTME (kullanıcı isteği: "İsim etiketi kalkan/can barının üstüne
 	## taşınsın (~20px yukarı)"): eskiden y=-82 idi - etiketin yüksekliği 20

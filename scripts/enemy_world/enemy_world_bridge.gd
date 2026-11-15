@@ -19,6 +19,7 @@ extends Node
 const NODE_NAME := "EnemyWorldBridge"
 const EnemyPathingScript := preload("res://scripts/enemy_pathing.gd")
 const DungeonWorldScript := preload("res://scripts/dungeon/dungeon_world.gd")
+const BaseZonesScript := preload("res://scripts/pvp/base_zones.gd") ## PvPvE takım üssü (madde 607): üsteki oyuncu hedef değil
 const PLAYER_BODY_RADIUS := 11.4 ## enemy.gd PLAYER_BODY_RADIUS - TÜM adaylar için aynı (enemy.gd de öyle kullanıyor)
 
 const T_PLAYER := 0
@@ -64,6 +65,10 @@ var dormant_count: int = 0 ## ölçüm / testler
 var stat_sleeps: int = 0 ## ölçüm: uykuya alınan / dışarıdan uyandırılan / süresi dolup uyanan toplamları
 var stat_wakes_ext: int = 0
 var stat_wakes_due: int = 0
+## Kurulan yaratık vuruşları (madde 571, enemy.gd _queue_hit): saldırı klibi başlar, hasar bu saatte vuruş karesi gelince iner.
+## Yaratığın tikine bağlı değil (saldırı sırasında uyuyan yaratıkta da), saat = köprünün fizik delta'ları.
+var _hit_nodes: Array = []
+var _hit_due := PackedFloat64Array()
 
 
 ## Bu sahnenin köprüsü (yoksa kurar). Yaratığın _ready'sinden çağrılır: o an current_scene "çocuk ekliyor" kilidinde
@@ -155,6 +160,26 @@ func wake(e: Node) -> void:
 	_active.append(e)
 
 
+## Olay aşamasında çağrılır: klip bu geçişin başında başlamış sayılır (_sync_clock = geçişten önceki saat; C++ / GDScript
+## saldırı karesi de bu geçişin delta'sını zaten işledi) -> hasar, vuruş karesinin yazıldığı geçişte iner.
+func schedule_hit(e: Node, delay: float) -> void:
+	_hit_nodes.append(e)
+	_hit_due.append(_sync_clock + delay)
+
+
+func _resolve_due_hits() -> void:
+	var i: int = 0
+	while i < _hit_nodes.size():
+		if _hit_due[i] <= _clock + 0.000001:
+			var e = _hit_nodes[i]
+			_hit_nodes.remove_at(i)
+			_hit_due.remove_at(i)
+			if e != null and is_instance_valid(e):
+				e._ew_resolve_hit()
+		else:
+			i += 1
+
+
 func target_node(index: int) -> Node2D:
 	if index < 0 or index >= _target_nodes.size():
 		return null
@@ -192,6 +217,8 @@ func _physics_process(delta: float) -> void:
 			else:
 				e._ew_on_event(ev[j], target_node(ev[j + 2]))
 		j += 3
+	if not _hit_nodes.is_empty():
+		_resolve_due_hits()
 	## seyrek tarama: uyanması kaçırılmış (ya da dışarıdan hızı/yarıçapı değiştirilmiş) yaratıklar
 	var n: int = _by_slot.size()
 	var s: int = _sweep_phase
@@ -347,7 +374,8 @@ func _build_targets() -> void:
 		var ok: bool = not (local_p.has_method("is_invisible_now") and local_p.is_invisible_now()) \
 				and not (local_p.has_method("is_indoors_now") and local_p.is_indoors_now()) \
 				and not (local_p.has_method("is_in_merchant_zone_now") and local_p.is_in_merchant_zone_now()) \
-				and not (local_p.get("is_dead") == true) 				and not (local_p.get("in_limbo") == true) ## ruh hâli (madde 438): dokunulmaz
+				and not (local_p.get("is_dead") == true) 				and not (local_p.get("in_limbo") == true) \
+				and not BaseZonesScript.shelters((local_p as Node2D).global_position) ## ruh hâli (madde 438): dokunulmaz; takım üssü (madde 607)
 		_add_target(local_p, T_PLAYER, ok, pos, kind, targetable, ghost, body, zone, ids)
 	## HitArea eşleniği (C++ hit_radius): yerel oyuncunun FİZİK çemberi - Area2D (mask 2) sadece katman 2'deki "player"ı
 	## görüyordu; Hadime hayaleti gibi collision_layer 0 iken görmezdi.
@@ -366,7 +394,8 @@ func _build_targets() -> void:
 				continue
 			var ok2: bool = not (rp.get("is_invisible") == true) and not (rp.get("is_dead") == true) \
 					and not (rp.get("is_downed") == true) and not (rp.get("is_indoors") == true) \
-					and not (rp.get("is_in_merchant_zone") == true) and not (rp.get("in_limbo") == true)
+					and not (rp.get("is_in_merchant_zone") == true) and not (rp.get("in_limbo") == true) \
+					and not BaseZonesScript.shelters((rp as Node2D).global_position)
 			_add_target(rp, T_REMOTE, ok2, pos, kind, targetable, ghost, body, zone, ids)
 	## 3. Necromancer yaratıkları
 	for ally: Node in tree.get_nodes_in_group("player_allies"):

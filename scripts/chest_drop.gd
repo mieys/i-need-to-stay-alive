@@ -9,24 +9,19 @@ extends Area2D
 ## elit sandık (NetworkManager.host_award_elite_chest), açılınca epik eşya kartı (main.gd _show_elite_chest, chest_menu.gd
 ## elit mod). Düşme kuralları enemy.gd _drop_chest'te.
 ##
-## Görsel (2026-11-06, madde 409): İLK sürümün paket sandıkları geri geldi - kademe bandına (chest_tier) göre 6 sandık + elit, 0,8 dünya
-## px/piksel (chest_art.gd). Sandık 0-3 kapalı, toplanınca 4-12 (sallanma + kapak açılır, altın görünür). Madde 242'nin ışık sütunu ve
-## ek gölgeleri kapalı (ChestArt.BEAM_ENABLED / EXTRA_SHADOW). Sandık YERDE DURUR.
+## Görsel (2026-11-11, madde 557): kullanıcının yeni sandık çizimleri (chest_art.gd) - sıradan + elit, her biri kare 0 = KAPALI, kare 1 = AÇIK,
+## 0,8 dünya px/piksel. Yerdeki sandık KAPALI karede durur ve diğer yer objeleri gibi SÜZÜLÜR (kök zıplaması, gölgesi yerde standart drop_shadow.gd); toplanınca kısa sallanır, kapak açılır
+## (kare 1), kısa bir an açık kalıp söner. Kademe bandı (chest_tier) görünüşü değiştirmez, yalnız ödül/başlık içindir.
 
 const ChestArt := preload("res://scripts/chest_art.gd")
-const NORMAL_SHEET := ChestArt.NORMAL_SHEET
 const DropShadowScript := preload("res://scripts/drop_shadow.gd")
-const ELITE_SHEET := ChestArt.ELITE_SHEET
-const SHADOW_TEX := preload("res://assets/sprites/chests/chest_shadow.png")
-const FRAME_COUNT := ChestArt.FRAME_COUNT
 ## Sandığın tabanı kökün SHADOW_Y altında: ortalı sprite'ta taban (CHEST_ANCHOR_PX.y - kare/2) x TEXEL aşağıda.
 const SHADOW_Y := 8.0
 const SPRITE_Y := SHADOW_Y - (ChestArt.CHEST_ANCHOR_PX.y - ChestArt.FRAME_PX * 0.5) * ChestArt.TEXEL
-const OPEN_FRAMES := [4, 5, 6, 7, 8, 9, 10, 11, 12]
-const OPEN_FRAME_TIME := 0.05
-## Normal sandık çoğu zaman durur, arada bir asma kilidinde parıltı çakar; elit sandığın mor taşı nabız atar.
-const NORMAL_GLINT_EVERY := 2.4
-const ELITE_IDLE_STEP := 0.3
+## Açılış: sallanma adımları (sanat px, yatay) -> kapak açılır -> OPEN_HOLD sn açık kalır -> söner.
+const SHAKE_OFFSETS := [-1.0, 1.0, -1.0, 1.0, 0.0]
+const SHAKE_STEP_TIME := 0.05
+const OPEN_HOLD := 0.25
 
 ## "KADEME" bandı (0-5) - hangi dünya evresinden düştü (sandık menüsünün başlığı, bkz. chest_menu.gd CHEST_TITLES) + sandığın görünüşü.
 @export var chest_tier: int = 0:
@@ -47,9 +42,12 @@ var night_glow_color: Color:
 		return Color(0.86, 0.64, 1.0) if is_elite else Color(1.0, 0.8, 0.45) ## elit: koyu mor gece zemininde sönük kalıyordu -> açık mor
 var bob_time: float = 0.0
 var sprite: Sprite2D = null
-var _shadow: Sprite2D = null
-var _beam: Sprite2D = null ## ışık sütunu + yer halkası (sandığın arkasında)
-var _idle_t: float = 0.0
+## SÜZÜLME (2026-11-11, kullanıcı: "yere düşen sandıklar süzülmüyor, diğer eşyalar gibi süzülsün"): yerdeki sandık altın/yemek/mıknatıs ile AYNI
+## kök zıplamasıyla (sin(t*4)*3, konuma artımlı eklenir) yukarı-aşağı süzülür; gölge yerde kalır, sandık yükseldikçe daralır (drop_shadow.gd root_bob).
+## Faz sandık başına rastgele (yan yana düşen sandıklar aynı anda inip kalkmasın). Açılış sallanması sprite'ta, süzülme kökte: çakışmaz.
+const BOB_SPEED := 4.0
+const BOB_AMP := 3.0
+var _last_bob_offset: float = 0.0
 
 func _ready() -> void:
 	add_to_group("chest_drops")
@@ -57,61 +55,32 @@ func _ready() -> void:
 	if not sprite:
 		sprite = get_node_or_null("Sprite2D")
 	bob_time = randf() * TAU
-	_idle_t = randf() * NORMAL_GLINT_EVERY
 	_update_visual()
-	## Gölge (2026-10-02, harita gölgeleriyle aynı "B" dili - bkz. drop_shadow.gd): sprite dinlenme konumundayken ölçülür,
-	## sonra sadece sprite zıpladığı için gölge yerde kalır.
-	if ChestArt.EXTRA_SHADOW:
-		DropShadowScript.attach(self, sprite, false, 3, Rect2(), true)
+	## Gölge (2026-10-02, harita gölgeleriyle aynı "B" dili - bkz. drop_shadow.gd): yeni sandık çiziminin kendi gölgesi yok -> diğer yer
+	## objeleri gibi standart gölge; sprite dinlenme konumundayken (kapalı kare) ölçülür, açılışta sallanan sprite'a bağlı değildir.
+	## root_bob true: kök süzüldüğü için gölge yerde sabit kalır (bkz. food_drop.gd).
+	DropShadowScript.attach(self, sprite, true, 3, Rect2(), true)
+
+
+func _process(delta: float) -> void:
+	bob_time += delta
+	var bob_offset: float = sin(bob_time * BOB_SPEED) * BOB_AMP
+	position.y += bob_offset - _last_bob_offset
+	_last_bob_offset = bob_offset
 
 
 func _update_visual() -> void:
 	var s: Sprite2D = sprite if sprite else get_node_or_null("Sprite2D") as Sprite2D
 	if s == null:
 		return
-	s.texture = ELITE_SHEET if is_elite else ChestArt.normal_sheet(chest_tier)
-	s.hframes = FRAME_COUNT
+	s.texture = ChestArt.sheet(is_elite)
+	s.hframes = ChestArt.FRAME_COUNT
 	s.vframes = 1
-	s.frame = 0
+	s.frame = ChestArt.FRAME_CLOSED
 	s.scale = Vector2.ONE * ChestArt.TEXEL
 	s.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	s.position = Vector2(0.0, SPRITE_Y)
-	if _shadow == null and ChestArt.EXTRA_SHADOW:
-		_shadow = Sprite2D.new()
-		_shadow.name = "Shadow"
-		_shadow.texture = SHADOW_TEX
-		_shadow.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		_shadow.position = Vector2(0.0, SHADOW_Y)
-		add_child(_shadow)
-		move_child(_shadow, 0)
-	if not ChestArt.BEAM_ENABLED:
-		return
-	if _beam == null:
-		_beam = Sprite2D.new()
-		_beam.name = "Beam"
-		_beam.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		_beam.hframes = ChestArt.BEAM_FRAMES
-		_beam.scale = Vector2.ONE * ChestArt.TEXEL
-		add_child(_beam)
-		move_child(_beam, s.get_index()) ## sandığın hemen arkası (gölgelerin önü)
-	_beam.texture = ChestArt.ELITE_BEAM_SHEET if is_elite else ChestArt.BEAM_SHEET
-	_beam.position = s.position + ChestArt.BEAM_OFFSET_PX * ChestArt.TEXEL
-	_beam.frame = 0
-	_beam.visible = true
 
-
-func _process(delta: float) -> void:
-	if sprite == null or _is_opening:
-		return
-	_idle_t += delta
-	if _beam != null:
-		_beam.frame = int(_idle_t / ChestArt.BEAM_IDLE_STEP) % ChestArt.BEAM_IDLE
-	if is_elite:
-		sprite.frame = int(_idle_t / ELITE_IDLE_STEP) % 4
-	else:
-		## Döngü sonunda 2 kare parıltı (2, 3), gerisi düz kapalı sandık.
-		var t: float = fmod(_idle_t, NORMAL_GLINT_EVERY)
-		sprite.frame = 2 if t > NORMAL_GLINT_EVERY - 0.16 and t <= NORMAL_GLINT_EVERY - 0.08 else 3 if t > NORMAL_GLINT_EVERY - 0.08 else 0
 
 var _is_opening: bool = false
 ## ÇİFT AÇILIŞ DÜZELTMESİ (2026-10-12, kullanıcı: "arkadaşımla aynı elit sandığı aldık, 2 sandık açıldı"): sandığın iki giriş yolu vardı -
@@ -178,20 +147,21 @@ func _open_chest_for(_body: Node, award_to_local: bool = true) -> void:
 	sfx.play()
 	sfx.finished.connect(sfx.queue_free)
 
-	## Dünyadaki kısa açılış: sallanma + aralıktan ışık + kapak patlaması (ödül ekranındaki uzun animasyonun ilk yarısı).
+	## Dünyadaki kısa açılış: sallanma + kapak açılır (ödül ekranındaki uzun animasyonun ilk yarısı). Hareket koddan (madde 557):
+	## çizimde yalnız kapalı + açık kare var.
 	if sprite:
 		sprite.position.y = SPRITE_Y
 	var tw: Tween = create_tween()
-	for f: int in OPEN_FRAMES:
+	for dx: float in SHAKE_OFFSETS:
 		tw.tween_callback(func() -> void:
 			if sprite:
-				sprite.frame = f
-			if is_instance_valid(_beam):
-				var bf: int = ChestArt.beam_frame_for_open(f)
-				_beam.visible = bf >= 0
-				if bf >= 0:
-					_beam.frame = bf
-		).set_delay(OPEN_FRAME_TIME)
+				sprite.position.x = dx * ChestArt.TEXEL
+		).set_delay(SHAKE_STEP_TIME)
+	tw.tween_callback(func() -> void:
+		if sprite:
+			sprite.frame = ChestArt.FRAME_OPEN
+	)
+	tw.tween_interval(OPEN_HOLD)
 	tw.tween_property(self, "modulate:a", 0.0, 0.18)
 
 	## Sandık seçim ekranı ANINDA açılmaz - kullanıcı isteği: "biriken sandıklar seviye atlayınca otomatik açılsın":
@@ -241,7 +211,7 @@ func _award_chest_gold(chest_receivers: Array) -> void:
 	if not NetworkManager.is_multiplayer_active:
 		GameManager.add_pending_chest_gold(is_elite, chest_gold_share(amount, 1))
 		return
-	var participants: Array = NetworkManager.get_reward_participants()
+	var participants: Array = NetworkManager.get_reward_participants(int(chest_receivers[0]) if not chest_receivers.is_empty() else 0) ## 2v2: yalnız alanın takımı bölüşür (madde 617)
 	if participants.is_empty():
 		return
 	var share: int = chest_gold_share(amount, participants.size())

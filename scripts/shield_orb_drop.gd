@@ -4,8 +4,10 @@ const DropAttractionScript := preload("res://scripts/drop_attraction.gd")
 const DropShadowScript := preload("res://scripts/drop_shadow.gd")
 const SoftGlowScript := preload("res://scripts/soft_glow_blend.gd")
 
-## KALKAN ORBU (kullanıcı isteği 2026-10-14: "tıpkı yiyecek gibi kalkan veren 2 adet yere düşen toplanabilir": 1. orb %15,
-## 2. orb %30 kalkan yeniler). food_drop.gd ile AYNI desen (kök zıplar, gölge yerde, 300 sn sonra kaybolur, istemcideki
+## MANA KALKANI İKSİRİ (eski adı kalkan orbu; kullanıcı isteği 2026-10-14: "tıpkı yiyecek gibi kalkan veren 2 adet yere düşen toplanabilir":
+## 1. kademe %15, 2. kademe %30 kalkan yeniler). 2026-11-11: görünüş orbdan İKSİR şişesine döndü (kullanıcının 32x32 çizimleri: kademe 1 küçük
+## mavi şişe, kademe 2 iri yuvarlak camgöbeği şişe; dosya adları `shield_orb_small/large.png` aynı kaldı, iç kimlik `shield_orb`, ağ türü ve grup
+## adı DEĞİŞMEDİ -> lobi protokolü aynı). Şişeler 32 px = tam 1x (yiyecekle aynı boy). food_drop.gd ile AYNI desen (kök zıplar, gölge yerde, 300 sn sonra kaybolur, istemcideki
 ## görsel kopya host'a request_drop_pickup yollar, "claimed" tek kapı). Yüzde, toplayanın AZAMİ kalkanı üzerinden.
 ## TEK kaynak burası: enemy.gd (düşme) ve network_manager.gd (host'un istemci adına işlediği yol) buradan okur.
 const TIER_SHIELD_PERCENT: Dictionary = {
@@ -32,7 +34,10 @@ var bob_time: float = 0.0
 var _last_bob_offset: float = 0.0
 var sprite: Sprite2D = null
 
-## PARILTI (kullanıcı isteği 2026-10-14: "orb parıltılı görünmeli"): orbun üstünde ayrı bir düğüm (gölge ölçüsünü bozmasın diye dokuya
+## PARILTI: iksir şişelerinde KAPALI (2026-11-11). Eski orbun küreyi çaprazlama geçen cam parlaması 26 px'lik çerçeveydi; 32 px şişenin üstünde
+## gri çubuk/çatlak gibi duruyor ve şişelerin kendi cam yansıması var. Geri açmak için true (kod + sayfalar duruyor).
+const SPARKLE_ENABLED := false
+## (eski orb notu) PARILTI (kullanıcı isteği 2026-10-14: "orb parıltılı görünmeli"): orbun üstünde ayrı bir düğüm (gölge ölçüsünü bozmasın diye dokuya
 ## gömülmedi) - nabız gibi atan hale, küreyi çaprazlama geçen cam parlaması ve kenarda yanıp sönen dört köşeli yıldızlar. Büyük orbda
 ## bir yıldız fazla + altın tonlu. FPS (2026-10-15): eskiden orb başına 12 Hz'de ~70 draw_rect + 480 hücrelik tarama (_draw) vardı;
 ## artık 48 adımlık (12 FPS, 4 sn) döngü SPRITE SHEET (tools/gen_shield_orb_sparkle.py, assets/pickups/shield_orb/sparkle_t1/t2.png),
@@ -65,13 +70,14 @@ func _ready() -> void:
 		sprite = get_node_or_null("Sprite2D")
 	_update_visual()
 	DropShadowScript.attach(self, sprite, true)
-	_fx = Sprite2D.new()
-	_fx.name = "Sparkle"
-	_fx.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_fx.material = SoftGlowScript.material() ## toplamalı yerine yumuşak parıltı: yan yana orblar beyaza patlamaz (2026-11-08)
-	_fx.hframes = SPARKLE_FRAMES
-	_fx.texture = _sparkle_sheet(tier)
-	add_child(_fx)
+	if SPARKLE_ENABLED:
+		_fx = Sprite2D.new()
+		_fx.name = "Sparkle"
+		_fx.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		_fx.material = SoftGlowScript.material() ## toplamalı yerine yumuşak parıltı: yan yana orblar beyaza patlamaz (2026-11-08)
+		_fx.hframes = SPARKLE_FRAMES
+		_fx.texture = _sparkle_sheet(tier)
+		add_child(_fx)
 	bob_time = randf() * 4.0 ## yan yana düşen orblar aynı anda yanıp sönmesin
 	get_tree().create_timer(EXPIRE_SECONDS).timeout.connect(_on_expire)
 	_place_on_ground.call_deferred()

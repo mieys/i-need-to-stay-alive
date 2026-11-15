@@ -103,8 +103,6 @@ static func face_icon(char_id: int, bw: float, dim: bool = false) -> CenterConta
 ## DIŞINDA (yüzden piksel yemez); YEREL koordinatta çizilir (`draw_local`) -> düğme nefesi / basma yaylanması / kaydırma ile birlikte hareket eder.
 ## Çerçeve katmanı yüzün ÜSTÜNDE: yarım piksele düşen konumda bile kenarda boşluk / taşma görünmez. accent = orta halka rengi (seçili kart).
 static func framed_icon(char_id: int, face_bw: float, frame_px: float = 2.0, dim: bool = false) -> CenterContainer:
-	var t: float = maxf(1.0, roundf(frame_px))
-	var border: float = 4.0 * t
 	var inner: CenterContainer = face_icon(char_id, face_bw)
 	var face_size := Vector2(face_bw, face_bw).floor()
 	var box: Control = null
@@ -113,6 +111,14 @@ static func framed_icon(char_id: int, face_bw: float, frame_px: float = 2.0, dim
 		face_size = box.custom_minimum_size
 		inner.remove_child(box)
 	inner.free()
+	return wrap_framed(box, face_size, frame_px, dim)
+
+
+## Herhangi bir kare kutuyu (box, face_size boyunda; null olabilir) aynı Gömme Tepsi çerçevesine sarar - evcil arka planı da kullanır
+## (pet_badge.gd framed_icon, madde 585).
+static func wrap_framed(box: Control, face_size: Vector2, frame_px: float = 2.0, dim: bool = false) -> CenterContainer:
+	var t: float = maxf(1.0, roundf(frame_px))
+	var border: float = 4.0 * t
 	var holder := FramedPortrait.new()
 	holder.custom_minimum_size = face_size + Vector2(border, border) * 2.0
 	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE

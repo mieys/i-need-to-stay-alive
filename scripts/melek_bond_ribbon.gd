@@ -27,8 +27,13 @@ var _idx := PackedInt32Array() ## üçgen indeksleri (örnek sayısı değişmed
 var last_total: float = 0.0
 
 
+var _kind: String = "heal"
+var _glow_seg: Array = []
+
+
 func setup(p_bond: Node2D, kind: String) -> void:
 	bond = p_bond
+	_kind = kind
 	top_level = true
 	position = Vector2.ZERO
 	z_index = 60
@@ -87,11 +92,13 @@ func compute() -> Dictionary:
 		return {}
 	var caster: Node2D = caster_v
 	var ring_c: Vector2 = bond.call("ring_world_center")
-	var hp: Array = BondMath.halo_point(caster, ring_c)
+	## Madde 565: E bağı dostun kalkan baloncuğuna bağlıysa ip baloncuğun yüzeyindeki değme noktasına iner.
+	var end_v: Variant = bond.call("rope_end_world") if bond.has_method("rope_end_world") else null
+	var hp: Array = BondMath.halo_point(caster, (end_v as Vector2) if end_v != null else ring_c)
 	var p0: Vector2 = hp[0]
 	var texel: float = maxf(float(hp[2]), 0.01)
 	var side: float = -1.0 if ring_c.x >= p0.x else 1.0 ## halkanın Melek'e bakan kenarı
-	var p1: Vector2 = ring_c + Vector2(side * (BondMath.RING_RX - 1.0), -1.0) * BondMath.TEXEL_W
+	var p1: Vector2 = (end_v as Vector2) if end_v != null else ring_c + Vector2(side * (BondMath.RING_RX - 1.0), -1.0) * BondMath.TEXEL_W
 	var p1a: Vector2 = (p1 - p0) / texel
 	var total: float = BondMath.bezier_length(p1a)
 	var t: float = float(bond.call("time_alive"))
@@ -105,11 +112,28 @@ func _process(_delta: float) -> void:
 	_rebuild()
 
 
+## Gece ışığı (bkz. night_glow.gd; katalogda BY_SCRIPT): ip boyunca (Melek'in halesi -> dostun bel halkası) kind rengiyle parlar.
+## _rebuild her karede _glow_seg'i günceller; ip yokken (boş) ışık da yok.
+func get_glow_segment() -> Array:
+	return _glow_seg
+
+
+func get_night_glow_color() -> Color:
+	return BondMath.palette(_kind)[3]
+
+
+func get_night_glow_energy() -> float:
+	if bond == null or not is_instance_valid(bond) or not bond.has_method("dissolve_amount"):
+		return 1.0
+	return 1.0 - clampf(float(bond.call("dissolve_amount")), 0.0, 1.0)
+
+
 func _rebuild() -> void:
 	if not _ci.is_valid():
 		return
 	RenderingServer.canvas_item_clear(_ci)
 	var r: Dictionary = compute()
+	_glow_seg = [] if r.is_empty() else [r["p0"], r["p1"]]
 	if r.is_empty():
 		_spr.visible = false
 		_head.visible = false

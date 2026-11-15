@@ -3,6 +3,7 @@ extends Node
 ## Yaratık altını yere düşmez, öldürene "+N" yazısı + sesle verilir (2026-10-15, bkz. scripts/kill_gold.gd).
 
 const KillGold = preload("res://scripts/kill_gold.gd")
+const Loc = preload("res://scripts/localization.gd")
 
 
 func test_amount_is_guaranteed_and_scales_with_creature_tier() -> void:
@@ -32,17 +33,19 @@ func test_summon_roll_can_give_nothing() -> void:
 
 ## 2026-10-24: yaratık altını yine yere düşer (GoldDrop), karaktere otomatik gönderilmez; miktar hesabı (amount_for) aynı.
 func test_enemy_drops_gold_on_the_ground() -> void:
-	assert(KillGold.GROUND_DROPS, "yaratık altını yere düşmeli")
 	var source: String = FileAccess.get_file_as_string("res://scripts/enemy.gd")
 	if source.length() == 0:
 		return
 	var g: int = source.find("func _drop_gold()")
-	var end: int = source.find("func _award_gold_directly(")
+	var end: int = source.find("func _roll_extra_item_gold(")
 	assert(g != -1 and end > g, "_drop_gold bulunamadı")
 	var body: String = source.substr(g, end - g)
 	assert(body.find("KillGold.amount_for(") != -1, "miktar hesabı değişmedi")
 	assert(body.find("GoldDrop.instantiate()") != -1 and body.find("broadcast_drop.rpc(\"gold\"") != -1, "altın GoldDrop olarak düşüp yayınlanmalı")
 	assert(body.find("KillGold.award") == -1, "ana yolda otomatik teslim olmamalı")
+	## 2026-11-15: eski doğrudan teslim + asist yolu (GROUND_DROPS = false) silindi
+	assert(source.find("_award_gold_directly") == -1 and source.find("_award_with_assists") == -1 and source.find("_assist_damage") == -1, "eski asist yolu kalmamalı")
+	assert(not FileAccess.file_exists("res://scripts/assist.gd") and not FileAccess.file_exists("res://scripts/kill_gold_coin.gd"), "asist / dönen para dosyaları silindi")
 
 
 ## Ölen yaratık yerde GoldDrop bırakır, altın o zaman eklenmez; toplama mesafesine girince (XP gibi) oyuncuya çekilir, toplanınca
@@ -53,9 +56,10 @@ func test_dead_enemy_leaves_gold_that_is_collected_by_proximity() -> void:
 	var was_active: bool = NetworkManager.is_multiplayer_active
 	NetworkManager.is_multiplayer_active = false
 	var e: Node2D = (load("res://scenes/creatures/enemy_slime1.tscn") as PackedScene).instantiate()
-	e.gold_min = 3
-	e.gold_max = 3
+	e.gold_min = 20
+	e.gold_max = 20
 	e.gold_chance = 1.0
+	KillGold.reset_pool()
 	add_child(e)
 	e.global_position = Vector2(5000, 5000)
 	var before: int = GameManager.gold
@@ -66,14 +70,15 @@ func test_dead_enemy_leaves_gold_that_is_collected_by_proximity() -> void:
 	var drops: Array = get_tree().get_nodes_in_group("gold_drops").filter(func(n: Node) -> bool: return n.global_position.distance_to(Vector2(5000, 5000)) < 40.0)
 	assert(drops.size() == 1, "yerde tek altın düşmeli: %d" % drops.size())
 	assert(GameManager.gold == before, "düşen altın yerdeyken eklenmez")
-	assert(int(drops[0].amount) == 3, "miktar aynı: %d" % int(drops[0].amount))
+	assert(int(drops[0].amount) == 23, "miktar +%%15 (20 -> 23): %d" % int(drops[0].amount))
 	## Toplama: oyuncu gövdesi altına değer.
 	var p := Node2D.new()
 	p.add_to_group("player")
 	add_child(p)
 	p.global_position = drops[0].global_position
 	drops[0].call("_on_body_entered", p)
-	assert(GameManager.gold == before + 3, "toplanınca altın eklenir")
+	var got: int = int(drops[0].amount)
+	assert(GameManager.gold == before + got, "toplanınca altın eklenir")
 	var texts: Array = []
 	for n in get_children():
 		if "label" in n and n.get("label") is Label:
@@ -87,12 +92,28 @@ func test_dead_enemy_leaves_gold_that_is_collected_by_proximity() -> void:
 	get_tree().current_scene = prev_scene
 
 
-func test_award_adds_gold_to_local_player() -> void:
+## 2026-11-13: gelir +%15 (beklenen değer) ve küçük paylar havuzda birikip MIN_COIN'de tek altın olur.
+func test_income_mult_expected_value_and_pool() -> void:
+	var total: int = 0
+	for i in 2000:
+		total += KillGold.scale_amount(3)
+	var avg: float = float(total) / 2000.0
+	assert(absf(avg - 3.45) < 0.08, "3 x 1,15 beklenen değer ~3,45: %f" % avg)
+	KillGold.reset_pool()
+	for i in 4:
+		assert(KillGold.pool_take(3) == 0, "MIN_COIN altında düşme yok")
+	assert(KillGold.pool_take(3) == 15, "havuz dolunca tek altın birikmiş değeri taşır")
+	assert(KillGold.pool_take(1) == 0, "havuz boşaldı")
+	KillGold.reset_pool()
+	assert(KillGold.pool_take(20) == 20, "büyük pay hemen düşer")
+
+
+func test_credit_adds_gold_to_local_player() -> void:
 	var before: int = GameManager.gold
-	KillGold.award_now(get_tree(), 7, Vector2(10, 10), null)
+	KillGold.credit(get_tree(), 7, Vector2(10, 10))
 	assert(GameManager.gold == before + 7, "altın hemen eklenmeli")
 	GameManager.gold = before
-	KillGold.award_now(get_tree(), 0, Vector2.ZERO, null)
+	KillGold.credit(get_tree(), 0, Vector2.ZERO)
 	assert(GameManager.gold == before, "0 altın bir şey eklemez")
 
 
@@ -118,68 +139,6 @@ func test_world_give_adds_gold_without_flying_coins() -> void:
 	GameManager.gold = before
 
 
-## Oyuncu yoksa (ya da görüş dışı) para gösterilemez: altın eski gibi anında verilir.
-func test_award_without_player_gives_instantly() -> void:
-	var before: int = GameManager.gold
-	KillGold.award(get_tree(), 9, Vector2(10, 10), null)
-	assert(GameManager.gold == before + 9, "oyuncu yoksa anında eklenir")
-	GameManager.gold = before
-
-
-## Yaratık altını yere düşen dönen paradır: 0,5 sn bekler, sonra oyuncuya uçar, VARINCA altın eklenir (kullanıcı 2026-10-21).
-func test_award_drops_spinning_coin_that_flies_to_player_after_half_second() -> void:
-	var prev_scene: Node = get_tree().current_scene
-	get_tree().current_scene = self
-	var p := Node2D.new()
-	p.add_to_group("player")
-	add_child(p)
-	p.global_position = Vector2(300, 0)
-	var before: int = GameManager.gold
-	var coins_before: int = KillGold.active_coins
-	KillGold.award(get_tree(), 9, Vector2(60, 0), null)
-	await get_tree().process_frame
-	await get_tree().process_frame
-	assert(KillGold.active_coins == coins_before + 1, "yerde bir para belirmeli")
-	assert(GameManager.gold == before, "para yerdeyken altın henüz eklenmez")
-	var coin: Node2D = null
-	for c in get_children():
-		if c.get_script() == KillGold.COIN_SCRIPT:
-			coin = c
-	assert(coin != null, "para düğümü sahnede")
-	assert(is_equal_approx(coin.HOVER_TIME, 0.5), "0,5 sn bekleme")
-	await get_tree().create_timer(0.35).timeout
-	assert(coin.global_position.distance_to(Vector2(60, 0)) < 20.0, "ilk 0,5 sn içinde yerinde durur")
-	assert(GameManager.gold == before, "uçuş başlamadan altın eklenmez")
-	await get_tree().create_timer(0.3).timeout ## 0,65 sn: uçuş başlamış, henüz varmamış olabilir
-	assert(not is_instance_valid(coin) or coin.global_position.x > 90.0, "0,5 sn sonra oyuncuya doğru uçar")
-	await get_tree().create_timer(KillGold.COIN_SCRIPT.MAX_FLIGHT + 0.2).timeout
-	assert(GameManager.gold == before + 9, "varınca altın eklenir")
-	assert(KillGold.active_coins == coins_before, "para varınca silinir")
-	GameManager.gold = before
-	p.remove_from_group("player")
-	p.free()
-	get_tree().current_scene = prev_scene
-
-
-## Çok para olunca düğüm sayısı patlamasın: sınırdan sonrası anında verilir.
-func test_coin_cap_falls_back_to_instant_gold() -> void:
-	var prev_scene: Node = get_tree().current_scene
-	get_tree().current_scene = self
-	var p := Node2D.new()
-	p.add_to_group("player")
-	add_child(p)
-	var saved: int = KillGold.active_coins
-	KillGold.active_coins = KillGold.MAX_ACTIVE_COINS
-	var before: int = GameManager.gold
-	KillGold.award(get_tree(), 4, Vector2(20, 0), null)
-	assert(GameManager.gold == before + 4, "para sınırı dolunca altın anında verilir")
-	KillGold.active_coins = saved
-	GameManager.gold = before
-	p.remove_from_group("player")
-	p.free()
-	get_tree().current_scene = prev_scene
-
-
 ## peer_id alanı olan sahte uzak oyuncu kuklası.
 func _peer_node(peer: int) -> Node2D:
 	var n := Node2D.new()
@@ -202,56 +161,87 @@ func test_pickup_text_is_hidden() -> void:
 	get_tree().current_scene = prev_scene
 
 
-## Simge (yazıya bitişik sabit altın) yalnız yazı açıkken - asist/takım payı yazılarında hâlâ çıkar.
-func test_icon_is_static_and_beside_text() -> void:
-	if get_tree().current_scene == null:
-		return
-	KillGold.show_at(get_tree(), 4, Vector2(0, 0), 1)
-	var icon: Sprite2D = null
-	for n in get_tree().current_scene.get_children():
-		for c in n.get_children():
-			if c is AnimatedSprite2D:
-				assert(false, "altın simgesi animasyonlu olmamalı")
-			if c is Sprite2D and (c as Sprite2D).texture == KillGold.COIN_FRAMES.get_frame_texture("spin", 0):
-				icon = c
-	assert(icon != null, "yazının yanında sabit altın simgesi olmalı")
-	## Simge yazının solunda ve metnin dikey ortasında (Label üst hizalı: -22 ... -22+yükseklik).
-	assert(icon.position.x < 0.0 and icon.position.y > -22.0 and icon.position.y < 8.0, "simge yazıya bitişik: %s" % [icon.position])
+## 2026-11-15: çok oyunculuda yerden toplanan sıradan yaratık altını takımca bölünür, toplayanın payı diğerlerinin 1,5 katı; kesirler birikir
+## (15 altınlık parada aşağı yuvarlayıp artanı toplayana vermek onun payını %47'ye çıkarırdı).
+func test_split_shares_picker_gets_a_bit_more_and_fractions_carry() -> void:
+	KillGold.reset_pool()
+	assert(is_equal_approx(KillGold.PICKER_SHARE_WEIGHT, 1.5), "toplayan ağırlığı 1,5")
+	var total: Dictionary = {}
+	for i in 1000:
+		var sh: Dictionary = KillGold.split_shares(15, [1, 2, 3, 4, 5], 2)
+		for pid in sh.keys():
+			total[pid] = int(total.get(pid, 0)) + int(sh[pid])
+	var paid: int = 0
+	for pid in total.keys():
+		paid += int(total[pid])
+	assert(paid <= 15000 and paid >= 15000 - 5, "ödenen toplam = düşen altın (en çok oyuncu başına 1 altın kesir bekler): %d" % paid)
+	assert(absi(int(total[2]) - 4091) <= 1, "toplayan %%27,3 (15000 x 1,5 / 5,5 = 4091): %d" % int(total[2]))
+	for pid in [1, 3, 4, 5]:
+		assert(absi(int(total[pid]) - 2727) <= 1, "diğerleri %%18,2 (2727): %d" % int(total[pid]))
+	## Tek katılımcı tamamını alır; toplayan listede değilse herkes eşit.
+	KillGold.reset_pool()
+	assert(int(KillGold.split_shares(50, [7], 7)[7]) == 50, "tek katılımcı hepsini alır")
+	var eq: Dictionary = KillGold.split_shares(90, [1, 2, 3], 99)
+	assert(int(eq[1]) == 30 and int(eq[2]) == 30 and int(eq[3]) == 30, "toplayan listede yok: eşit: %s" % [eq])
+	## 2 oyuncu: %60 / %40.
+	var two: Dictionary = KillGold.split_shares(100, [1, 2], 1)
+	assert(int(two[1]) == 60 and int(two[2]) == 40, "2 oyuncu 60 / 40: %s" % [two])
+	KillGold.reset_pool()
 
 
-## 2026-10-19 (madde 308): takım payı "TAKIM +N", asist "ASİST +N", kendi öldürme "+N".
-func test_team_share_text_is_labelled() -> void:
-	var prev_scene: Node = get_tree().current_scene
-	get_tree().current_scene = self
-	KillGold.show_at(get_tree(), 3, Vector2(0, 0), KillGold.TEAM_KIND)
-	KillGold.show_at(get_tree(), 5, Vector2(0, 0), 1)
-	KillGold.show_at(get_tree(), 7, Vector2(0, 0))
-	var texts: Array = []
-	for n in get_children():
-		if "label" in n and n.get("label") is Label:
-			texts.append((n.get("label") as Label).text)
-	assert(texts.has("TAKIM +3") and texts.has("ASİST +5") and not texts.has("+7"), "asist/takım yazıları sürer, düz toplama yazısı yok: %s" % [texts])
-	get_tree().current_scene = prev_scene
-
-
-## Çok oyunculu bayrak açık + yalnız yerel oyuncu: takım payı çalışmaz (grup tek kişi), altının tamamı öldürene (yerel) gider; yeni kod yolu hatasız koşar.
-func test_enemy_award_with_assists_alone_in_multiplayer_flag() -> void:
+## Host: toplayan kendi payını hemen alır, takım arkadaşının payı birikip TEAM_GOLD_FLUSH_INTERVAL sonra cüzdanına girer (yazısız, uçan parayla).
+func test_creature_gold_is_split_with_teammates_in_multiplayer() -> void:
 	var prev_scene: Node = get_tree().current_scene
 	get_tree().current_scene = self
 	var was_active: bool = NetworkManager.is_multiplayer_active
+	var was_host: bool = NetworkManager.is_host
 	NetworkManager.is_multiplayer_active = true
+	NetworkManager.is_host = true
+	KillGold.reset_pool()
 	var p := Node2D.new()
 	p.add_to_group("player")
 	add_child(p)
-	var e: Node2D = (load("res://scenes/creatures/enemy_agac1.tscn") as PackedScene).instantiate()
-	add_child(e)
+	var r: Node2D = _peer_node(77)
+	r.add_to_group("remote_players")
+	add_child(r)
 	var before: int = GameManager.gold
-	e.call("_award_with_assists", 10, Vector2.ZERO)
-	await get_tree().create_timer(KillGold.COIN_SCRIPT.HOVER_TIME + 0.4).timeout ## dönen para bekler, oyuncuya uçar, varınca verilir
-	assert(GameManager.gold == before + 10, "tek başına: 10 altının tamamı yerel öldürene: %d" % (GameManager.gold - before))
+	var old_children: Array = get_children() ## önceki testlerin bıraktığı yazılar sayılmasın
+	## Yerel oyuncu yerden toplar (gerçek GoldDrop): 100 altının 60'ı ona, 40'ı uzak oyuncuya ayrılır.
+	var drop: Node2D = (load("res://scenes/gold_drop.tscn") as PackedScene).instantiate()
+	drop.set("amount", 100)
+	add_child(drop)
+	drop.call("_on_body_entered", p)
+	assert(GameManager.gold == before + 60, "toplayan (yerel) 60 alır: %d" % (GameManager.gold - before))
+	## Uzak oyuncu toplar: onun payı 60 (çağırana döner), yerel oyuncunun 40'ı bekler ve süre dolunca eklenir.
+	var keep: int = NetworkManager.host_split_creature_gold(100, Vector2(40, 0), r)
+	assert(keep == 60, "uzak toplayanın payı 60: %d" % keep)
+	assert(GameManager.gold == before + 60, "takım payı hemen eklenmez (toplu gider)")
+	NetworkManager._process_team_gold(NetworkManager.TEAM_GOLD_FLUSH_INTERVAL + 0.01)
+	assert(GameManager.gold == before + 100, "yerel oyuncunun takım payı 40 eklendi: %d" % (GameManager.gold - before))
+	var texts: Array = []
+	var coins: int = 0
+	for n in get_children():
+		if old_children.has(n):
+			continue
+		if "label" in n and n.get("label") is Label:
+			texts.append((n.get("label") as Label).text)
+		if n.get_script() == NetworkManager.GoldShareFxScript:
+			coins += 1
+			n.free()
+	assert(texts.is_empty(), "takım payında karakterin üstünde yazı çıkmaz: %s" % [texts])
+	assert(coins == 1, "takım payı için tek bir uçan altın: %d" % coins)
+	## Boss altını bu yoldan geçmez; tek oyunculuda / host değilken altın bölünmez.
+	NetworkManager.is_host = false
+	assert(NetworkManager.host_split_creature_gold(100, Vector2.ZERO, p) == 100, "host değil: bölünmez")
+	NetworkManager.is_host = true
+	r.remove_from_group("remote_players")
+	assert(NetworkManager.host_split_creature_gold(100, Vector2.ZERO, p) == 100, "tek katılımcı: tamamı toplayana")
+	NetworkManager._process_team_gold(1.0)
 	GameManager.gold = before
 	NetworkManager.is_multiplayer_active = was_active
+	NetworkManager.is_host = was_host
+	KillGold.reset_pool()
 	p.remove_from_group("player")
 	p.free()
-	e.free()
+	r.free()
 	get_tree().current_scene = prev_scene

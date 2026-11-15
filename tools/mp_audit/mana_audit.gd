@@ -48,21 +48,13 @@ func _fx_state(prefix: String, holder: Node) -> void:
 		_note(prefix + ".fx", false)
 		return
 	_note(prefix + ".fx", true)
-	_note(prefix + ".disc", int(fx.call("disc_count")))
-	_note(prefix + ".disc_back", _disc_behind(fx))
+	_note(prefix + ".hit", int(fx.call("hit_count"))) ## madde 572: darbe = baloncuk yüzeyi (eski mühür diski yok)
+	_note(prefix + ".hit_ranged", int(fx.call("hit_count", true)))
 	_note(prefix + ".break", bool((fx.get("_break_front") as Sprite2D).visible))
 	_note(prefix + ".regen", bool(fx.call("is_regen_shown")))
 	_note(prefix + ".rise", bool((fx.get("_rise_front") as Sprite2D).visible))
 	_note(prefix + ".type", str(fx.get("_type")))
 	_note(prefix + ".shield", int(float(holder.get("item_shield_hp"))))
-
-
-func _disc_behind(fx: Node) -> bool:
-	for d in fx.get("_discs"):
-		var s: Node = d["spr"]
-		if is_instance_valid(s) and s.get_parent() != fx:
-			return true
-	return false
 
 
 func _run() -> void:

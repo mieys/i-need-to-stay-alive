@@ -71,62 +71,38 @@ class Glyph extends Control:
 					draw_rect(Rect2(off + Vector2(x * px, y * px), Vector2(px, px)), col)
 
 
-## Vitrin ışık havuzu (basamaklı daireler + zemin elipsi).
-class Spot extends Control:
-	var col: Color = Color.WHITE
-	var floor_y: float = 0.84
-
-	func _init(c: Color, fy: float = 0.84) -> void:
-		col = c
-		floor_y = fy
-		mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	func _draw() -> void:
-		var c := (size * 0.5).floor()
-		var r: float = minf(size.x, size.y) * 0.48
-		for i in 4:
-			draw_circle(c, floorf(r * (1.0 - i * 0.2)), Color(col, 0.06 + i * 0.03))
-		var fc := Vector2(c.x, floorf(size.y * floor_y))
-		draw_set_transform(fc, 0.0, Vector2(1.0, 0.24))
-		draw_circle(Vector2.ZERO, floorf(r * 0.62), Color(col, 0.2))
-		draw_circle(Vector2.ZERO, floorf(r * 0.42), Color(col, 0.16))
-		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-
-
-## Ruh Kıymığı kristali: Oyun Bitti'deki mor 7x11 piksel kristal, HER ekranda bu (madde 343; eski camgöbeği elmas kalktı).
+## Ruh Kıymığı: kullanıcının çizdiği 32x32 mor yıldız (madde 559; eski 7x11 kristal kalktı), HER ekranda bu. Tuvalin dolu kısmı
+## (5,4'ten 23x23) çizilir - kenar boşluğu yok, yanındaki sayıyla tam hizalanır. Piksel sanatı: hep NEAREST ve sanat pikselinin TAM KATINDA
+## (23 x k) çizilir, kesirli büyütme dış hattı eşitsiz kalınlaştırırdı; istenen boya en yakın k seçilir.
 class ShardIcon extends Control:
-	const ROWS := ["...O...", "..OLO..", ".OLLMO.", ".OLMMO.", "OLLMMDO", "OLMMMDO", "OLMMDDO", ".OMMDO.", ".OMDDO.", "..ODO..", "...O..."]
-	const COLS := {"O": Color("#20150d"), "L": Color("#e6dcff"), "M": Color("#b49cf0"), "D": Color("#6f52bc")}
+	const TEX := preload("res://assets/ui/ruh_kiymigi/ruh_kiymigi.png")
+	const SRC := Rect2(5, 4, 23, 23) ## tuvaldeki dolu bölge
+	const ART := 23
 	var dim: bool = false
 
-	## px = yükseklik; genişlik kristalin oranında (7/11), sayının yanında boşluk kalmasın.
+	## px = istenen yükseklik; gerçek kenar en yakın tam kat (23, 46, 69...). Kutu karedir.
 	func _init(px: float = 24.0, dimmed: bool = false) -> void:
-		custom_minimum_size = Vector2(ceilf(px * 7.0 / 11.0), px)
+		var side: float = side_for(px)
+		custom_minimum_size = Vector2(side, side)
 		size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		dim = dimmed
 
 	func _draw() -> void:
-		var h: float = minf(size.y, size.x * 11.0 / 7.0)
-		paint(self, ((size - Vector2(h * 7.0 / 11.0, h)) * 0.5).floor(), h, dim)
+		var h: float = minf(size.x, size.y)
+		paint(self, ((size - Vector2(h, h)) * 0.5).floor(), h, dim)
 
-	## Tek kaynak (Oyun Bitti panosu da bunu çağırır): o = sol üst, h = yükseklik (11 hücre). Hücre kenarları tam piksele
-	## yuvarlanır - kesirli boyda da boşluksuz, en fazla 1 px fark.
+	## İstenen boya en yakın tam kat kenar (en az 1 kat).
+	static func side_for(h: float) -> float:
+		return float(ART * maxi(1, roundi(h / ART)))
+
+	## Tek kaynak (Oyun Bitti panosu da bunu çağırır): o = sol üst, h = kutu kenarı; yıldız kutunun ortasına tam katta oturur.
 	static func paint(ci: CanvasItem, o: Vector2, h: float, dimmed: bool = false) -> void:
-		var c: float = h / 11.0
+		var side: float = side_for(h)
 		var k: float = 0.5 if dimmed else 1.0
-		var t := Color(k, k, k, 1)
-		for j in ROWS.size():
-			var row: String = ROWS[j]
-			var y0: float = roundf(o.y + j * c)
-			var y1: float = roundf(o.y + (j + 1) * c)
-			for i in row.length():
-				var ch: String = row[i]
-				if not COLS.has(ch):
-					continue
-				var x0: float = roundf(o.x + i * c)
-				var x1: float = roundf(o.x + (i + 1) * c)
-				ci.draw_rect(Rect2(x0, y0, x1 - x0, y1 - y0), COLS[ch] * t)
+		var at := (o + Vector2(h - side, h - side) * 0.5).floor()
+		ci.draw_texture_rect_region(TEX, Rect2(at, Vector2(side, side)), SRC, Color(k, k, k, 1))
 
 
 ## İnce ilerleme / bekleme çizgisi.

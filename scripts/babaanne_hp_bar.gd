@@ -11,6 +11,12 @@ const BACK := Color(0.28, 0.16, 0.15)
 const FILL := Color(0.84, 0.27, 0.22)
 const FILL_HI := Color(0.97, 0.52, 0.42)
 
+const UiHideScript := preload("res://scripts/ui_hide.gd") ## F3 arayüzü gizle (madde 612): babaannenin can çubuğu da kapanır (`visibility_layer`)
+
+
+func _ready() -> void:
+	pass ## F3 arayüz gizliyken de görünür kalır (kullanıcı isteği 2026-11-14): mark_world YOK
+
 
 func _draw() -> void:
 	var k: float = 2.0 ## yerel birim / dünya pikseli

@@ -96,13 +96,13 @@ const EVO_Q_FAST_MOVE_MULT := 1.1
 const EVO_Q_COST_MULT := 0.5
 ## Q Hızlı Okuma: lanet aralığı saldırı hızıyla kısalır ama bu kadardan kısa olmaz (sn).
 const EVO_CURSE_MIN_INTERVAL := 0.25
-## E Genişleyen Boşluk: yarıçap/görsel çarpanı.
+## E Genişleyen Çukur (eski Genişleyen Boşluk): yarıçap/görsel çarpanı (görsel: hadime_black_hole.gd BIG_SHEET_MULT ile aynı).
 const EVO_HOLE_SIZE_MULT := 1.5
-## E Gezgin Delik: kalabalığa ilerleme hızı = çekim hızı (kullanıcı: "içine çekme hızıyla eşit olmalıdır"). Kalabalık bu
+## E Gezgin Çukur (eski Gezgin Delik): kalabalığa ilerleme hızı = çekim hızı (kullanıcı: "içine çekme hızıyla eşit olmalıdır"). Kalabalık bu
 ## yarıçapta aranır, hedef bu aralıkla yenilenir.
 const EVO_HOLE_MOVE_SEARCH := 320.0
 const EVO_HOLE_RETARGET := 0.5
-## E Süpernova: ömrün sonunda içindekilere saldırı gücünün %150'si.
+## E Yer Yarılması (eski Süpernova): ömrün sonunda içindekilere saldırı gücünün %150'si.
 const EVO_HOLE_BURST_RATIO := 1.5
 
 ## ---------- R: Karabasan ----------

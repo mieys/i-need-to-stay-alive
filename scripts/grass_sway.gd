@@ -28,7 +28,8 @@ const LAYER_NAMES: Array[String] = ["Çalılar", "Çalılar1", "Çiçekler 1"] #
 ## bataklık süsleri ve çiçekler eskisi gibi sallanır. Liste: tools/proto_20261105/genis_calilar_liste.png
 ## Kara Bataklık (2026-11-09): b_nesne.png'nin geniş bitkileri (sazlık / eğrelti öbekleri) de aynı kararla sabit.
 ## Altın Kumlar (2026-11-09): c_nesne.png'nin geniş bitkileri (geniş ot öbekleri, palmiye filizi) de sabit.
-const STATIC_WIDE_TEXTURES: Array[String] = ["Objects.png", "sade ağaç ve taş.png", "b_nesne.png", "c_nesne.png"]
+## Ayaz Dağı (2026-11-12): k_nesne.png'nin geniş bitkileri (diken / buz çiçeği öbekleri) de sabit.
+const STATIC_WIDE_TEXTURES: Array[String] = ["Objects.png", "sade ağaç ve taş.png", "b_nesne.png", "c_nesne.png", "k_nesne.png"]
 const STATIC_FLAG := 128
 const MAX_CHARACTERS := 8      ## shader'daki karakterler dizi boyu
 ## Karakter ayak noktası (dünya px, köke göre): oyuncu kökü ölçek 0.5'te, sprite'ın zemine değdiği yer ~+30 yerel.

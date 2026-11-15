@@ -6,11 +6,12 @@ const VampirMathScript := preload("res://scripts/vampir_math.gd")
 const EventSfx := preload("res://scripts/event_sfx.gd")
 const ParrotTreeLoot := preload("res://scripts/parrot_tree_loot.gd")
 const MapProfilesScript := preload("res://scripts/map_profiles.gd") ## harita seçimi (madde 444)
+const TeamsScript := preload("res://scripts/pvp/teams.gd") ## 2v2 PvP takımları (madde 607 / 616)
+const GameModeScript := preload("res://scripts/pvp/game_mode.gd")
 const AudioBuses := preload("res://scripts/audio_buses.gd")
 const BalanceLogScript: GDScript = preload("res://scripts/balance_log.gd")
 const GoldRewardFx := preload("res://scripts/gold_reward_fx.gd")
 const KillGold := preload("res://scripts/kill_gold.gd")
-const AssistScript := preload("res://scripts/assist.gd")
 ## Suriyeli Hadime "hadime_fx" kozmetik efektleri (bkz. broadcast_player_vfx) - yerel oyuncuyla AYNI yardımcı.
 const HadimeMathScript := preload("res://scripts/hadime_math.gd")
 ## Cadı "cadi_fx" / "cadi_throw" kozmetik efektleri (bkz. broadcast_player_vfx) - yerel oyuncuyla AYNI yardımcı.
@@ -94,10 +95,11 @@ var local_char_id: int = 1
 ## bunu LineEdit'e önceden doldurur), her isim değişikliğinde (host_lan/
 ## join_lan/update_local_player_name) tekrar kaydedilir.
 const PLAYER_NAME_CONFIG_PATH := "user://player_settings.cfg"
+const SecurityGuardScript := preload("res://scripts/security/security_guard.gd") ## geliştirici ortam değişkenleri yalnız editörde (2026-11-12)
 
 func _save_local_player_name() -> void:
 	## Test/denetim süreçleri (LILSLAYERS_UID ile başlatılır, bkz. tools/mp_audit) oyuncunun kayıtlı adını ezmesin.
-	if OS.get_environment("LILSLAYERS_UID") != "":
+	if SecurityGuardScript.dev_env("LILSLAYERS_UID") != "":
 		return
 	var config := ConfigFile.new()
 	config.set_value("player", "name", local_player_name)
@@ -110,21 +112,55 @@ func _save_local_player_name() -> void:
 ## iki süreç aynı user:// klasörünü paylaşır).
 const PLAYER_IDENTITY_PATH := "user://player_identity.cfg"
 var local_player_uid: String = ""
+## KİMLİK ÇALMAYI ÖNLEME (hile koruması, madde 613): uid roster ile herkese görünür, bu yüzden tek başına kimlik KANITI değil. Her kurulumun
+## ayrıca GİZLİ bir sırrı var (player_identity.cfg, ağa/roster'a ASLA gitmez); host'a yalnız türevi (kanıt) gider, host onun bir kez daha özetini
+## (doğrulayıcı) saklar ve aynı uid'le gelen sonraki bağlantıda kanıtı denetler. Roster'a/devire yalnız doğrulayıcı gider (geri çevrilemez).
+var _local_player_secret: String = ""
+var _uid_verifier: Dictionary = {} ## host: uid -> doğrulayıcı (kanıtın SHA-256'sı); oda kapanana kadar, host devrinde yeni host'a taşınır
 
 
 func _load_or_create_player_uid() -> void:
-	var env_uid: String = OS.get_environment("LILSLAYERS_UID")
+	var env_uid: String = SecurityGuardScript.dev_env("LILSLAYERS_UID") ## yalnız editörde (hile koruması: exportta kimlik taklidi kısayolu yok)
 	if env_uid != "":
 		local_player_uid = env_uid
+		_local_player_secret = "dev|" + env_uid ## test süreçleri: aynı uid hep aynı sırrı üretir (geri katılım denetimleri aynı uid'le yeniden bağlanır)
 		return
 	var config := ConfigFile.new()
+	var dirty: bool = false
 	if config.load(PLAYER_IDENTITY_PATH) == OK:
 		local_player_uid = str(config.get_value("player", "uid", ""))
+		_local_player_secret = str(config.get_value("player", "secret", ""))
+	var crypto := Crypto.new()
 	if local_player_uid == "":
-		var crypto := Crypto.new()
 		local_player_uid = crypto.generate_random_bytes(12).hex_encode()
 		config.set_value("player", "uid", local_player_uid)
+		dirty = true
+	if _local_player_secret == "": ## eski kurulum (yalnız uid vardı) ya da yeni kurulum
+		_local_player_secret = crypto.generate_random_bytes(24).hex_encode()
+		config.set_value("player", "secret", _local_player_secret)
+		dirty = true
+	if dirty:
 		config.save(PLAYER_IDENTITY_PATH)
+
+
+## Host'a giden kimlik kanıtı (sırdan türer; sır kendisi hiç gitmez).
+func local_player_proof() -> String:
+	return ("proof|" + _local_player_secret).sha256_text()
+
+
+## Kanıt geçerli mi? Biçim (64 onaltılık) doğru olmalı; host bu uid'in doğrulayıcısını biliyorsa (expected != "") kanıtın özeti onunla eşleşmeli,
+## bilmiyorsa (ilk kayıt) kabul edilir ve öğrenilir.
+static func identity_proof_ok(proof: String, expected_verifier: String) -> bool:
+	if proof.length() != 64 or not proof.is_valid_hex_number(false):
+		return false
+	return expected_verifier == "" or proof.sha256_text() == expected_verifier
+
+
+## Host: bu uid için beklenen doğrulayıcı ("" = henüz öğrenilmedi). Host'un kendi uid'i her zaman bilinir (istemci onu üstlenemez).
+func _expected_verifier(uid: String) -> String:
+	if uid == local_player_uid:
+		return local_player_proof().sha256_text()
+	return str(_uid_verifier.get(uid, ""))
 
 
 func _load_saved_player_name() -> void:
@@ -169,7 +205,7 @@ const MAX_PLAYERS := 8
 ## Host devri: kabul edilen herkes şifreyi bilir (room_password = girdiği şifre) - yeni host aynı ayarlarla kurar, diğerleri aynı
 ## şifreyle otomatik doğrulanır.
 const ROOM_MIN_PLAYERS := 2
-const LOBBY_PROTOCOL := "lobi-27" ## (2026-11-09: lobi-26 -> lobi-27, madde 540: teslim oylaması RPC'leri `_rpc_*surrender*` - eski exe bilmez.) (2026-11-09: lobi-25 -> lobi-26, madde 516: Vampir Yarasa Formu geçişi "vampir_fx" kind "bat_in"/"bat_out" (eski "puff" kalktı) - eski exe yeni türü tanımaz, geçiş efektini hiç göstermez) (2026-11-09: lobi-24 -> lobi-25, madde 509: yeni evciller Minik Cadı + Hayalet - broadcast_slime / broadcast_hayalet RPCleri, durum anlık görüntüsünde "psz" - eski exe RPC listesi uyuşmaz) (2026-11-08: lobi-23 -> lobi-24, madde 499: altın hediyesi duyurusu _rpc_announce_gold_gift (herkesin sohbetinde satır) - eski exe RPC listesi uyuşmaz) (2026-11-08: lobi-22 -> lobi-23, madde 496: 4 yeni görev + vurulabilen görev hedefi RPC'leri broadcast_world_event_target_state / _dead / request_world_event_target_damage, zindan haritalarında görevler - eski exe RPC listesi uyuşmaz) (2026-11-08: lobi-21 -> lobi-22, madde 463: ana haritada DungeonManager düğümü yok, derin orman / zindan kalktı) (2026-11-07: lobi-20 -> lobi-21, Taşkın Hisar KÖPRÜ KOLU: DungeonManager._rpc_req_lever (kol gruptaki parmaklıkları indirir) + Lağım Ağı GAZ FIÇISI: _rpc_req_barrel / _rpc_barrel, _rpc_full_state 4. argüman (fıçılar) - eski exe RPC listesi uyuşmaz, madde 449); (2026-11-07: lobi-19 -> lobi-20, yeni silah Pompalı Tüfek "pompali" + request_enemy_damage 5. argüman (sep: saçma hasar sayıları ayrı) + "damage_number" "sep" alanı - eski exe silahı tanımaz, madde 448); (2026-11-07: lobi-18 -> lobi-19, HARİTA SEÇİMİ: _rpc_start_game / _rpc_join_in_progress_game harita kimliği argümanı + LAN ilanına 9. alan (harita) - eski exe RPC imzası uyuşmaz, madde 444); (2026-11-06: lobi-17 -> lobi-18, level pazarı ayrı ekran: _rpc_extend_level_up_countdown (pazarın kendi süresi) - eski exe RPC listesi uyuşmaz, madde 432); (2026-11-06: lobi-16 -> lobi-17, lobi seçimlerine evcil hayvan: _rpc_sync_player_loadout üçüncü argüman "pet" - eski exe 2 argümanla çağırır, RPC reddedilir); (2026-11-06: lobi-15 -> lobi-16, ağ gecikmesi düzeltmesi: güvenilir RPC'ler ayrı aktarım kanallarında (CH_*), oyuncu durum paketi delta (main.gd _rpc_player_state), yaratık senkron kaydında değişmeyen can/kalkan atlanır (enemy_sync_codec FLAG_NO_HP), bağlantı kalitesi ping/pong RPC'leri - eski exe ile kanal/RPC listesi uyuşmaz, madde 419); (2026-10-23: lobi-14 -> lobi-15, yaratık yeteneği "bone" (İskelet Kemik Atışı) dünya efekti - eski exe tanımaz, görünmez kemikten hasar alırdı, madde 368); (2026-10-21: lobi-13 -> lobi-14, Oakley yetenek evrimleri: "oakley_revive" oyuncu efekti + "oakley_tree" süre/alan verisi + bee_poison RPC param2 (Salgın Zehir) - eski exe tanımaz, madde 348); (2026-10-20: lobi-12 -> lobi-13, yeni silah Kalkan "kalkan" + "kalkan_*" darbe verisi - eski exe silahı tanımaz, madde 338); (2026-10-19: lobi-11 -> lobi-12, yeni silah Gökkuşağı Asası "gokkusagi" + "rbeam_*" oyuncu efektleri - eski exe silahı/ışını tanımaz, madde 306); (lobi-10 -> lobi-11, Yıldırım Asası vuruş sesi: "beam_hit" oyuncu efekti - eski exe tanımaz, tikleri sessiz duyar, madde 294); lobi-10: (2026-10-19: lobi-9 -> lobi-10, saklanma çalılığı: request_brush_reveal RPC'si + "brush_search_*"/"brush_alert" yaratık efektleri, madde 283); lobi-9: (2026-10-19: lobi-8 -> lobi-9, broadcast_enemy_projectile'a mermi stili argümanı - lich Ruh Alevi, madde 280); lobi-8: (2026-10-15: lobi-7 -> lobi-8, asist sistemi: destek bildirimi RPC'si + grant_kill_gold imzası); lobi-7: (2026-10-15: lobi-6 -> lobi-7, yaratık altını yere düşmez: grant_kill_gold RPC'si - eski exe bu RPC'yi tanımaz); lobi-6: (2026-10-14: lobi-5 -> lobi-6, kalkan orbu düşmesi - eski exe "shield_orb" türünü tanımaz, orbu göremez); lobi-5: (2026-10-14: lobi-4 -> lobi-5, host menüye dönerken istemci balans kayıtlarını toplama RPC'leri); lobi-4: (2026-10-13: lobi-3 -> lobi-4, debug uyarısı RPC; önce lobi-2 -> lobi-3, Cadı/Peri/Necro değişiklikleri; eski exe'li oyuncu host'a girmesin) eski sürümle (doğrulamasız) karışmasın: farklıysa host reddeder
+const LOBBY_PROTOCOL := "lobi-42" ## (2026-11-15: lobi-41 -> lobi-42: eski asist yolu silindi - "grant_kill_gold" ve "_rpc_report_support" RPC'leri yok, eski exe RPC listesi uyuşmaz.) (2026-11-13: lobi-40 -> lobi-41, madde 652: yeni silah anahtarı "makineli" - eski exe kuklada sahnesini bulamaz. 2026-11-12: lobi-39 -> lobi-40, madde 625: Toplayıcı ruhanisi - yeni "request_toplayici_pull" / "request_toplayici_cancel" / "sync_toplayici_pull" / "sync_toplayici_cancel", eski exe RPC listesi uyuşmaz.) (2026-11-12: lobi-38 -> lobi-39, madde 617: 2v2 PvP tamamlandı - PvpNet yeni "_rpc_report_death" / "_rpc_score" / "_rpc_match_end" / "_rpc_boss_buff", "_rpc_cc" yeni "slow" türü, takım başına XP (sync_team_xp yalnız kendi takımına), teslim oylaması takım içi; eski exe RPC listesi uyuşmaz.) (2026-11-12: lobi-37 -> lobi-38, madde 620: dünya haritası OYLAMASI - yeni "_rpc_cast_world_map_vote" (eş host'a oyunu yollar) / "_rpc_world_map_votes" (host herkese oy listesi + süre) / "_rpc_world_map_vote_result" (kazanan), eski exe RPC listesi uyuşmaz.) (2026-11-12: lobi-36 -> lobi-37, madde 615: PvP hasarı - PvpNet yeni "_rpc_hit" / "_rpc_cc" (rakip oyuncuya hasar / kontrol, kurban doğrular), eski exe RPC listesi uyuşmaz.) (2026-11-12: lobi-35 -> lobi-36, madde 613: kimlik doğrulayıcı - "_rpc_register_uid" 3. argüman (kanıt), "_rpc_migration_roster" 4. argüman (doğrulayıcılar); eski exe imzası uyuşmaz.) (2026-11-12: lobi-34 -> lobi-35, madde 608: PvpNet yeni "_rpc_request_team" (2v2 seçim ekranında oyuncu takım seçer, host doğrular, "_rpc_state" yayınlar); lobi-33 -> lobi-34, madde 607: PvPvE modu - NetworkManager altında yeni "PvpNet" düğümü (_rpc_state / _rpc_bases / _rpc_request_bases), eski exe düğümü bilmez.) (2026-11-12: lobi-32 -> lobi-33, madde 607: dünya haritası seçim ekranı - host "_rpc_world_map" RPC'si (açık/seçim) yollar, eski exe bilmez; harita artık OYUNU BAŞLAT'tan sonra seçilir.) (2026-11-12: lobi-31 -> lobi-32, madde 605: harita anahtarı - host "broadcast_boss_keys" RPC'si yollar, eski exe bilmez (RPC düğüm yolu uyuşmaz); anahtar kaydı her oyuncunun kendi makinesinde.) (2026-11-11: lobi-30 -> lobi-31, madde 591: Çakram özelliği Seken Çelik - uzak çakram kopyası "bounce_left"/"net_pid" alır ve kasterin "chakram_leg" mesajıyla seker, final kopyası "chakram_mill" - eski exe sekmeyi göstermez, çakram kopyası düşmanda döner.) (2026-11-10: lobi-29 -> lobi-30, madde 551: Gökkuşağı Asası "rbeam_update" yeni "sp" (finalde ışık saçılmasının merkezi) + "rbeam_start" "ln" (gönderiliş) + "rbeam_stop" kuklada incelerek söner - eski exe finalde saçılmayı göstermez, eski ve yeni exe farklı menzil/hasar görür.) (2026-11-10: lobi-28 -> lobi-29, madde 550: Ateş Asası püskürtmesi yeni sayfa adları "flame_shower_*" + sprite verisinde "under" - eski exe sayfayı bulamaz, başkasının alevini hiç göstermez.) (2026-11-09: lobi-27 -> lobi-28, madde 543: "Dükkan" ruhani yeteneği silindi - eski exe "dukkan" seçip "spirit_cancel"/FxSpiritDukkan gönderir, yeni exe tanımaz.) (2026-11-09: lobi-26 -> lobi-27, madde 540: teslim oylaması RPC'leri `_rpc_*surrender*` - eski exe bilmez.) (2026-11-09: lobi-25 -> lobi-26, madde 516: Vampir Yarasa Formu geçişi "vampir_fx" kind "bat_in"/"bat_out" (eski "puff" kalktı) - eski exe yeni türü tanımaz, geçiş efektini hiç göstermez) (2026-11-09: lobi-24 -> lobi-25, madde 509: yeni evciller Minik Cadı + Hayalet - broadcast_slime / broadcast_hayalet RPCleri, durum anlık görüntüsünde "psz" - eski exe RPC listesi uyuşmaz) (2026-11-08: lobi-23 -> lobi-24, madde 499: altın hediyesi duyurusu _rpc_announce_gold_gift (herkesin sohbetinde satır) - eski exe RPC listesi uyuşmaz) (2026-11-08: lobi-22 -> lobi-23, madde 496: 4 yeni görev + vurulabilen görev hedefi RPC'leri broadcast_world_event_target_state / _dead / request_world_event_target_damage, zindan haritalarında görevler - eski exe RPC listesi uyuşmaz) (2026-11-08: lobi-21 -> lobi-22, madde 463: ana haritada DungeonManager düğümü yok, derin orman / zindan kalktı) (2026-11-07: lobi-20 -> lobi-21, Taşkın Hisar KÖPRÜ KOLU: DungeonManager._rpc_req_lever (kol gruptaki parmaklıkları indirir) + Lağım Ağı GAZ FIÇISI: _rpc_req_barrel / _rpc_barrel, _rpc_full_state 4. argüman (fıçılar) - eski exe RPC listesi uyuşmaz, madde 449); (2026-11-07: lobi-19 -> lobi-20, yeni silah Pompalı Tüfek "pompali" + request_enemy_damage 5. argüman (sep: saçma hasar sayıları ayrı) + "damage_number" "sep" alanı - eski exe silahı tanımaz, madde 448); (2026-11-07: lobi-18 -> lobi-19, HARİTA SEÇİMİ: _rpc_start_game / _rpc_join_in_progress_game harita kimliği argümanı + LAN ilanına 9. alan (harita) - eski exe RPC imzası uyuşmaz, madde 444); (2026-11-06: lobi-17 -> lobi-18, level pazarı ayrı ekran: _rpc_extend_level_up_countdown (pazarın kendi süresi) - eski exe RPC listesi uyuşmaz, madde 432); (2026-11-06: lobi-16 -> lobi-17, lobi seçimlerine evcil hayvan: _rpc_sync_player_loadout üçüncü argüman "pet" - eski exe 2 argümanla çağırır, RPC reddedilir); (2026-11-06: lobi-15 -> lobi-16, ağ gecikmesi düzeltmesi: güvenilir RPC'ler ayrı aktarım kanallarında (CH_*), oyuncu durum paketi delta (main.gd _rpc_player_state), yaratık senkron kaydında değişmeyen can/kalkan atlanır (enemy_sync_codec FLAG_NO_HP), bağlantı kalitesi ping/pong RPC'leri - eski exe ile kanal/RPC listesi uyuşmaz, madde 419); (2026-10-23: lobi-14 -> lobi-15, yaratık yeteneği "bone" (İskelet Kemik Atışı) dünya efekti - eski exe tanımaz, görünmez kemikten hasar alırdı, madde 368); (2026-10-21: lobi-13 -> lobi-14, Oakley yetenek evrimleri: "oakley_revive" oyuncu efekti + "oakley_tree" süre/alan verisi + bee_poison RPC param2 (Salgın Zehir) - eski exe tanımaz, madde 348); (2026-10-20: lobi-12 -> lobi-13, yeni silah Kalkan "kalkan" + "kalkan_*" darbe verisi - eski exe silahı tanımaz, madde 338); (2026-10-19: lobi-11 -> lobi-12, yeni silah Gökkuşağı Asası "gokkusagi" + "rbeam_*" oyuncu efektleri - eski exe silahı/ışını tanımaz, madde 306); (lobi-10 -> lobi-11, Yıldırım Asası vuruş sesi: "beam_hit" oyuncu efekti - eski exe tanımaz, tikleri sessiz duyar, madde 294); lobi-10: (2026-10-19: lobi-9 -> lobi-10, saklanma çalılığı: request_brush_reveal RPC'si + "brush_search_*"/"brush_alert" yaratık efektleri, madde 283); lobi-9: (2026-10-19: lobi-8 -> lobi-9, broadcast_enemy_projectile'a mermi stili argümanı - lich Ruh Alevi, madde 280); lobi-8: (2026-10-15: lobi-7 -> lobi-8, asist sistemi: destek bildirimi RPC'si + grant_kill_gold imzası); lobi-7: (2026-10-15: lobi-6 -> lobi-7, yaratık altını yere düşmez: grant_kill_gold RPC'si - eski exe bu RPC'yi tanımaz); lobi-6: (2026-10-14: lobi-5 -> lobi-6, kalkan orbu düşmesi - eski exe "shield_orb" türünü tanımaz, orbu göremez); lobi-5: (2026-10-14: lobi-4 -> lobi-5, host menüye dönerken istemci balans kayıtlarını toplama RPC'leri); lobi-4: (2026-10-13: lobi-3 -> lobi-4, debug uyarısı RPC; önce lobi-2 -> lobi-3, Cadı/Peri/Necro değişiklikleri; eski exe'li oyuncu host'a girmesin) eski sürümle (doğrulamasız) karışmasın: farklıysa host reddeder
 const AUTH_TIMEOUT_MS := 10000 ## host: bu sürede doğrulanmayanı atar; istemci: bu sürede kabul gelmezse vazgeçer
 
 ## AKTARIM KANALLARI (madde 419, ağ gecikmesi düzeltmesi; analiz madde 349): güvenilir (reliable) paketler kanal başına SIRALI gelir -
@@ -191,6 +227,7 @@ const REJECT_PASSWORD_WRONG := 2
 const REJECT_FULL := 3
 const REJECT_KICKED := 4
 const REJECT_VERSION := 5
+const REJECT_IDENTITY := 6 ## kimlik (uid) başkasına ait: kanıt uyuşmuyor ya da yok (hile koruması, madde 613)
 
 signal room_entered ## host odayı kurdu / istemci odaya KABUL edildi (arayüz oda lobisine ya da karakter seçimine geçer)
 signal room_join_rejected(code: int, message: String)
@@ -312,6 +349,8 @@ static func reject_message(code: int) -> String:
 			return "Host seni bu odadan çıkardı."
 		REJECT_VERSION:
 			return "Oyun sürümün bu odayla uyuşmuyor. İkiniz de aynı sürümü kullanmalısınız."
+		REJECT_IDENTITY:
+			return "Kimlik doğrulanamadı."
 	return "Odaya girilemedi."
 
 
@@ -483,6 +522,10 @@ const DROP_REMOVE_INTERVAL := 0.05 ## Saniyede max 20 kez toplu drop silme
 func _ready() -> void:
 	_load_saved_player_name()
 	_load_or_create_player_uid()
+	## PvPvE (madde 607): mod / takım / üs RPC'leri ayrı düğümde (scripts/pvp/pvp_net.gd) - her makinede aynı yol /root/NetworkManager/PvpNet.
+	var pvp_net: Node = preload("res://scripts/pvp/pvp_net.gd").new()
+	pvp_net.name = "PvpNet"
+	add_child(pvp_net)
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 	multiplayer.connected_to_server.connect(_on_connected_to_server)
@@ -500,7 +543,6 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 
 
-var _assist_poll_timer: float = 0.0
 
 
 func _process(delta: float) -> void:
@@ -519,6 +561,7 @@ func _process(delta: float) -> void:
 	## sadece host'ta ve bir oylama sürerken bir şey yapar.
 	update_restart_vote_timer(delta)
 	update_surrender_vote_timer(delta) ## teslim oylaması (madde 540)
+	update_world_map_vote_timer(delta) ## dünya haritası oylaması (madde 620)
 
 	## bkz. _sweep_stale_throttle_keys üstündeki not - FPS'in zamanla düşmesi
 	## bugu için düzeltme.
@@ -528,11 +571,8 @@ func _process(delta: float) -> void:
 		_sweep_stale_throttle_keys()
 
 	if is_multiplayer_active and is_host:
-		_assist_poll_timer -= delta
-		if _assist_poll_timer <= 0.0:
-			_assist_poll_timer = 1.0
-			AssistScript.poll_paladins(get_tree()) ## Şovalye E/R koruması asist kaydı (bkz. assist.gd)
 		_process_batched_syncs(delta)
+	_process_team_gold(delta) ## yaratık altını takım payları (bkz. host_split_creature_gold)
 	_process_online_session()
 	_process_room_auth()
 	_process_host_heartbeat(delta)
@@ -920,6 +960,8 @@ func disconnect_from_room(show_status: bool = true) -> void:
 func _clear_peer_state() -> void:
 	_net_log("_clear_peer_state (oturum kapanıyor / tek oyunculuya dönüş) çağıran: %s" % str(get_stack().slice(1, 4)))
 	_link.reset()
+	world_map_open = false
+	_world_map_reset_votes()
 	if _peer:
 		_peer.close()
 		_peer = null
@@ -960,11 +1002,13 @@ func _clear_peer_state() -> void:
 	_is_game_in_progress = false
 	_is_rejoining_midgame = false
 	_peer_uid.clear()
+	_uid_verifier.clear()
 	_peer_addr.clear()
 	_peer_eos.clear()
 	_roster_order.clear()
 	_migration_roster = []
 	_migration_known_uids = []
+	_migration_known_ver = {}
 	host_handover = {}
 	migration_handover = {}
 	_last_atmosphere_state = {}
@@ -1020,7 +1064,7 @@ func _complete_admission() -> void:
 	lobby_updated.emit()
 
 	## Host'a kalıcı kimliğimi bildir (oyun sürüyorsa geri katılma hakkımı buna göre verir/vermez).
-	_rpc_register_uid.rpc_id(1, local_player_uid, EosOnline.local_user_id() if is_online_session else "")
+	_rpc_register_uid.rpc_id(1, local_player_uid, EosOnline.local_user_id() if is_online_session else "", local_player_proof())
 
 	# Broadcast our info to everyone in the room
 	_rpc_sync_player_info.rpc(local_player_name, local_char_id, is_host)
@@ -1232,7 +1276,7 @@ func submit_restart_vote(approved: bool) -> void:
 
 @rpc("any_peer", "call_remote", "reliable")
 func _rpc_submit_restart_vote(peer_id: int, approved: bool) -> void:
-	if not is_host or not restart_vote_pending:
+	if not is_host or not restart_vote_pending or _from_unadmitted_peer():
 		return
 	var sender_id: int = multiplayer.get_remote_sender_id()
 	if sender_id != peer_id:
@@ -1301,6 +1345,8 @@ func _reset_for_restart_lobby() -> void:
 	_restart_vote_timer = 0.0
 	reset_surrender_vote()
 	_loading_done.clear()
+	world_map_open = false ## önceki oyunun harita oylaması karakter seçimine sızmasın
+	_world_map_reset_votes()
 	_is_game_in_progress = false
 	_is_rejoining_midgame = false
 	_game_roster_uids.clear()
@@ -1424,7 +1470,7 @@ func request_surrender_vote() -> void:
 
 @rpc("any_peer", "call_remote", "reliable")
 func _rpc_request_surrender_vote() -> void:
-	if not is_host:
+	if not is_host or _from_unadmitted_peer():
 		return
 	_host_start_surrender_vote(multiplayer.get_remote_sender_id())
 
@@ -1456,13 +1502,27 @@ func submit_surrender_vote(yes: bool) -> void:
 
 @rpc("any_peer", "call_remote", "reliable")
 func _rpc_submit_surrender_vote(yes: bool) -> void:
-	if not is_host:
+	if not is_host or _from_unadmitted_peer():
 		return
 	_host_record_surrender_vote(multiplayer.get_remote_sender_id(), yes)
 
 
+## Teslim oyu kullanabilecekler: co-op'ta odadaki herkes (oybirliği); 2v2 PvP'de yalnız oylamayı başlatanın TAKIMI (rakip oy kullanmaz, madde 617).
+func _surrender_eligible() -> Array:
+	if not GameModeScript.is_pvp() or surrender_vote_initiator <= 0:
+		return lobby_players.keys()
+	var out: Array = []
+	var team: int = TeamsScript.team_of(surrender_vote_initiator)
+	for pid in lobby_players.keys():
+		if TeamsScript.team_of(int(pid)) == team:
+			out.append(pid)
+	return out
+
+
 func _host_record_surrender_vote(pid: int, yes: bool) -> void:
 	if not is_host or not surrender_vote_active or not lobby_players.has(pid) or surrender_votes.has(pid):
+		return
+	if not _surrender_eligible().has(pid):
 		return
 	surrender_votes[pid] = yes
 	if not yes:
@@ -1476,7 +1536,7 @@ func _host_record_surrender_vote(pid: int, yes: bool) -> void:
 func _check_surrender_vote_complete() -> bool:
 	if not surrender_vote_active:
 		return false
-	for pid in lobby_players.keys():
+	for pid in _surrender_eligible():
 		if not bool(surrender_votes.get(pid, false)):
 			return false
 	_finish_surrender_vote(true)
@@ -1484,7 +1544,7 @@ func _check_surrender_vote_complete() -> bool:
 
 
 func _broadcast_surrender_vote() -> void:
-	var ids: Array = lobby_players.keys()
+	var ids: Array = _surrender_eligible()
 	ids.sort()
 	var voters := PackedInt32Array()
 	var yes := PackedInt32Array()
@@ -1503,6 +1563,8 @@ func _broadcast_surrender_vote() -> void:
 func _rpc_surrender_vote_state(initiator: int, voters: PackedInt32Array, yes: PackedInt32Array, no: PackedInt32Array, time_left: float) -> void:
 	if not _from_host() or GameManager.is_game_over:
 		return
+	if GameModeScript.is_pvp() and not voters.has(TeamsScript.local_peer()):
+		return ## 2v2: rakip takımın teslim oylamasını görmem / oy kullanmam (madde 617)
 	## Host durumu yayından ÖNCE kurar (_host_start_surrender_vote) - "yeni oylama mı" etkin bayraktan değil duyuru bayrağından anlaşılır.
 	var fresh: bool = not _surrender_announced
 	_surrender_announced = true
@@ -1527,22 +1589,31 @@ func _finish_surrender_vote(passed: bool) -> void:
 	if not is_host or not surrender_vote_active:
 		return
 	var yes_n: int = 0
-	for pid in lobby_players.keys(): ## yalnız hâlâ odada olanların oyu sayılır
+	var eligible: Array = _surrender_eligible()
+	for pid in eligible: ## yalnız hâlâ odada olanların oyu sayılır
 		if bool(surrender_votes.get(pid, false)):
 			yes_n += 1
-	_rpc_surrender_vote_result.rpc(passed, yes_n, lobby_players.size())
+	_rpc_surrender_vote_result.rpc(passed, yes_n, eligible.size())
 
 
 @rpc("any_peer", "call_local", "reliable")
 func _rpc_surrender_vote_result(passed: bool, yes_n: int, total: int) -> void:
 	if not _from_host():
 		return
+	var initiator: int = surrender_vote_initiator
+	var mine: bool = not GameModeScript.is_pvp() or surrender_voters.has(TeamsScript.local_peer())
 	_clear_surrender_vote_state()
-	if not passed:
-		_surrender_cooldown_until_msec = Time.get_ticks_msec() + int(SURRENDER_VOTE_COOLDOWN * 1000.0)
-	surrender_vote_ended.emit(passed, yes_n, total)
+	if mine:
+		if not passed:
+			_surrender_cooldown_until_msec = Time.get_ticks_msec() + int(SURRENDER_VOTE_COOLDOWN * 1000.0)
+		surrender_vote_ended.emit(passed, yes_n, total)
 	if passed:
-		_apply_surrender()
+		if GameModeScript.is_pvp(): ## 2v2: teslim eden takım kaybeder, host maçı bitirir (madde 617)
+			var net: Node = get_node_or_null("PvpNet")
+			if is_host and net != null and initiator > 0:
+				net.host_end_match(1 - clampi(TeamsScript.team_of(initiator), 0, 1), "surrender")
+		else:
+			_apply_surrender()
 
 
 ## Koşuyu teslimle bitirir (her eş kendi tarafında; tek oyunculuda doğrudan). Oyun bitti ekranını main.gd kurar.
@@ -1621,6 +1692,54 @@ func _rpc_close_room() -> void:
 ## Gönderen host mu (ya da çağrı yerel call_local mı)? SADECE host'un gönderdiği RPC'lerin ilk satırı (bkz. `if not _from_host(): return`).
 ## Eskiden bu RPC'lerin çoğunda gönderen kontrolü yoktu: bağlı herhangi bir peer (Epic internet odasında yabancı biri de) oyunu bitirebilir,
 ## takım XP'sini yazabilir, zafer ilan edebilirdi. Host ENet sunucusu = peer 1 (host devrinden sonra da yeni sunucu 1 olur, bkz. host migrasyonu).
+## HİLE KORUMASI (2026-11-12): "peer_id" argümanı taşıyan any_peer RPC'lerde gönderen, iddia ettiği oyuncu (ya da host) mu? Aksi hâlde
+## herhangi bir istemci başkası adına işlem yapabilir (sohbet, istatistik, menü meşguliyeti). Tekli/çevrimdışı çağrı her zaman geçer.
+const MAX_NAME_LEN := 32
+const MAX_CHAT_LEN := 240
+var _redirect_bonds: Dictionary = {} ## Şovalye Koruma Bariyeri: BİZİM hasar aktarım bağı kurduğumuz dostun peer id'si -> bağın bitiş zamanı (msec)
+
+
+## player.gd _apply_damage_redirect_to_ally: bağ kurulunca (percent > 0) ya da bitince (<= 0) çağrılır - sync_redirected_damage yalnız bağlı dosttan kabul eder.
+func note_redirect_bond(target_peer_id: int, percent: float, duration: float) -> void:
+	if percent > 0.0:
+		_redirect_bonds[target_peer_id] = Time.get_ticks_msec() + int((maxf(duration, 0.0) + 3.0) * 1000.0)
+	else:
+		_redirect_bonds.erase(target_peer_id)
+## Host'a gelen istemci istekleri için makul üst sınırlar (hile koruması, madde 613). Meşru tek vuruş hasarı milyonlar mertebesinde (kademe 13
+## toplamı ~16 milyon) - 1e9 üstü saçma; yaratığın canına GÖRE kırpma YAPILMAZ (aşırı hasar/hasar sıralaması + balans kaydı bozulurdu).
+const MAX_REQUEST_DAMAGE := 1.0e9
+const MAX_REQUEST_KNOCKBACK := 600.0
+const MAX_REQUEST_FORCE := 2000.0
+const MAX_REQUEST_PARAM := 1.0e9
+const MAX_REQUEST_CONTROL_SEC := 60.0
+const CONTROL_EFFECTS: Array[String] = ["stun", "freeze", "fear", "fear_wander", "taunt", "taunt_ally", "root", "madness"]
+
+
+static func _sane_f(v: float, lo: float, hi: float) -> float:
+	if is_nan(v):
+		return lo
+	return clampf(v, lo, hi)
+## Uzaktan gelen efekt/mermi sahne yolu (broadcast_projectile / broadcast_player_vfx ...): saldırgan yol vererek istemcide ana menü, harita,
+## zindan gibi ağır/yapısal sahneleri örnekletemesin. Meşru efektlerin hepsi res://scenes/ altında.
+const _DENIED_SCENE_NAMES: Array[String] = ["main", "main_menu", "character_select", "loading_screen", "lobby_menu", "pause_menu", "room_browser", "room_lobby", "chest_menu"]
+
+func _vfx_scene_ok(path: String) -> bool:
+	if not path.begins_with("res://scenes/") or not path.ends_with(".tscn") or path.contains(".."):
+		return false
+	if path.contains("/zindan/") or path.contains("/creatures/"):
+		return false
+	var base: String = path.get_file().get_basename()
+	if base.ends_with("_baked") or _DENIED_SCENE_NAMES.has(base):
+		return false
+	return ResourceLoader.exists(path)
+
+func _sender_may_act_for(peer_id: int) -> bool:
+	if not multiplayer.has_multiplayer_peer():
+		return true
+	var sender: int = multiplayer.get_remote_sender_id()
+	return sender == 0 or sender == peer_id or sender == 1 or sender == _host_peer_id()
+
+
 func _from_host() -> bool:
 	## Tekli oyunda (OfflineMultiplayerPeer, is_multiplayer_active false) çağrı yereldir: gönderen kimliği 1 görünür ama _host_peer 0'dır.
 	if not is_multiplayer_active:
@@ -1822,6 +1941,7 @@ func _on_peer_disconnected(peer_id: int) -> void:
 		## ölü) takım sonsuza dek "izleyicisin" ekranında takılı kalmasın.
 		_check_all_players_dead()
 		_on_surrender_voter_left() ## teslim oylaması: ayrılanın oyu gerekmez (madde 540)
+		_on_world_map_voter_left(peer_id) ## harita oylaması: ayrılanın oyu düşer (madde 620)
 	## DÜZELTME: ayrılan peer kart/silah/kalkan seçerken kopmuşsa (level_up_
 	## busy_peers'ta kalmış olabilir) TEMİZLENMEZSE geri kalan herkes
 	## SONSUZA KADAR "bir oyuncu seçim yapıyor" bekleme durumunda donup
@@ -1936,6 +2056,8 @@ func set_level_up_busy(busy: bool) -> void:
 
 @rpc("any_peer", "call_local", "reliable")
 func _rpc_set_level_up_busy(peer_id: int, busy: bool) -> void:
+	if not _sender_may_act_for(peer_id):
+		return ## hile koruması: kimse başkasını "menüde" (ruh hâli) ya da kalıcı hayalet yapamaz
 	if busy:
 		level_up_busy_peers[peer_id] = true
 	else:
@@ -2283,6 +2405,8 @@ func set_chest_busy(busy: bool) -> void:
 
 @rpc("any_peer", "call_local", "reliable")
 func _rpc_set_chest_busy(peer_id: int, busy: bool) -> void:
+	if not _sender_may_act_for(peer_id):
+		return ## hile koruması (bkz. _rpc_set_level_up_busy)
 	if busy:
 		chest_busy_peers[peer_id] = true
 	else:
@@ -2405,7 +2529,7 @@ func broadcast_weapon_attack(source_pos: Vector2, target_pos: Vector2, shop_key:
 ## look: efsunlu merminin görünümü (renk tonu, parçacık izi, ölçek - bkz. EnchantFx.apply_projectile_look). Kaster
 ## tarafında AYNI fonksiyon uygulanır (weapon.gd _fire_at), uzak kopya birebir aynı görünür.
 func broadcast_projectile(scene_path: String, spawn_pos: Vector2, direction: Vector2, proj_speed: float, proj_scale: Vector2, target_pos: Vector2, player_id: int = 0, look: Dictionary = {}) -> void:
-	if not ResourceLoader.exists(scene_path):
+	if not _vfx_scene_ok(scene_path):
 		return
 	var proj_scene: PackedScene = load(scene_path) as PackedScene
 	if not proj_scene:
@@ -2609,7 +2733,7 @@ var _confirmed_dead_peers: Dictionary = {} ## peer_id -> true, SADECE host'ta an
 
 @rpc("any_peer", "reliable")
 func report_player_permanently_dead() -> void:
-	if not is_host:
+	if not is_host or _from_unadmitted_peer():
 		return
 	var sender_id: int = multiplayer.get_remote_sender_id()
 	if sender_id == 0:
@@ -2642,7 +2766,7 @@ func _mark_peer_permanently_dead(peer_id: int) -> void:
 ## sayılıp oyun erken biterdi. report_player_permanently_dead'in tersi, aynı yetkili kayıt.
 @rpc("any_peer", "reliable")
 func report_player_alive_again() -> void:
-	if not is_host:
+	if not is_host or _from_unadmitted_peer():
 		return
 	var sender_id: int = multiplayer.get_remote_sender_id()
 	if sender_id == 0:
@@ -2668,6 +2792,11 @@ func report_self_alive_again() -> void:
 func _check_all_players_dead() -> void:
 	if not is_host or GameManager.is_game_over or lobby_players.is_empty():
 		return
+	if GameModeScript.is_pvp(): ## 2v2: oyun herkes ölünce değil, bir takımın TÜM oyuncuları kalıcı ölünce biter (madde 617)
+		var net: Node = get_node_or_null("PvpNet")
+		if net != null:
+			net.host_check_elimination()
+		return
 	for pid in lobby_players.keys():
 		if not _confirmed_dead_peers.has(pid):
 			return ## hâlâ hayatta/henüz bildirmemiş biri var
@@ -2688,7 +2817,9 @@ signal match_stats_received(peer_id: int, player_name: String, damage_dealt: flo
 
 @rpc("any_peer", "call_local", "reliable")
 func sync_match_stats(peer_id: int, player_name: String, damage_dealt: float, damage_taken: float, kills: int = 0) -> void:
-	match_stats_received.emit(peer_id, player_name, damage_dealt, damage_taken, kills)
+	if not _sender_may_act_for(peer_id):
+		return ## hile koruması: başkası adına istatistik yazılamaz
+	match_stats_received.emit(peer_id, player_name.left(MAX_NAME_LEN), damage_dealt, damage_taken, kills)
 
 
 ## Balans telemetrisi (bkz. balance_log.gd): istemci koşu bitince kaydını host'a yollar, host kendi dosyasına ekler. SADECE host işler;
@@ -2697,7 +2828,7 @@ var _balance_records_by_peer: Dictionary = {}
 
 @rpc("any_peer", "call_remote", "reliable")
 func submit_balance_record(json_text: String) -> void:
-	if not is_host:
+	if not is_host or _from_unadmitted_peer():
 		return
 	var sender: int = multiplayer.get_remote_sender_id()
 	if sender <= 0 or int(_balance_records_by_peer.get(sender, 0)) >= 20:
@@ -2728,7 +2859,9 @@ signal chat_message_received(peer_id: int, player_name: String, text: String)
 
 @rpc("any_peer", "call_local", "reliable")
 func broadcast_chat_message(peer_id: int, player_name: String, text: String) -> void:
-	chat_message_received.emit(peer_id, player_name, text)
+	if not _sender_may_act_for(peer_id):
+		return ## hile koruması: başkası adına sohbet mesajı yazılamaz
+	chat_message_received.emit(peer_id, player_name.left(MAX_NAME_LEN), text.left(MAX_CHAT_LEN)) ## uzunluk sınırı (yalnız istemcideki max_length'e güvenilmez)
 
 
 ## DEBUG MODU UYARISI (kullanıcı isteği 2026-10-13: "multiplayerda biri debug modundan bişey yaparsa diğer tüm oyunculara uyarı ve
@@ -2744,6 +2877,7 @@ func announce_debug_action(text: String) -> void:
 
 @rpc("any_peer", "call_local", "reliable")
 func broadcast_debug_action(player_name: String, text: String) -> void:
+	GameManager.run_debug_used = true ## odada KİMSE debug açtıysa koşu anahtar vermez (madde 605)
 	debug_action_announced.emit(player_name.substr(0, 24), text.substr(0, 120))
 
 
@@ -2776,7 +2910,7 @@ func broadcast_merchant_departed() -> void:
 
 ## Yaratık Kademesi bildirimi (kullanıcı isteği 2026-10-04: "yaratıkların kademesi arttığında insanlara bildirim gelsin, kademe
 ## numarası yazsın"). Karar HOST'ta (enemy_spawner.gd _check_tier_announcement - Kademe saati orada), bu RPC herkese (host/tek
-## oyunculu dahil, call_local) numarayı iletir; main.gd bildirimi (toast) gösterir. tier == FINAL_TIER (16) = Final Kademe.
+## oyunculu dahil, call_local) numarayı iletir; main.gd bildirimi (toast) gösterir. tier == LAST_TIER (10) = son kademe (madde 597).
 signal creature_tier_reached(tier: int)
 
 @rpc("any_peer", "call_local", "reliable")
@@ -2795,6 +2929,15 @@ func broadcast_creature_tier_reached(tier: int) -> void:
 signal victory_reached(elapsed: float)
 signal endless_started
 signal endless_layer_reached(layer: int)
+
+## HARİTA ANAHTARI (madde 605): K5 / K10 bossu ölünce HOST karar verir (GameManager.award_boss_keys, kademe başına bir kez), herkes (host dahil)
+## kendi kaydına yazar. Adet/harita alıcıda da doğrulanır (host'tan gelmeyen / bilinmeyen tür / makul olmayan adet yok sayılır).
+@rpc("any_peer", "call_local", "reliable")
+func broadcast_boss_keys(map_id: String, count: int) -> void:
+	if not _from_host() or count < 1 or count > 5:
+		return
+	GameManager.grant_boss_keys(map_id, count)
+
 
 @rpc("any_peer", "call_local", "reliable")
 func broadcast_victory(elapsed: float) -> void:
@@ -2953,9 +3096,9 @@ signal world_event_copy_damage_requested(mission_id: int, copy_index: int, amoun
 
 @rpc("any_peer", "call_remote", "reliable", CH_COMBAT)
 func request_world_event_copy_damage(mission_id: int, copy_index: int, amount: float) -> void:
-	if not is_host:
+	if not is_host or _from_unadmitted_peer():
 		return
-	world_event_copy_damage_requested.emit(mission_id, copy_index, amount)
+	world_event_copy_damage_requested.emit(mission_id, copy_index, _sane_f(amount, 0.0, MAX_REQUEST_DAMAGE))
 
 ## Kopyaya itme (bkz. mission_player_copy.gd apply_knockback_distance) - hasar isteğiyle AYNI yol: istemcinin vuruşu
 ## host'taki GERÇEK kopyaya iletilir (yaratıklardaki request_enemy_knockback'in karşılığı).
@@ -2963,7 +3106,7 @@ signal world_event_copy_knockback_requested(mission_id: int, copy_index: int, di
 
 @rpc("any_peer", "call_remote", "reliable")
 func request_world_event_copy_knockback(mission_id: int, copy_index: int, dir: Vector2, distance: float) -> void:
-	if not is_host:
+	if not is_host or _from_unadmitted_peer():
 		return
 	world_event_copy_knockback_requested.emit(mission_id, copy_index, dir, distance)
 
@@ -3009,9 +3152,9 @@ func broadcast_world_event_target_dead(mission_id: int, target_index: int, vanis
 
 @rpc("any_peer", "call_remote", "reliable", CH_COMBAT)
 func request_world_event_target_damage(mission_id: int, target_index: int, amount: float) -> void:
-	if not is_host:
+	if not is_host or _from_unadmitted_peer():
 		return
-	world_event_target_damage_requested.emit(mission_id, target_index, amount)
+	world_event_target_damage_requested.emit(mission_id, target_index, _sane_f(amount, 0.0, MAX_REQUEST_DAMAGE))
 
 
 ## Remove a visual drop on all clients when it's collected on the host.
@@ -3206,8 +3349,10 @@ const DamageNumbersRef := preload("res://scripts/damage_numbers.gd")
 
 @rpc("any_peer", "call_remote", "reliable", CH_COMBAT)
 func request_enemy_damage(network_id: int, amount: float, is_crit: bool, shield_pen_percent: float, sep: bool = false) -> void:
-	if not is_host or get_tree().paused:
+	if not is_host or get_tree().paused or _from_unadmitted_peer():
 		return
+	amount = _sane_f(amount, 0.0, MAX_REQUEST_DAMAGE) ## NaN/sonsuz/negatif/saçma büyük hasar (hile koruması, madde 613)
+	shield_pen_percent = _sane_f(shield_pen_percent, 0.0, 100.0)
 	var target_enemy: Node = find_enemy_by_net_id(network_id)
 	if target_enemy and is_instance_valid(target_enemy) and target_enemy.has_method("take_damage_host"):
 		## Gerçek saldıran katılımcının peer id'si - Korsan'ın "öldürdüğün her
@@ -3225,28 +3370,28 @@ func request_enemy_damage(network_id: int, amount: float, is_crit: bool, shield_
 ## hesaplanıp normal yaratık konum yayınıyla herkese gider.
 @rpc("any_peer", "call_remote", "unreliable")
 func request_enemy_knockback(network_id: int, dir: Vector2, distance: float) -> void:
-	if not is_host or get_tree().paused:
+	if not is_host or get_tree().paused or _from_unadmitted_peer():
 		return
 	var target_enemy: Node = find_enemy_by_net_id(network_id)
 	if target_enemy and is_instance_valid(target_enemy) and target_enemy.has_method("apply_knockback_distance"):
-		target_enemy.apply_knockback_distance(dir, distance)
+		target_enemy.apply_knockback_distance(dir, _sane_f(distance, 0.0, MAX_REQUEST_KNOCKBACK))
 
 
 ## İstemcinin hız-tabanlı itişi (gövde itişi, alan itmeleri) -> host'taki gerçek yaratık (bkz. enemy.gd apply_knockback_force
 ## üstündeki BUG DÜZELTMESİ). request_enemy_knockback ile aynı desen.
 @rpc("any_peer", "call_remote", "unreliable")
 func request_enemy_knockback_force(network_id: int, dir: Vector2, force: float) -> void:
-	if not is_host or get_tree().paused:
+	if not is_host or get_tree().paused or _from_unadmitted_peer():
 		return
 	var target_enemy: Node = find_enemy_by_net_id(network_id)
 	if target_enemy and is_instance_valid(target_enemy) and target_enemy.has_method("apply_knockback_force"):
-		target_enemy.apply_knockback_force(dir, force)
+		target_enemy.apply_knockback_force(dir, _sane_f(force, 0.0, MAX_REQUEST_FORCE))
 
 
 ## İstemcinin yetenek itmesi (mesafe cinsinden, bkz. enemy.gd apply_skill_push) -> host'taki gerçek yaratık.
 @rpc("any_peer", "call_remote", "reliable", CH_COMBAT)
 func request_enemy_skill_push(network_id: int, dir: Vector2, distance: float) -> void:
-	if not is_host or get_tree().paused:
+	if not is_host or get_tree().paused or _from_unadmitted_peer():
 		return
 	var target_enemy: Node = find_enemy_by_net_id(network_id)
 	if target_enemy and is_instance_valid(target_enemy) and target_enemy.has_method("apply_skill_push"):
@@ -3277,7 +3422,7 @@ func notify_kill_passive(is_boss_kill: bool, death_pos: Vector2 = Vector2.ZERO) 
 ## Tepkimeler host'ta çözülür ve hasarı bu isteği gönderen oyuncuya atfedilir.
 @rpc("any_peer", "call_remote", "reliable", CH_COMBAT)
 func request_enemy_element(network_id: int, kind: String, params: Dictionary) -> void:
-	if not is_host or get_tree().paused:
+	if not is_host or get_tree().paused or _from_unadmitted_peer():
 		return
 	var target_enemy: Node = find_enemy_by_net_id(network_id)
 	if target_enemy and is_instance_valid(target_enemy) and target_enemy.has_method("apply_element_host"):
@@ -3317,11 +3462,17 @@ func broadcast_enchant_area(kind: String, pos: Vector2, data: Dictionary) -> voi
 ## Host-authoritative enemy status effect: non-host clients send poison/bleed/chill here.
 @rpc("any_peer", "call_remote", "reliable", CH_COMBAT)
 func request_enemy_effect(network_id: int, effect_type: String, param1: float, param2: float, param3: float) -> void:
-	if not is_host or get_tree().paused:
+	if not is_host or get_tree().paused or _from_unadmitted_peer():
 		return
 	var target_enemy: Node = find_enemy_by_net_id(network_id)
 	if not target_enemy or not is_instance_valid(target_enemy):
 		return
+	## Hile koruması (madde 613): NaN/sonsuz/saçma değerler elenir, kontrol (stun/dondurma/korku/kışkırtma/kök/delilik) süresi en çok 60 sn.
+	param1 = _sane_f(param1, -MAX_REQUEST_PARAM, MAX_REQUEST_PARAM)
+	param2 = _sane_f(param2, -MAX_REQUEST_PARAM, MAX_REQUEST_PARAM)
+	param3 = _sane_f(param3, -MAX_REQUEST_PARAM, MAX_REQUEST_PARAM)
+	if CONTROL_EFFECTS.has(effect_type):
+		param1 = clampf(param1, 0.0, MAX_REQUEST_CONTROL_SEC)
 	match effect_type:
 		## Tüftüf zehri - param1=yükün saniyelik hasarı, param2=yük üst sınırı,
 		## param3=yükün ömrü (bkz. enemy.gd apply_poison).
@@ -3738,8 +3889,7 @@ const RELIABLE_PLAYER_VFX := {
 	"skill_scene": true, "skill_ring": true, "skill_burst": true, "teleport_snap": true, "speed_line": true,
 	"beam_start": true, "beam_stop": true, "weapon_icon_visibility": true, "necro_skull": true,
 	"rbeam_start": true, "rbeam_stop": true, ## Gökkuşağı Asası ışını (madde 306) - başlangıç/bitiş kaybolursa ışın görünmez / asılı kalır
-	"oakley_flower_spawn": true, "oakley_flower_bond": true, "spirit_blink": true, "spirit_cancel": true,
-	"weapon_surge": true, ## Büyücü pasifi - yetenek başına bir kez, kaybolması pasifin görünmemesi demek
+	"oakley_flower_spawn": true, "oakley_flower_bond": true, "spirit_blink": true,
 	"weapon_reload": true, ## Tabanca/Tüfek şarjör doldurma (madde 296) - silah başına ~5-10 sn'de bir; kaybolursa doldurma diğer ekranda hiç görünmez
 	"cadi_fx": true, ## Cadı Q bulutu + biniş dumanı - kaybolursa diğer ekranda bulut eksik/erken söner (0,3-1,2 sn'de bir, trafik önemsiz)
 	"cadi_throw": true, ## Cadı R şişesi - kaybolursa alan/patlama diğer oyuncularda hiç görünmez (8 sn'de bir, trafik önemsiz)
@@ -3787,7 +3937,7 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 			var scene_path: String = str(extra_data.get("scene_path", ""))
 			if scene_path.is_empty():
 				return
-			if not ResourceLoader.exists(scene_path):
+			if not _vfx_scene_ok(scene_path):
 				return
 			var fx_scene: PackedScene = load(scene_path) as PackedScene
 			if not fx_scene:
@@ -3807,7 +3957,7 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 		## script'in _draw()'ı) ayrı bir dal gerekti.
 		"speed_line":
 			var sl_scene_path: String = str(extra_data.get("scene_path", ""))
-			if sl_scene_path.is_empty() or not ResourceLoader.exists(sl_scene_path):
+			if sl_scene_path.is_empty() or not _vfx_scene_ok(sl_scene_path):
 				return
 			var sl_scene: PackedScene = load(sl_scene_path) as PackedScene
 			if not sl_scene:
@@ -3825,7 +3975,7 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 				rp._spawn_ring_vfx(float(extra_data.get("radius", 120.0)), Color(extra_data.get("color", Color.WHITE)))
 		"skill_scene":
 			var scene_path: String = str(extra_data.get("scene_path", ""))
-			if scene_path.is_empty() or not ResourceLoader.exists(scene_path):
+			if scene_path.is_empty() or not _vfx_scene_ok(scene_path):
 				return
 			var skill_scene: PackedScene = load(scene_path) as PackedScene
 			if not skill_scene:
@@ -3848,7 +3998,7 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 			yy.spawn_idle_light(get_tree(), pos, yy.node_for_peer(get_tree(), int(extra_data.get("rcp", 0))), rp)
 		"hitscan_impact":
 			var scene_path: String = str(extra_data.get("scene_path", ""))
-			if scene_path.is_empty() or not ResourceLoader.exists(scene_path):
+			if scene_path.is_empty() or not _vfx_scene_ok(scene_path):
 				return
 			var impact_scene: PackedScene = load(scene_path) as PackedScene
 			if not impact_scene:
@@ -3900,7 +4050,7 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 			get_tree().current_scene.add_child(flower)
 			flower.global_position = pos
 			if flower.has_method("setup"):
-				flower.call("setup", float(extra_data.get("caster_damage_bonus", 0.0)), str(extra_data.get("flower_id", "")))
+				flower.call("setup", float(extra_data.get("caster_damage_bonus", 0.0)), str(extra_data.get("flower_id", "")), float(extra_data.get("caster_heal_mult", 1.0)))
 		## Oakley'nin pasifinin çiçek bırakma anındaki anlık "sihirli bağ"
 		## çizgisi (kullanıcı isteği: "çiçek bırakırken bıraktığı yere doğru
 		## bıraktığı esnada ince bir sihirli bağ efekti oluşacak anlık") -
@@ -3966,13 +4116,14 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 			## Büyücü "Efsunlu Büyü" (Q finali): efsunlu Arcane Lanet'in kafatası %25 büyük (kasterle aynı ölçek).
 			skull_fx.scale = Vector2.ONE * float(extra_data.get("fx_scale", 1.0))
 			skull_fx.set("hop", int(extra_data.get("hop", 0))) ## kaçıncı sekme (lanet gözü boyu + ilk sekmede kalkış mührü, madde 188)
+			skull_fx.set("blast", bool(extra_data.get("blast", false))) ## E1 Arcane Patlama: varışta lanet_burst yok (madde 563)
 			get_tree().current_scene.add_child(skull_fx)
 			if skull_fx.has_method("setup_positions"):
 				skull_fx.setup_positions(Vector2(extra_data.get("from_pos", pos)), pos)
 			AllyFxDensity.soften(skull_fx, rp)
 		"melee_hit":
 			var scene_path: String = str(extra_data.get("scene_path", ""))
-			if scene_path.is_empty() or not ResourceLoader.exists(scene_path):
+			if scene_path.is_empty() or not _vfx_scene_ok(scene_path):
 				return
 			var hit_scene: PackedScene = load(scene_path) as PackedScene
 			if not hit_scene:
@@ -4037,7 +4188,7 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 		"rbeam_hit":
 			rp._rbeam_hit(extra_data)
 		"rbeam_stop":
-			rp._stop_rbeam_vfx()
+			rp._stop_rbeam_vfx(true)
 		"weapon_sound":
 			## Bıçak/Pençe/Mızrak kombo zinciri (madde 406, weapon.gd _broadcast_attack_chain): adımlar kendi gecikmeleriyle; en çok 4 adım.
 			var chain: Variant = extra_data.get("chain", null)
@@ -4057,6 +4208,11 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 			if not snd_path.is_empty():
 				_play_remote_weapon_sound(rp, snd_path, float(extra_data.get("pitch", 1.0)), float(extra_data.get("volume_db", -10.0)),
 						bool(extra_data.get("rim", false)), pos)
+		## Kalkan siper duruşu bloğu (madde 687, kalkan_guard.gd _broadcast_block): o oyuncu bir yaratık atışını bloklamış - kıvılcım + ses +
+		## kalkanın geri tepmesi burada da. extra dx/dy = sahibten atışa yön. Güvenilmez (kozmetik).
+		"kalkan_block":
+			if rp.has_method("kalkan_block_remote"):
+				rp.kalkan_block_remote(pos, Vector2(float(extra_data.get("dx", 0.0)), float(extra_data.get("dy", 0.0))))
 		"weapon_recoil":
 			## recoil_distance artık ağdan gelmiyor - _animate_weapon_recoil
 			## bu silahın kendi sabit değerini yerel diziden okuyor.
@@ -4070,15 +4226,11 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 		"weapon_icon_visibility":
 			if rp.has_method("_set_weapon_icon_visible"):
 				rp._set_weapon_icon_visible(int(extra_data.get("slot_index", -1)), bool(extra_data.get("visible", true)))
-		## Tabanca/Tüfek şarjör doldurma (madde 296, weapon.gd _broadcast_reload): d = süre (0 = iptal).
+		## Tabanca/Tüfek/Pompalı şarjör doldurma (madde 296, weapon.gd _broadcast_reload): d = süre (0 = iptal), n = pompalıda
+		## sürülecek fişek (eksik mermi; eski istemci yollamaz -> -1 = tam).
 		"weapon_reload":
 			if rp.has_method("_start_weapon_reload"):
-				rp._start_weapon_reload(int(extra_data.get("slot_index", -1)), float(extra_data.get("d", 0.0)))
-		## Büyücü Kız pasifi "Büyü Dalgası": atışsız yetenek kullanımında silah ikonu ileri fırlar (bkz. weapon.gd _surge_visual).
-		"weapon_surge":
-			if rp.has_method("_animate_weapon_surge"):
-				rp._animate_weapon_surge(int(extra_data.get("slot_index", -1)),
-					Vector2(float(extra_data.get("direction_x", 1.0)), float(extra_data.get("direction_y", 0.0))))
+				rp._start_weapon_reload(int(extra_data.get("slot_index", -1)), float(extra_data.get("d", 0.0)), int(extra_data.get("n", -1)))
 		"weapon_fire":
 			if rp.has_method("_animate_weapon_fire_full"):
 				rp._animate_weapon_fire_full(extra_data)
@@ -4127,9 +4279,8 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 		## Yarasa formunun kendisi/silahların çekilmesi bu kanaldan DEĞİL, animasyon adından gelir.
 		## Genel pixel parçacık patlaması (pixel_draw.gd spawn_burst) - Korsan bomba tozu/duman/kıvılcımı vb.
 		## Ruhani Yetenekler (bkz. spiritual_skills.gd, player.gd _spirit_* bloğu): "spirit_blink" = ışınlanma efekti
-		## (kind "streak": Taktiksel, from=pos -> extra.to; kind "column": Dükkan, pos'ta ışık sütunu), "spirit_cancel" =
-		## Dükkan odaklanması iptal (kukladaki kanal FX'ini adıyla bulup kapatır). Karakter-bağlı aura FX'leri (adc/tank/taktik/
-		## dukkan) `skill_scene` ile, Can'ın takım FX'i _rpc_spirit_team_buff ile gider.
+		## (kind "streak": Taktiksel, from=pos -> extra.to). Karakter-bağlı aura FX'leri (adc/tank/taktik) `skill_scene` ile,
+		## Can'ın takım FX'i _rpc_spirit_team_buff ile gider. (Dükkan + "spirit_cancel" silindi, madde 543.)
 		"spirit_blink":
 			var blink := Node2D.new()
 			blink.set_script(load("res://scripts/fx_spirit_blink.gd"))
@@ -4140,10 +4291,6 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 		"teleport_snap":
 			if rp.has_method("snap_to_network_position"):
 				rp.snap_to_network_position(pos)
-		"spirit_cancel":
-			var cancel_target: Node = rp.get_node_or_null(str(extra_data.get("node", "FxSpiritDukkan")))
-			if cancel_target != null and cancel_target.has_method("cancel"):
-				cancel_target.call("cancel")
 		"pixel_burst":
 			PixelDrawScript.spawn_burst(get_tree().current_scene, pos, str(extra_data.get("palette", "fire")), int(extra_data.get("count", 14)), float(extra_data.get("speed", 140.0)), float(extra_data.get("life", 0.5)))
 		"vampir_fx":
@@ -4409,7 +4556,16 @@ func open_chest_for_peer(chest_tier: int) -> void:
 ##
 ## Katılımcılar: host'un yerel oyuncusu + tüm uzak oyuncular; kalıcı olarak ölmüş (is_dead) olanlar dışarıda
 ## (ödülü kullanamazlar). [{"peer_id": int, "node": Node}]
-func get_reward_participants() -> Array:
+## 2v2 PvP (madde 617): `for_peer` verilirse yalnız o oyuncunun TAKIMI (sandık sırası / elit sandık / boss altını / takım payı kendi takımına gider,
+## rakip takım paylaşıma girmez). Co-op'ta ya da for_peer 0 iken hepsi (eski davranış).
+func get_reward_participants(for_peer: int = 0) -> Array:
+	var all: Array = _all_reward_participants()
+	if for_peer <= 0 or not GameModeScript.is_pvp():
+		return all
+	return all.filter(func(e: Dictionary) -> bool: return TeamsScript.is_ally(int(e["peer_id"]), for_peer))
+
+
+func _all_reward_participants() -> Array:
 	var out: Array = []
 	var local_p: Node = get_tree().get_first_node_in_group("player")
 	if local_p and is_instance_valid(local_p) and local_p.get("is_dead") != true:
@@ -4437,7 +4593,7 @@ var _chest_turn_last_peer: int = 0 ## host: sandığı en son alan peer (0 = hen
 func host_award_chest(chest_tier: int, picker_peer_id: int = 0) -> int:
 	if not is_host:
 		return 0
-	var participants: Array = get_reward_participants()
+	var participants: Array = get_reward_participants(picker_peer_id)
 	if participants.is_empty():
 		return 0
 	var candidate_ids: Array = []
@@ -4523,7 +4679,7 @@ func show_weapon_shard_text(amount: int) -> void:
 func host_award_elite_chest(picker_peer_id: int = 0) -> int:
 	if not is_host:
 		return 0
-	var participants: Array = get_reward_participants()
+	var participants: Array = get_reward_participants(picker_peer_id)
 	var local_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1
 	for p: Dictionary in participants:
 		var pid: int = int(p["peer_id"])
@@ -4621,6 +4777,8 @@ func _rpc_announce_chest_winner(picker_id: int, winner_id: int) -> void:
 ## "Mesafe fark etmeksizin": RPC herkese gittiği için menzil kontrolü yok. Ölmüş oyuncular etkilenmez (apply_spirit_can_buff kendi içinde eler).
 @rpc("any_peer", "call_local", "reliable")
 func _rpc_spirit_team_buff(caster_id: int) -> void:
+	if TeamsScript.is_enemy(caster_id, TeamsScript.local_peer()):
+		return ## 2v2 PvP: RAKİP takımın ruhani "Can" büyüsü bana can / kalkan vermez (madde 617); co-op'ta hep aynı takım
 	var local_p: Node = get_tree().get_first_node_in_group("player")
 	if local_p and is_instance_valid(local_p) and local_p.has_method("apply_spirit_can_buff"):
 		local_p.apply_spirit_can_buff()
@@ -4629,7 +4787,7 @@ func _rpc_spirit_team_buff(caster_id: int) -> void:
 	var is_caster: bool = multiplayer.has_multiplayer_peer() and caster_id == multiplayer.get_unique_id()
 	if is_caster:
 		report_support_all()
-		for rp: Node in get_tree().get_nodes_in_group("remote_players"):
+		for rp: Node in get_tree().get_nodes_in_group("remote_allies"):
 			if not is_instance_valid(rp) or rp.get("is_dead") == true or rp.get("is_downed") == true \
 					or not rp.has_method("show_support_number"):
 				continue
@@ -4639,7 +4797,7 @@ func _rpc_spirit_team_buff(caster_id: int) -> void:
 	var scene: PackedScene = load("res://scenes/fx_spirit_can.tscn") as PackedScene
 	if scene == null:
 		return
-	for rp: Node in get_tree().get_nodes_in_group("remote_players"):
+	for rp: Node in get_tree().get_nodes_in_group("remote_allies"):
 		if is_instance_valid(rp) and rp.get("is_dead") != true:
 			rp.add_child(scene.instantiate())
 
@@ -4651,13 +4809,13 @@ func _rpc_spirit_team_buff(caster_id: int) -> void:
 func host_share_boss_gold(amount: int, from_pos: Vector2, picker: Node) -> bool:
 	if not is_host or amount <= 0:
 		return false
-	var participants: Array = get_reward_participants()
-	if participants.size() <= 1:
-		return false
 	var local_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1
 	var picker_id: int = local_id
 	if picker != null and is_instance_valid(picker) and not picker.is_in_group("player") and "peer_id" in picker:
 		picker_id = int(picker.peer_id)
+	var participants: Array = get_reward_participants(picker_id)
+	if participants.size() <= 1:
+		return false
 	var peer_ids: Array = []
 	for p: Dictionary in participants:
 		peer_ids.append(int(p["peer_id"]))
@@ -4678,6 +4836,89 @@ func host_share_boss_gold(amount: int, from_pos: Vector2, picker: Node) -> bool:
 			fx_shares[pid] = shares[pid]
 	_rpc_gold_share_fx.rpc(from_pos, fx_shares)
 	return true
+
+
+## SIRADAN YARATIK ALTINI TAKIM PAYLAŞIMI (2026-11-15, kullanıcı: "öldüremeyenler fazla altın kasamıyor" + "toplayana azcık daha fazla versin";
+## oran kill_gold.gd PICKER_SHARE_WEIGHT / split_shares). Host: yerden toplanan altını (gold_drop.gd, drop_merge.gd credit_gold) canlı
+## katılımcılara böler. Döner: TOPLAYANIN payı - çağıran onu eskisi gibi hemen verir (yerel KillGold.credit, uzak collect_gold). Diğerlerinin
+## payı _team_gold_pending'de birikir ve TEAM_GOLD_FLUSH_INTERVAL'de bir oyuncu başına TEK RPC ile gider (mıknatısla 40 altın birden
+## toplanınca 160 RPC + 160 uçan para olmasın). Paylaşılacak kimse yoksa (host değil, tek katılımcı, toplayan katılımcı değil) amount aynen döner.
+## 2v2'de yalnız toplayanın takımı bölüşür (get_reward_participants).
+const GoldShareFxScript: GDScript = preload("res://scripts/fx_gold_share.gd")
+const TEAM_GOLD_FLUSH_INTERVAL := 0.25
+var _team_gold_pending: Dictionary = {} ## peer id -> [bekleyen altın, son toplanma noktası]
+var _team_gold_flush_left: float = 0.0
+
+
+func host_split_creature_gold(amount: int, from_pos: Vector2, picker: Node) -> int:
+	if not is_host or not is_multiplayer_active or amount <= 0:
+		return amount
+	var local_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1
+	var picker_id: int = local_id
+	if picker != null and is_instance_valid(picker) and not picker.is_in_group("player") and "peer_id" in picker:
+		picker_id = int(picker.peer_id)
+	var peer_ids: Array = []
+	for p: Dictionary in get_reward_participants(picker_id):
+		peer_ids.append(int(p["peer_id"]))
+	if peer_ids.size() <= 1 or not peer_ids.has(picker_id):
+		return amount
+	var shares: Dictionary = KillGold.split_shares(amount, peer_ids, picker_id)
+	for pid in shares.keys():
+		var share: int = int(shares[pid])
+		if int(pid) == picker_id or share <= 0:
+			continue
+		var row: Array = _team_gold_pending.get(int(pid), [0, from_pos])
+		row[0] = int(row[0]) + share
+		row[1] = from_pos
+		_team_gold_pending[int(pid)] = row
+	return int(shares.get(picker_id, 0))
+
+
+## Host, her karede: biriken takım paylarını TEAM_GOLD_FLUSH_INTERVAL'de bir sahiplerine yollar. Host/çok oyunculu değilken bekleyen pay silinir
+## (eski oturumun payı yeni oturuma taşınmasın).
+func _process_team_gold(delta: float) -> void:
+	if _team_gold_pending.is_empty():
+		return
+	if not (is_multiplayer_active and is_host):
+		_team_gold_pending.clear()
+		return
+	_team_gold_flush_left -= delta
+	if _team_gold_flush_left > 0.0:
+		return
+	_team_gold_flush_left = TEAM_GOLD_FLUSH_INTERVAL
+	var local_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1
+	var connected: PackedInt32Array = multiplayer.get_peers() if multiplayer.has_multiplayer_peer() else PackedInt32Array()
+	var pending: Dictionary = _team_gold_pending
+	_team_gold_pending = {}
+	for pid in pending.keys():
+		var row: Array = pending[pid]
+		if int(pid) == local_id:
+			_receive_team_gold(int(row[0]), row[1])
+		elif connected.has(int(pid)): ## bu arada ayrılan oyuncunun payı düşer
+			grant_team_gold.rpc_id(int(pid), int(row[0]), row[1])
+
+
+## Host -> pay sahibi: takım arkadaşının yerden topladığı yaratık altınından payın (bkz. host_split_creature_gold).
+@rpc("any_peer", "call_remote", "reliable")
+func grant_team_gold(amount: int, from_pos: Vector2) -> void:
+	if not _from_host() or amount <= 0:
+		return
+	_receive_team_gold(amount, from_pos)
+
+
+## Payı bu makinedeki oyuncunun KİŞİSEL altınına ekler. Yazı yok (kullanıcı 2026-11-06: karakterin üstünde "+N" çıkmasın); toplanma noktasından
+## oyuncuya tek bir altın uçar ve varınca kısık toplama sesi çalar (fx_gold_share.gd). Balans kaydında takım payı (gold_assist "team").
+func _receive_team_gold(amount: int, from_pos: Vector2) -> void:
+	GameManager.gold += amount
+	BalanceLogScript.on_kill_gold(amount, KillGold.TEAM_KIND)
+	var lp: Node = get_tree().get_first_node_in_group("player")
+	var root: Node = get_tree().current_scene
+	if lp == null or not is_instance_valid(lp) or not (lp is Node2D) or root == null:
+		return
+	var fx := Node2D.new()
+	fx.set_script(GoldShareFxScript)
+	root.add_child(fx)
+	fx.call("setup", from_pos, lp, 0, true)
 
 
 ## Herkesin ekranında: toplanma noktasından her payın sahibine doğru uçan altınlar (kozmetik, altın host'ta zaten verildi).
@@ -4725,7 +4966,7 @@ func host_take_gold_for_parrot(real_drop: Node, picker: Node) -> int:
 ## İstemcideki Korsan'ın papağanı görsel kopyayı aldı -> host gerçek altını sahiplenir ve miktarı geri bildirir.
 @rpc("any_peer", "call_remote", "reliable")
 func request_parrot_gold(drop_network_id: int) -> void:
-	if not is_host:
+	if not is_host or _from_unadmitted_peer():
 		return
 	var sender_id: int = multiplayer.get_remote_sender_id()
 	var amount: int = -1
@@ -4750,7 +4991,7 @@ func parrot_gold_result(drop_network_id: int, amount: int) -> void:
 ## Konum sahibin yakınında olmalı (hileli uzak spawn yok) ve istek sıklığı sınırlı.
 @rpc("any_peer", "call_remote", "reliable")
 func request_parrot_tree_drop(world_pos: Vector2) -> void:
-	if not is_host:
+	if not is_host or _from_unadmitted_peer():
 		return
 	var sender_id: int = multiplayer.get_remote_sender_id()
 	if should_throttle("parrot_tree_%d" % sender_id, 2.0):
@@ -4837,41 +5078,21 @@ func grant_personal_gold(amount: int) -> void:
 		GameManager.gold += amount
 
 
-## Yaratık öldürme altını (2026-10-15, bkz. kill_gold.gd): öldüren uzak oyuncunun kişisel altınına eklenir; yaratığın öldüğü yerde (world_pos)
-## dönen para SADECE onun ekranında belirir, ona uçar, varınca altın + yazı + ses. Sadece host'tan gelir.
-@rpc("any_peer", "call_remote", "reliable")
-func grant_kill_gold(amount: int, world_pos: Vector2, assist: int = 0) -> void:
-	if not _from_host() or amount <= 0:
-		return
-	KillGold.drop_coin(get_tree(), amount, world_pos, assist) ## 2026-10-21: yerde dönen para, 0,5 sn sonra bana uçar ve varınca altın eklenir
-
-
-## ASİST (2026-10-15, bkz. assist.gd): can/kalkan basan, buff veren, bağ kuran oyuncu hedefi bildirir. Host'ta doğrudan kayda geçer,
-## istemcide host'a (hedef başına en çok saniyede 1) gider. hold = etkisi süren buff'ın süresi.
-func report_support(target_peer_id: int, hold: float = 0.0) -> void:
+## DESTEK sayacı (balans kaydı, hedef başına en çok saniyede 1): can/kalkan basan, buff veren, bağ kuran oyuncu çağırır. Eskiden host'a da
+## gidip asist altını payına sayılıyordu (assist.gd); asist yolu 2026-11-15'te silindi, yalnız yerel sayaç kaldı (RPC yok). hold kullanılmıyor.
+func report_support(target_peer_id: int, _hold: float = 0.0) -> void:
 	if not is_multiplayer_active or target_peer_id <= 0 or not multiplayer.has_multiplayer_peer():
 		return
 	var me: int = multiplayer.get_unique_id()
 	if target_peer_id == me or should_throttle("support_%d" % target_peer_id, 1.0):
 		return
 	BalanceLogScript.note_support_sent()
-	if is_host:
-		AssistScript.note_support(me, target_peer_id, hold)
-	else:
-		_rpc_report_support.rpc_id(_host_peer_id(), target_peer_id, hold)
 
 
 ## Ruhani "Can" gibi herkese giden destek: her canlı katılımcıya bildirir.
 func report_support_all(hold: float = 0.0) -> void:
 	for p: Dictionary in get_reward_participants():
 		report_support(int(p["peer_id"]), hold)
-
-
-@rpc("any_peer", "call_remote", "reliable")
-func _rpc_report_support(target_peer_id: int, hold: float) -> void:
-	if not is_host:
-		return
-	AssistScript.note_support(multiplayer.get_remote_sender_id(), target_peer_id, hold)
 
 
 ## Işığın Muhafızı Parşomeni (eşya, 2026-10-02): can/kalkan veren oyuncu bu RPC'yi SADECE hedefin peer'ine yollar
@@ -5036,6 +5257,13 @@ func sync_damage_redirect_buff(target_peer_id: int, source_peer_id: int, percent
 	var local_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0
 	if local_id != target_peer_id:
 		return
+	## Hile koruması (madde 613): bağı kuran, "kaynak" olarak yazılan oyuncunun KENDİSİ olmalı (aksi hâlde biri başkasının hasarını üçüncü
+	## kişiye yönlendirir); yüzde 0-1, süre 0-120 sn.
+	var buff_sender: int = multiplayer.get_remote_sender_id()
+	if buff_sender > 1 and buff_sender != source_peer_id:
+		return
+	percent = _sane_f(percent, 0.0, 1.0)
+	duration = _sane_f(duration, 0.0, 120.0)
 	var local_player: Node = get_tree().get_first_node_in_group("player")
 	if not local_player or not ("damage_redirect_percent" in local_player):
 		return
@@ -5107,11 +5335,17 @@ func sync_oakley_bond_buff(target_peer_id: int, heal_per_hit: float, shield_per_
 ## uygulanacak (bypass YOK).
 @rpc("any_peer", "call_remote", "reliable", CH_COMBAT)
 func sync_redirected_damage(target_peer_id: int, amount: float) -> void:
-	if amount <= 0.0:
+	if is_nan(amount) or amount <= 0.0:
 		return
 	var local_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0
 	if local_id != target_peer_id:
 		return
+	## Hile koruması (madde 613): hasarı yalnız BİZİM bağladığımız (note_redirect_bond) ve bağı süren dost aktarabilir; kimse bizi uzaktan
+	## "1e9 hasar"la öldüremez. Gönderen host (1) ya da yerel (0) ise sıkılaştırma yok (relay göndericiyi koruyor mu doğrulanmadı).
+	var redirect_sender: int = multiplayer.get_remote_sender_id()
+	if redirect_sender > 1 and Time.get_ticks_msec() > int(_redirect_bonds.get(redirect_sender, 0)):
+		return
+	amount = _sane_f(amount, 0.0, MAX_REQUEST_DAMAGE)
 	var local_player: Node = get_tree().get_first_node_in_group("player")
 	if local_player and local_player.has_method("take_redirected_damage"):
 		local_player.take_redirected_damage(amount)
@@ -5150,9 +5384,14 @@ func sync_kalkan_bagi_shield_delta(target_peer_id: int, delta_amount: float) -> 
 
 
 ## Host otoritesinde ortak takım EXP toplama
-func host_collect_xp(amount: float) -> void:
+func host_collect_xp(amount: float, collector_peer: int = 0) -> void:
 	if not is_host:
 		return
+	if GameModeScript.is_pvp(): ## 2v2: takım başına ayrı XP / seviye (madde 617, pvp_net.gd)
+		var net: Node = get_node_or_null("PvpNet")
+		if net != null:
+			net.host_collect_xp(amount, collector_peer)
+			return
 	var old_level: int = GameManager.team_level
 	GameManager.add_team_xp(amount)
 	# Seviye atlandıysa bekletmeden hemen sync gönder, aksi halde timer ile batchle
@@ -5181,6 +5420,8 @@ func sync_team_xp(current_xp: float, needed_xp: float, current_level: int) -> vo
 ## canını görür, başkasınınkini değil.
 @rpc("any_peer", "call_local", "reliable")
 func sync_revive_consumed(peer_id: int, new_remaining: int) -> void:
+	if not _from_host():
+		return ## HİLE KORUMASI (2026-11-12): dirilme hakkı kararı yalnız host'tan; istemci başkasının/kendi hakkını yazamaz
 	GameManager.peer_revives[peer_id] = new_remaining
 	if peer_id == multiplayer.get_unique_id():
 		GameManager.revives_updated.emit(new_remaining)
@@ -5206,7 +5447,7 @@ signal brush_reveal_requested(peer_key: int)
 
 @rpc("any_peer", "call_remote", "reliable")
 func request_brush_reveal() -> void:
-	if not is_host:
+	if not is_host or _from_unadmitted_peer():
 		return
 	var sender: int = multiplayer.get_remote_sender_id()
 	if sender <= 0:
@@ -5228,7 +5469,7 @@ func sync_mine_state(broken: Array) -> void:
 
 @rpc("any_peer", "call_remote", "reliable")
 func request_mine_hit(site: int) -> void:
-	if not is_host:
+	if not is_host or _from_unadmitted_peer():
 		return
 	mine_hit_requested.emit(site)
 
@@ -5332,7 +5573,7 @@ func announce_meta_revive_bonus() -> void:
 
 @rpc("any_peer", "reliable")
 func request_meta_revive_bonus(bonus: int) -> void:
-	if not is_host:
+	if not is_host or _from_unadmitted_peer():
 		return
 	_host_apply_meta_revive_bonus(multiplayer.get_remote_sender_id(), bonus)
 
@@ -5340,7 +5581,7 @@ func request_meta_revive_bonus(bonus: int) -> void:
 func _host_apply_meta_revive_bonus(peer_id: int, bonus: int) -> void:
 	if GameManager.peer_revives.has(peer_id):
 		return
-	var extra: int = clampi(bonus, 0, GameManager.MetaUpgradesScript.max_level("revive"))
+	var extra: int = clampi(bonus, 0, GameManager.MetaUpgradesScript.max_level("revive") + Characters.SIGNATURE_MAX_REVIVES) ## + Hadime'nin özel statı (madde 677)
 	if extra <= 0:
 		return
 	sync_revive_consumed.rpc(peer_id, GameManager.MetaUpgradesScript.BASE_REVIVES + extra)
@@ -5348,7 +5589,7 @@ func _host_apply_meta_revive_bonus(peer_id: int, bonus: int) -> void:
 
 @rpc("any_peer", "reliable")
 func request_use_revive(request_id: int) -> void:
-	if not is_host:
+	if not is_host or _from_unadmitted_peer():
 		return
 	var sender_id: int = multiplayer.get_remote_sender_id()
 	var granted: bool = _consume_revive_authoritative(sender_id)
@@ -5434,7 +5675,247 @@ func _rpc_sync_player_loadout(weapon: String, spirit: String, pet: String) -> vo
 func start_multiplayer_game() -> void:
 	if not is_host or not all_players_ready():
 		return
+	world_map_open = false
+	_world_map_reset_votes()
 	_rpc_start_game.rpc(GameManager.selected_map)
+
+
+## DÜNYA HARİTASI (madde 606): host OYUNU BAŞLAT'a basınca dünya haritası ekranı (world_map_screen.gd) HERKESTE açılır. Açık/kapalı +
+## ilk odak host'tan herkese; odada 2+ oyuncu varsa harita OYLA seçilir (aşağıdaki madde 620 bloğu), tek kişilik odada host kendi seçer.
+## 2+ oyuncuda istemci ekranı hep oylama kipindedir (istemci varsa odada en az iki kişi vardır).
+signal world_map_changed(open: bool, map_id: String)
+var world_map_open: bool = false
+var world_map_pick: String = ""
+
+
+## host: dünya haritası açıldı / seçim değişti (open true) ya da kapandı (open false) - istemcilere yayınlar.
+func broadcast_world_map(open: bool, map_id: String = "") -> void:
+	if not is_host or not is_multiplayer_active:
+		return
+	if not open:
+		_world_map_reset_votes()
+	world_map_open = open
+	world_map_pick = map_id
+	_rpc_world_map.rpc(open, map_id)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _rpc_world_map(open: bool, map_id: String) -> void:
+	if not _from_host():
+		return
+	if not open or not world_map_open: ## kapandı ya da yeni açıldı: önceki oylamanın artığı kalmasın
+		_world_map_reset_votes()
+	world_map_open = open
+	world_map_pick = map_id if MapProfilesScript.has_profile(map_id) else MapProfilesScript.DEFAULT_ID
+	world_map_changed.emit(open, world_map_pick)
+
+
+## ==============================================================================
+## DÜNYA HARİTASI OYLAMASI (madde 620, 2026-11-12; kullanıcı: "multiplayerda harita seçme ekranını diğer oyuncular da görsün ve oylama ile
+## seçilsin harita"). Odada 2+ oyuncu varsa harita host'un tek başına seçimi DEĞİL, herkesin (host dahil) oyudur: bir haritaya tıklamak =
+## o haritaya oy (istediği kadar değiştirilir). Host yetkilidir: oyları o toplar (_rpc_cast_world_map_vote), her değişimde herkese
+## yayınlar (_rpc_world_map_votes: kim hangi haritaya + kalan süre). Oylama WORLD_MAP_VOTE_TIMEOUT dolunca ya da odadaki HERKES oy verince
+## biter: en çok oy alan kazanır; eşitlikte eşit olanlar arasından RASTGELE; hiç oy yoksa host'un son seçimi. Sonuç herkese gider
+## (_rpc_world_map_vote_result, ekran kazananı gösterir), WORLD_MAP_RESULT_HOLD sonra host oyunu başlatır (world_map_vote_finished ->
+## lobby_menu _on_world_map_chosen). Ayrılan oyuncunun oyu düşer. Tek kişilik odada oylama yok (host seçer, eski akış). Host ekranda GERİ
+## derse oylama iptal olur (broadcast_world_map(false)).
+## ==============================================================================
+const WORLD_MAP_VOTE_TIMEOUT := 30.0
+const WORLD_MAP_RESULT_HOLD := 2.5 ## kazanan gösterilir, sonra oyun başlar
+const WORLD_MAP_VOTE_MAX := 16 ## istemcinin kabul ettiği en çok oy kaydı (bozuk paket sınırı)
+var world_map_votes: Dictionary = {} ## peer_id -> harita kimliği; host'ta yetkili kayıt, istemcide son yayının kopyası (+ kendi bekleyen oyu)
+var world_map_vote_time_left: float = 0.0
+var world_map_vote_winner: String = "" ## "" = henüz sonuçlanmadı
+var world_map_vote_tie: bool = false
+var _world_map_vote_live: bool = false ## host: oylama sürüyor (sonuçlanmadı)
+var _world_map_hold_left: float = -1.0 ## host: sonuç gösteriliyor, bu kadar sonra oyun başlar (<0 = yok)
+var _world_map_my_vote: String = "" ## istemci: host yayını gecikirken kendi oyum ekrandan silinmesin
+
+signal world_map_votes_changed ## oy geldi / değişti / liste yenilendi (ekran yeniden çizer)
+signal world_map_vote_resolved(map_id: String, tie: bool) ## herkes (host dahil): kazanan belli
+signal world_map_vote_finished(map_id: String) ## yalnız host: gösterim süresi doldu, oyunu başlat
+
+
+## host: bu odada oylama gerekir mi (2+ oyuncu). Tek kişi eski akışla kendi seçer.
+func world_map_vote_needed() -> bool:
+	return is_host and is_multiplayer_active and lobby_players.size() >= 2
+
+
+## Oyları sayar: harita kimliği -> oy sayısı.
+static func world_map_tally(votes: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
+	for pid in votes.keys():
+		var id: String = str(votes[pid])
+		out[id] = int(out.get(id, 0)) + 1
+	return out
+
+
+## Kazananı belirler -> [harita kimliği, eşitlik mi]. En çok oy alan kazanır; eşitlikte eşit olanlar profil sırasıyla dizilip
+## `roll % eşit sayısı` ile seçilir (roll = rastgele sayı, testte sabit); hiç oy yoksa `fallback`.
+static func world_map_decide(votes: Dictionary, fallback: String, roll: int) -> Array:
+	var tally: Dictionary = world_map_tally(votes)
+	if tally.is_empty():
+		return [fallback, false]
+	var best: int = 0
+	for id: String in tally:
+		best = maxi(best, int(tally[id]))
+	var tied: Array[String] = []
+	for id: String in MapProfilesScript.selectable_ids(): ## deterministik sıra (sözlük sırasına bağlı kalma)
+		if int(tally.get(id, 0)) == best:
+			tied.append(id)
+	if tied.is_empty():
+		return [fallback, false]
+	if tied.size() == 1:
+		return [tied[0], false]
+	return [tied[absi(roll) % tied.size()], true]
+
+
+## Bu eşin oyu (kendi bekleyen oyu dahil), "" = vermedi.
+func my_world_map_vote() -> String:
+	var me: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0
+	return str(world_map_votes.get(me, _world_map_my_vote))
+
+
+## host: oylamayı açar (ekranı herkeste açar + boş oy listesi + süre). Tek kişilikte hiçbir şey yapmaz (çağıran eski akışı kurar).
+func host_begin_world_map_vote(initial_map: String) -> void:
+	if not world_map_vote_needed():
+		return
+	_world_map_reset_votes()
+	_world_map_vote_live = true
+	world_map_vote_time_left = WORLD_MAP_VOTE_TIMEOUT
+	broadcast_world_map(true, initial_map)
+	_broadcast_world_map_votes()
+	world_map_votes_changed.emit()
+
+
+## Herkes (host dahil) çağırır: haritaya oy ver / oyunu değiştir.
+func cast_world_map_vote(map_id: String) -> void:
+	if not is_multiplayer_active or not world_map_open or world_map_vote_winner != "":
+		return
+	if not MapProfilesScript.selectable_ids().has(map_id):
+		return
+	var me: int = multiplayer.get_unique_id()
+	if is_host:
+		_host_record_world_map_vote(me, map_id)
+		return
+	_world_map_my_vote = map_id
+	world_map_votes[me] = map_id
+	world_map_votes_changed.emit()
+	_rpc_cast_world_map_vote.rpc_id(_host_peer_id(), map_id)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _rpc_cast_world_map_vote(map_id: String) -> void:
+	if not is_host or _from_unadmitted_peer():
+		return
+	_host_record_world_map_vote(multiplayer.get_remote_sender_id(), map_id)
+
+
+func _host_record_world_map_vote(pid: int, map_id: String) -> void:
+	if not is_host or not _world_map_vote_live or not lobby_players.has(pid):
+		return
+	if not MapProfilesScript.selectable_ids().has(map_id) or str(world_map_votes.get(pid, "")) == map_id:
+		return
+	world_map_votes[pid] = map_id
+	world_map_votes_changed.emit()
+	if not _check_world_map_vote_complete():
+		_broadcast_world_map_votes()
+
+
+## Odadaki HERKES oy verdiyse oylamayı bitirir. true = bitti.
+func _check_world_map_vote_complete() -> bool:
+	if not _world_map_vote_live or lobby_players.is_empty():
+		return false
+	for pid in lobby_players.keys():
+		if not world_map_votes.has(pid):
+			return false
+	_finish_world_map_vote()
+	return true
+
+
+func _broadcast_world_map_votes() -> void:
+	var pids := PackedInt32Array()
+	var maps := PackedStringArray()
+	for pid in world_map_votes.keys():
+		pids.append(int(pid))
+		maps.append(str(world_map_votes[pid]))
+	_rpc_world_map_votes.rpc(pids, maps, world_map_vote_time_left)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _rpc_world_map_votes(pids: PackedInt32Array, maps: PackedStringArray, time_left: float) -> void:
+	if not _from_host() or is_host or world_map_vote_winner != "":
+		return
+	world_map_votes.clear()
+	for i in mini(mini(pids.size(), maps.size()), WORLD_MAP_VOTE_MAX):
+		if MapProfilesScript.selectable_ids().has(maps[i]):
+			world_map_votes[int(pids[i])] = maps[i]
+	if _world_map_my_vote != "": ## host yayını benim son oyumdan önce üretilmiş olabilir
+		world_map_votes[multiplayer.get_unique_id()] = _world_map_my_vote
+	world_map_vote_time_left = maxf(time_left, 0.0)
+	world_map_votes_changed.emit()
+
+
+## host: oylamayı bitirir, kazananı herkese bildirir ve gösterim sayacını başlatır.
+func _finish_world_map_vote() -> void:
+	if not is_host or not _world_map_vote_live:
+		return
+	_world_map_vote_live = false
+	var fallback: String = GameManager.selected_map if MapProfilesScript.selectable_ids().has(GameManager.selected_map) \
+			else MapProfilesScript.DEFAULT_ID
+	var res: Array = world_map_decide(world_map_votes, fallback, randi())
+	_broadcast_world_map_votes() ## son oy dökümü herkesin ekranında kazananla birlikte görünsün
+	_world_map_hold_left = WORLD_MAP_RESULT_HOLD
+	_rpc_world_map_vote_result.rpc(str(res[0]), bool(res[1]))
+
+
+@rpc("any_peer", "call_local", "reliable")
+func _rpc_world_map_vote_result(map_id: String, tie: bool) -> void:
+	if not _from_host():
+		return
+	world_map_vote_winner = map_id if MapProfilesScript.has_profile(map_id) else MapProfilesScript.DEFAULT_ID
+	world_map_vote_tie = tie
+	world_map_vote_time_left = 0.0
+	world_map_vote_resolved.emit(world_map_vote_winner, tie)
+
+
+## Bir eş koptu (host): oyu düşer; geri kalan herkes oy vermişse oylama biter, değilse güncel liste yayınlanır.
+func _on_world_map_voter_left(peer_id: int) -> void:
+	if not is_host or not _world_map_vote_live:
+		return
+	world_map_votes.erase(peer_id)
+	world_map_votes_changed.emit()
+	if not _check_world_map_vote_complete():
+		_broadcast_world_map_votes()
+
+
+func _world_map_reset_votes() -> void:
+	world_map_votes.clear()
+	world_map_vote_time_left = 0.0
+	world_map_vote_winner = ""
+	world_map_vote_tie = false
+	_world_map_vote_live = false
+	_world_map_hold_left = -1.0
+	_world_map_my_vote = ""
+
+
+## _process'ten her karede (ALWAYS). Host oylama süresini ve sonuç gösterim sayacını işler; istemci yalnız kalan süreyi sayar.
+func update_world_map_vote_timer(delta: float) -> void:
+	if not is_multiplayer_active or not world_map_open:
+		return
+	if not is_host:
+		if world_map_vote_winner == "":
+			world_map_vote_time_left = maxf(0.0, world_map_vote_time_left - delta)
+		return
+	if _world_map_vote_live:
+		world_map_vote_time_left -= delta
+		if world_map_vote_time_left <= 0.0:
+			_finish_world_map_vote()
+	elif _world_map_hold_left >= 0.0:
+		_world_map_hold_left -= delta
+		if _world_map_hold_left < 0.0:
+			_world_map_hold_left = -1.0
+			world_map_vote_finished.emit(world_map_vote_winner)
 
 
 ## map_id (madde 444): host'un seçtiği harita - herkes yüklemeden önce kendi GameManager.selected_map'ine yazar (Main onu yükler).
@@ -5452,6 +5933,10 @@ func _rpc_start_game(map_id: String = "ana") -> void:
 	## true bırakmış olabilir; burada sıfırlanmazsa sıradaki NORMAL/toplu
 	## başlangıçta da yanlışlıkla "diğerlerini bekleme" moduna düşerdi.
 	_is_rejoining_midgame = false
+	## Harita oylaması bitti: istemcide de kapansın (host start_multiplayer_game'de kapatıyor ama istemci hiç kapatmıyordu -> yeniden
+	## başlatılıp lobiye dönünce lobby_menu _ready bayat world_map_open ile oylama ekranını tekrar açıp karakter seçimini kapatıyordu).
+	world_map_open = false
+	_world_map_reset_votes()
 	GameManager.reset()
 	GameManager.selected_map = map_id if MapProfilesScript.has_profile(map_id) else MapProfilesScript.DEFAULT_ID
 	# Set local player selected character from our lobby info
@@ -5562,6 +6047,7 @@ var _peer_addr: Dictionary = {} ## host: peer -> ENet uzak adresi (devirde diğe
 var _peer_eos: Dictionary = {} ## host: peer -> Epic kimliği (internet odası)
 var _migration_roster: Array = [] ## herkes: host'un son yayınladığı sıra listesi
 var _migration_known_uids: Array = [] ## herkes: bu oyunun TÜM oyuncuları (düşenler dahil) - yeni host geri katılma hakkını korur
+var _migration_known_ver: Dictionary = {} ## herkes: uid -> kimlik doğrulayıcı (madde 613) - yeni host başkasının kimliğini üstlenmeye karşı bunu da miras alır
 var _migration_port: int = 0 ## herkes: oyunun portu (LAN)
 var host_handover: Dictionary = {} ## herkes: host'un son "devir paketi" (spawner gizli sayaçları vb.)
 var migration_handover: Dictionary = {} ## yeni host'un Main'i bunu okur (notify_main_ready_for_catchup'ta temizlenir)
@@ -5667,7 +6153,7 @@ func _rpc_request_balance_flush() -> void:
 
 @rpc("any_peer", "call_remote", "reliable")
 func _rpc_balance_flush_ack() -> void:
-	if not is_host:
+	if not is_host or _from_unadmitted_peer():
 		return
 	_balance_ack_pending.erase(multiplayer.get_remote_sender_id())
 
@@ -5718,18 +6204,21 @@ func _publish_migration_roster() -> void:
 	_migration_roster = HostMigrationScript.build_roster(lobby_players, _peer_uid, _peer_addr, _peer_eos, _roster_order, connected)
 	_migration_port = HostMigrationScript.parse_port(room_code)
 	_migration_known_uids = _game_roster_uids.keys()
+	_uid_verifier[local_player_uid] = local_player_proof().sha256_text()
+	_migration_known_ver = _uid_verifier.duplicate()
 	for pid in connected:
 		if int(pid) != local_id:
-			_rpc_migration_roster.rpc_id(int(pid), _migration_roster, _migration_port, _migration_known_uids)
+			_rpc_migration_roster.rpc_id(int(pid), _migration_roster, _migration_port, _migration_known_uids, _migration_known_ver)
 
 
 @rpc("any_peer", "call_remote", "reliable")
-func _rpc_migration_roster(entries: Array, port: int, known_uids: Array = []) -> void:
+func _rpc_migration_roster(entries: Array, port: int, known_uids: Array = [], known_ver: Dictionary = {}) -> void:
 	if is_host or not _from_host():
 		return
 	_migration_roster = entries
 	_migration_port = port
 	_migration_known_uids = known_uids
+	_migration_known_ver = known_ver
 
 
 ## Host: spawner (ve ileride başkaları) "devir paketi"ni buradan yayınlar; yeni host Main'inde bunu okur.
@@ -6105,6 +6594,7 @@ func _migration_host_start() -> void:
 	lobby_players = {1: {"name": local_player_name, "char_id": local_char_id, "is_ready": true, "is_host": true,
 		"weapon": GameManager.selected_start_weapon, "spirit": GameManager.selected_spiritual, "pet": _local_pet()}}
 	_peer_uid = {1: local_player_uid}
+	_uid_verifier = _migration_known_ver.duplicate() ## eski host'un öğrendiği doğrulayıcılar: kimlik çalma devirde de kapalı kalır
 	_peer_addr.clear()
 	_peer_eos.clear()
 	_game_roster_uids.clear()
@@ -6181,12 +6671,24 @@ var _last_report_msec: int = 0
 
 
 @rpc("any_peer", "reliable")
-func _rpc_register_uid(uid: String, eos_id: String = "") -> void:
+func _rpc_register_uid(uid: String, eos_id: String = "", proof: String = "") -> void:
 	if not is_host or _from_unadmitted_peer():
 		return
 	var sender_id: int = multiplayer.get_remote_sender_id()
 	if sender_id <= 0:
 		return
+	uid = uid.left(64)
+	eos_id = eos_id.left(128)
+	## KİMLİK KANITI (madde 613): uid herkese görünür, kanıt yalnız sahibinde. İlk kayıtta doğrulayıcı öğrenilir; sonraki aynı-uid kayıtları
+	## (yeniden bağlanma / başkasının taklidi) AYNI kanıtı vermek zorunda - yoksa REDDEDİLİR ve gerçek sahibe/anlık görüntüsüne dokunulmaz.
+	if uid != "":
+		var expected: String = _expected_verifier(uid)
+		if not identity_proof_ok(proof, expected):
+			_net_log("kimlik REDDEDİLDİ: peer %d uid %s... kanıt %s" % [sender_id, uid.left(6), "yok" if proof.length() != 64 else "uyuşmuyor"])
+			_reject_peer(sender_id, REJECT_IDENTITY)
+			return
+		if expected == "":
+			_uid_verifier[uid] = proof.sha256_text()
 	## Aynı oyuncu (kimlik) yeni bir peer id ile geri bağlandı: Epic'in kopma bildirimi geç gelebilir, eski kayıt (hayalet) kalmasın.
 	if uid != "":
 		for old_id in _peer_uid.keys():
@@ -6304,7 +6806,7 @@ static func rejoin_snapshot_signature(snapshot: Dictionary) -> int:
 
 @rpc("any_peer", "reliable")
 func _rpc_report_rejoin_snapshot(snapshot: Dictionary) -> void:
-	if not is_host:
+	if not is_host or _from_unadmitted_peer():
 		return
 	var uid: String = str(_peer_uid.get(multiplayer.get_remote_sender_id(), ""))
 	if uid != "" and _game_roster_uids.has(uid):
@@ -6354,7 +6856,7 @@ func _apply_rejoin_game_state() -> void:
 ## (bkz. set_local_ready). Host'a "beni de oyuna al" isteği gönderir.
 @rpc("any_peer", "reliable")
 func request_join_in_progress_game() -> void:
-	if not is_host:
+	if not is_host or _from_unadmitted_peer():
 		return
 	var sender_id: int = multiplayer.get_remote_sender_id()
 	if sender_id <= 0:
@@ -6366,8 +6868,13 @@ func request_join_in_progress_game() -> void:
 		return
 	_game_peers[sender_id] = true
 	_publish_migration_roster()
-	_rpc_receive_rejoin_snapshot.rpc_id(sender_id, _rejoin_snapshots.get(uid, {}), GameManager.team_level, GameManager.team_xp,
-			GameManager.team_xp_needed)
+	var rejoin_xp: Array = [GameManager.team_level, GameManager.team_xp, GameManager.team_xp_needed]
+	var pvp_xp_node: Node = get_node_or_null("PvpNet")
+	if pvp_xp_node != null:
+		var pvp_xp: Array = pvp_xp_node.xp_triplet_for(sender_id) ## 2v2: geri katılanın TAKIMININ seviyesi (madde 617)
+		if not pvp_xp.is_empty():
+			rejoin_xp = pvp_xp
+	_rpc_receive_rejoin_snapshot.rpc_id(sender_id, _rejoin_snapshots.get(uid, {}), rejoin_xp[0], rejoin_xp[1], rejoin_xp[2])
 	_rpc_join_in_progress_game.rpc_id(sender_id, GameManager.selected_map)
 	## "Yakalama" gönderimi (hayattaki yaratıklar, atmosfer, satıcı) BURADA DEĞİL: istemci bu anda daha yükleme ekranına
 	## geçiyor, Main yok - paketler "Node not found: Main/EnemySpawner" ile boşa gidiyordu (2026-10-04, iki süreçli testte
@@ -6392,7 +6899,7 @@ func notify_main_ready_for_catchup() -> void:
 
 @rpc("any_peer", "reliable")
 func _rpc_main_ready(rejoining: bool) -> void:
-	if not is_host:
+	if not is_host or _from_unadmitted_peer():
 		return
 	var sender_id: int = multiplayer.get_remote_sender_id()
 	if sender_id <= 0 or not _game_peers.has(sender_id):
@@ -6408,7 +6915,7 @@ func _rpc_main_ready(rejoining: bool) -> void:
 
 @rpc("any_peer", "reliable")
 func request_game_catchup() -> void:
-	if not is_host:
+	if not is_host or _from_unadmitted_peer():
 		return
 	var sender_id: int = multiplayer.get_remote_sender_id()
 	if sender_id <= 0 or not _game_peers.has(sender_id):
@@ -6534,7 +7041,7 @@ func request_drop_pickup(drop_network_id: int, drop_type: String) -> void:
 	## yığılıyordu. Toplama muhasebesinin (xp/altın toplamı, node silme)
 	## fizik/duraklama durumuna bağımlı olmasına gerek yok - sadece host
 	## kontrolü yeterli.
-	if not is_host:
+	if not is_host or _from_unadmitted_peer():
 		return
 	# Host kendi _visual_drops'unda gerçek drop'u arar (host da visual kopya tutar)
 	# ama asıl drop enemy.gd tarafından spawn edilmiş gerçek drop'tur.
@@ -6652,8 +7159,8 @@ func request_drop_pickup(drop_network_id: int, drop_type: String) -> void:
 					## Tecrübe Kazanımı: toplayan oyuncunun bonusu (bkz. xp_orb.gd xp_gain_mult_for).
 					var xp_local_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0
 					var xp_collector: Node = get_tree().get_first_node_in_group("player") if (sender_id == xp_local_id or sender_id == 0) else _find_remote_player(sender_id)
-					var xp_mult: float = real_drop.xp_gain_mult_for(xp_collector) if real_drop.has_method("xp_gain_mult_for") else 1.0
-					host_collect_xp(real_drop.xp_value * xp_mult)
+					var xp_mult: float = real_drop.gain_mult_for(xp_collector) if real_drop.has_method("gain_mult_for") else 1.0 ## Toplayıcı çekişinde bonus yok (madde 625)
+					host_collect_xp(real_drop.xp_value * xp_mult, sender_id if sender_id > 0 else xp_local_id)
 				real_drop.queue_free()
 			_:
 				# Gold: host tarafında normal toplama işle
@@ -6718,6 +7225,94 @@ func sync_magnet_pickup(target_peer_id: int = -1) -> void:
 	get_tree().call_group("gold_drops", "attract_to_player", target_peer_id)
 
 
+## ---------------------------------------------------------------- TOPLAYICI ruhani çekişi (madde 625, kurallar scripts/toplayici.gd)
+## Host yetkili: host görüşteki (2v2'de kendi takımının) GERÇEK XP kürelerini seçer, kendi kopyalarını çeker, kimlikleri herkese yollar,
+## herkes kendi görsel kopyasını aynı oyuncuya çeker (diğer oyuncular da kürelerin uçtuğunu görür). Host ruhani seçimini bilmez -> hile
+## koruması sıklık sınırı (çekiş aralığının %80'i): istek atan en fazla Toplayıcı kadar çekebilir.
+const ToplayiciScript := preload("res://scripts/toplayici.gd")
+const SpiritualForToplayici := preload("res://scripts/spiritual_skills.gd")
+var _toplayici_last_msec: Dictionary = {} ## peer -> son çekiş (host)
+
+
+## Sahibin makinesinden (player.gd _process_toplayici). Tek oyunculu: doğrudan; host: kendisi seçer; istemci: host'a istek.
+func toplayici_pull_local(collector: Node2D) -> void:
+	if collector == null or not is_instance_valid(collector):
+		return
+	if not is_multiplayer_active:
+		ToplayiciScript.apply(ToplayiciScript.pick(get_tree(), collector.global_position, 0), -1)
+		return
+	if is_host:
+		_toplayici_host_pull(multiplayer.get_unique_id(), collector.global_position)
+	else:
+		request_toplayici_pull.rpc_id(_host_peer_id())
+
+
+## Sahibin makinesinden: 2v2'de rakipten hasar alınca çekişi kes.
+func toplayici_cancel_local() -> void:
+	if not is_multiplayer_active:
+		return
+	if is_host:
+		_toplayici_host_cancel(multiplayer.get_unique_id())
+	else:
+		request_toplayici_cancel.rpc_id(_host_peer_id())
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func request_toplayici_pull() -> void:
+	if not is_host or _from_unadmitted_peer():
+		return
+	var sender: int = multiplayer.get_remote_sender_id()
+	var rp: RemotePlayer = _find_remote_player(sender)
+	if rp == null or rp.get("is_dead") == true:
+		return
+	_toplayici_host_pull(sender, rp.global_position)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func request_toplayici_cancel() -> void:
+	if not is_host or _from_unadmitted_peer():
+		return
+	_toplayici_host_cancel(multiplayer.get_remote_sender_id())
+
+
+func _toplayici_host_pull(collector_peer: int, center: Vector2) -> void:
+	var now: int = Time.get_ticks_msec()
+	var pvp: bool = GameModeScript.is_pvp()
+	var min_gap: int = int(SpiritualForToplayici.toplayici_cooldown(pvp) * 800.0) ## F beklemesinin %80'i (ms)
+	if _toplayici_last_msec.has(collector_peer) and now - int(_toplayici_last_msec[collector_peer]) < min_gap:
+		return
+	_toplayici_last_msec[collector_peer] = now
+	var orbs: Array = ToplayiciScript.pick(get_tree(), center, TeamsScript.team_of(collector_peer))
+	ToplayiciScript.apply(orbs, collector_peer)
+	var ids: PackedInt32Array = ToplayiciScript.ids_of(orbs)
+	if not ids.is_empty():
+		sync_toplayici_pull.rpc(collector_peer, ids)
+
+
+func _toplayici_host_cancel(collector_peer: int) -> void:
+	if ToplayiciScript.release(get_tree(), collector_peer) > 0:
+		sync_toplayici_cancel.rpc(collector_peer)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func sync_toplayici_pull(collector_peer: int, ids: PackedInt32Array) -> void:
+	if not _from_host():
+		return
+	var orbs: Array = []
+	for id in ids:
+		var d: Variant = _visual_drops.get(id)
+		if d != null and is_instance_valid(d) and (d as Node).is_in_group("xp_orbs"):
+			orbs.append(d)
+	ToplayiciScript.apply(orbs, collector_peer)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func sync_toplayici_cancel(collector_peer: int) -> void:
+	if not _from_host():
+		return
+	ToplayiciScript.release(get_tree(), collector_peer)
+
+
 ## Oakley'nin Çiçek yeteneği (bkz. player.gd _try_oakley_flower/scripts/
 ## oakley_flower.gd) - her istemci çiçeği KENDİ bağımsız kopyası olarak
 ## oluşturduğu için (bkz. oakley_flower.gd dosya başı notu), biri alınca
@@ -6738,7 +7333,7 @@ func broadcast_flower_picked(flower_id: String) -> void:
 ## Host sandığı açar ve itemleri ilgili oyuncuya verir.
 @rpc("any_peer", "call_remote", "reliable")
 func request_chest_open(drop_network_id: int, player_peer_id: int) -> void:
-	if not is_host or get_tree().paused:
+	if not is_host or get_tree().paused or _from_unadmitted_peer():
 		return
 	var real_chest: Node = null
 	for c: Node in get_tree().get_nodes_in_group("chest_drops"):
@@ -6747,16 +7342,21 @@ func request_chest_open(drop_network_id: int, player_peer_id: int) -> void:
 			break
 	if not real_chest or not is_instance_valid(real_chest):
 		return
+	## HİLE KORUMASI (2026-11-12): oyuncu = gönderen (argümandaki peer id'ye güvenilmez), "claimed" oyuncu doğrulanınca yazılır
+	## (sahte id sandığı kalıcı yakamasın).
+	var opener_id: int = multiplayer.get_remote_sender_id()
+	if opener_id <= 0:
+		opener_id = player_peer_id
+	var player: Node = _find_player_by_peer_id(opener_id)
+	if not player or not is_instance_valid(player):
+		return
 	## bkz. request_drop_pickup üstündeki aynı "claimed" DÜZELTME notu -
 	## burada da aynı çift-ödül yarışı mümkündü.
 	if real_chest.get_meta("claimed", false):
 		return
 	real_chest.set_meta("claimed", true)
 
-	var player: Node = _find_player_by_peer_id(player_peer_id)
-	if not player or not is_instance_valid(player):
-		return
-	
+
 	# Sandığı host tarafında aç
 	if real_chest.has_method("_open_for_player"):
 		real_chest._open_for_player(player)

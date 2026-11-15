@@ -50,7 +50,11 @@ var _box: Rect2 = Rect2()
 var _hide_timer: Timer = null
 
 
+const UiHideScript := preload("res://scripts/ui_hide.gd") ## F3 arayüzü gizle (madde 612): konuşma balonu da kapanır (`visibility_layer`)
+
+
 func _ready() -> void:
+	UiHideScript.mark_world(self)
 	z_index = 65 ## isim etiketinin/can-kalkan çubuğunun üstünde
 	visible = false
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST

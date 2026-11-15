@@ -1,4 +1,7 @@
-"""Kalkan orbu piksel sanatı - kullanıcı isteği 2026-10-14: "tıpkı yiyecek gibi kalkan veren 2 adet yere düşen toplanabilir".
+"""DİKKAT (2026-11-11): bu betik ESKİ ORB sanatını üretir. Kalkan orbu "Mana Kalkanı İksiri" oldu ve `shield_orb_small/large.png` artık
+kullanıcının 32x32 şişe çizimleri - betiği ÇALIŞTIRMA (şişeleri 16/20 px'lik orblarla ezer). Eski orblar `out/shield_orb_eski_yedek/`.
+
+Kalkan orbu piksel sanatı - kullanıcı isteği 2026-10-14: "tıpkı yiyecek gibi kalkan veren 2 adet yere düşen toplanabilir".
 
 Mavi cam küre + ortasında açık renk kalkan arması. Küçük orb (%15) sade koyu çizgili; büyük orb (%30) daha iri ve altın halkalı. Oyunun sanatı
 48x48 yoğunlukta (eski gen_weapon_shard.py, madde 519'da silindi): düz ton bantları, 1 piksel koyu dış çizgi, kenar yumuşatma YOK. Deterministik.

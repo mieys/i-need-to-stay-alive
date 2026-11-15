@@ -26,7 +26,11 @@ const OverheadBarScript := preload("res://scripts/overhead_bar.gd")
 const LABEL_SIZE := Vector2(120.0, 34.0)
 
 
+const UiHideScript := preload("res://scripts/ui_hide.gd") ## F3 arayüzü gizle (madde 612): düşen oyuncunun sayacı da kapanır (`visibility_layer`)
+
+
 func _ready() -> void:
+	UiHideScript.mark_world(self)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	size = LABEL_SIZE
 	position = Vector2(-LABEL_SIZE.x * 0.5, OverheadBarScript.CHARACTER_Y_OFFSET + OverheadBarScript.HEIGHT * 0.5 - LABEL_SIZE.y * 0.5)

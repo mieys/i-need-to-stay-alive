@@ -12,7 +12,7 @@ fire_rate = 1.1111
 damage = 0.0
 crit_chance = 0.05
 crit_damage = 1.5
-card_damage_bonus_ratio = 1.25
+card_damage_bonus_ratio = 1.5
 sprite_forward_angle_deg = 0.0
 melee_icon_rest_rotation_deg = 0.0
 
@@ -27,4 +27,4 @@ texture = ExtResource("2")
 [node name="AttackSound" type="Node2D" parent="."]
 script = ExtResource("3")
 streams = Array[AudioStream]([ExtResource("4"), ExtResource("5")])
-volume_db = -7.0
+volume_db = -18.0

@@ -347,3 +347,34 @@ func test_spawner_never_picks_water_or_house_position() -> void:
 	spawner.queue_free()
 	harita.queue_free()
 	_clear_game_manager_map()
+
+
+## Hata defteri 2026-11-14: Oakley'nin otomatik çiçeği su / engel içine düşüyordu. Kıyıda duran Oakley'nin çiçeği hep yürünür zemine düşer.
+func test_oakley_auto_flower_never_lands_in_water() -> void:
+	var harita: Node = _inject_map_into_game_manager()
+	var forest: TileMapLayer = GameManager.get_forest_layer()
+	TerrainCollisionScript.reset()
+	TerrainCollisionScript.ensure(forest)
+	var center: Vector2 = _find_water_edge_point(harita)
+	assert(center != Vector2.ZERO, "kıyı noktası bulunamadı")
+	## Oakley kıyıda (suyun hemen yanındaki açık zeminde) durur
+	var origin: Vector2 = Vector2.ZERO
+	for ang in range(0, 360, 30):
+		var p: Vector2 = center + Vector2.from_angle(deg_to_rad(float(ang))) * 26.0
+		if not GameManager.is_position_blocked_by_walls(p):
+			origin = p
+			break
+	assert(origin != Vector2.ZERO, "kıyıda açık zemin yok")
+	var PlayerScript: GDScript = preload("res://scripts/player.gd")
+	var hit_water_before: int = 0
+	for _i in range(200):
+		var pos: Vector2 = PlayerScript.oakley_flower_auto_drop_pos(origin)
+		assert(not GameManager.is_position_blocked_by_walls(pos), "çiçek engele/suya düştü: %s" % str(pos))
+		assert(pos.distance_to(origin) <= PlayerScript.OAKLEY_FLOWER_DROP_RADIUS + 0.01)
+		## eski yol (denetimsiz rastgele nokta) burada suya düşebiliyor muydu - testin anlamlı olduğunun kanıtı
+		var raw: Vector2 = origin + Vector2.from_angle(randf() * TAU) * randf_range(0.0, PlayerScript.OAKLEY_FLOWER_DROP_RADIUS)
+		if GameManager.is_position_blocked_by_walls(raw):
+			hit_water_before += 1
+	assert(hit_water_before > 0, "kıyı noktası suya yeterince yakın değil, test anlamsız")
+	harita.queue_free()
+	_clear_game_manager_map()

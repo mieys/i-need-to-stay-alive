@@ -116,3 +116,84 @@ func test_expires_after_lifetime() -> void:
 	await _physics_frames(int(3.2 * Engine.physics_ticks_per_second))
 	assert(not is_instance_valid(p), "hedefsiz mermi LIFETIME sonunda kendini silmeli")
 	_cleanup()
+
+
+## ---- Madde 569: mana kalkanı baloncuğu - menzilli atış gövdeye değil baloncuğun DIŞ kenarına çarpar ----
+class FakeShieldFx extends Node:
+	var angles: Array = []
+	var proj_dist: Array = [] ## değme anında merminin baloncuk merkezine uzaklığı
+
+	func ranged_hit(angle: float) -> void:
+		angles.append(angle)
+		var host: Node2D = get_parent() as Node2D
+		for p in get_tree().get_nodes_in_group("enemy_projectiles"):
+			if is_instance_valid(p) and not (p as Node).is_queued_for_deletion():
+				proj_dist.append((p as Node2D).global_position.distance_to(host.global_position))
+
+
+class FakeShieldBody extends CharacterBody2D:
+	var item_shield_hp: float = 50.0
+	var mana_fx: Node = null
+	var hits: int = 0
+	var kinds: Array = []
+
+	func take_damage(_amount: float, _source: Node = null) -> void:
+		hits += 1
+		kinds.append("")
+
+	func take_special_damage(_amount: float, _source: Node2D, kind: String) -> void:
+		hits += 1
+		kinds.append(kind)
+
+
+func _make_shield_body(pos: Vector2, bubble_scale: float) -> FakeShieldBody:
+	var b := FakeShieldBody.new()
+	b.collision_layer = 2
+	b.collision_mask = 0
+	var cs := CollisionShape2D.new()
+	var shape := CircleShape2D.new()
+	shape.radius = 12.0
+	cs.shape = shape
+	b.add_child(cs)
+	var sv := Node2D.new()
+	sv.name = "ShieldVisual"
+	b.add_child(sv)
+	var bub := Node2D.new()
+	bub.name = "BubbleSprite"
+	bub.scale = Vector2(bubble_scale, bubble_scale)
+	sv.add_child(bub)
+	var fx := FakeShieldFx.new()
+	b.add_child(fx)
+	b.mana_fx = fx
+	b.add_to_group("player")
+	add_child(b)
+	b.global_position = pos
+	_spawned.append(b)
+	return b
+
+
+func test_shielded_player_bubble_stops_projectile_outside() -> void:
+	var Rule: GDScript = load("res://scripts/shield_bubble_hit.gd")
+	var body := _make_shield_body(Vector2(3000, 1000), 2.0)
+	var r: float = Rule.BUBBLE_R * 2.0
+	var p := _fire(Vector2(2880, 1000), Vector2.RIGHT)
+	await _physics_frames(60)
+	assert(body.hits == 1 and body.kinds == ["projectile"], "kalkanlı oyuncuya mermi 'projectile' türüyle 1 kez işler: %s" % str(body.kinds))
+	var fx: FakeShieldFx = body.mana_fx
+	assert(fx.angles.size() == 1, "değme anında kalkanda menzilli darbe efekti")
+	assert(absf(angle_difference(float(fx.angles[0]), PI)) < 0.2, "efekt merminin geldiği yönde (batı)")
+	assert(fx.proj_dist.size() == 1 and float(fx.proj_dist[0]) >= r, "mermi baloncuğun DIŞINDA söner: %s (r %.1f)" % [str(fx.proj_dist), r])
+	assert(not is_instance_valid(p), "baloncuğa çarpan mermi yok olur")
+	## Ağ (görsel) kopyası: aynı kuralla dış kenarda söner + efekt, ama hasar YOK.
+	body.item_shield_hp = 50.0
+	_fire(Vector2(3000, 880), Vector2.DOWN, true)
+	await _physics_frames(60)
+	assert(body.hits == 1, "ağ kopyası hasar vermez")
+	assert(fx.angles.size() == 2, "ağ kopyası da kenarda efekt oynatır (her makine kendi kopyasıyla)")
+	## Kalkan bitince eski kural: gövdeye isabet, düz take_damage.
+	body.item_shield_hp = 0.0
+	_fire(Vector2(3120, 1000), Vector2.LEFT)
+	await _physics_frames(60)
+	assert(body.hits == 2 and body.kinds[1] == "", "kalkansız: gövde isabeti (eski yol): %s" % str(body.kinds))
+	assert(fx.angles.size() == 2, "kalkansızken baloncuk efekti yok")
+	_cleanup()

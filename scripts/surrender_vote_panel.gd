@@ -190,7 +190,24 @@ func _vote(yes: bool) -> void:
 	_refresh()
 
 
+## Kumanda (denetim 547: düğmeler FOCUS_NONE + oy yalnız F1/F2 idi -> kumandayla oy verilemiyordu): A = EVET, B = HAYIR. Yalnız oy verilmemişken,
+## başka pencere (envanter, duraklatma, kartlar...) açık değilken - yanlışlıkla bir menü onayı oy olmasın. Start'a (ui_cancel) dokunulmaz.
+func _pad_vote_allowed() -> bool:
+	if not _panel.visible or _result_t > 0.0 or not _btn_row.visible:
+		return false
+	if GameManager.is_any_blocking_panel_open() or get_tree().paused:
+		return false
+	var g: Node = GameManager.get_node_or_null("GamepadUi")
+	return g == null or not bool(g.call("in_game_modal_open"))
+
+
 func _input(event: InputEvent) -> void:
+	if event is InputEventJoypadButton:
+		var jb := event as InputEventJoypadButton
+		if jb.pressed and (jb.button_index == JOY_BUTTON_A or jb.button_index == JOY_BUTTON_B) and _pad_vote_allowed():
+			_vote(jb.button_index == JOY_BUTTON_A)
+			get_viewport().set_input_as_handled()
+		return
 	if not _panel.visible or _result_t > 0.0 or not (event is InputEventKey):
 		return
 	var k := event as InputEventKey
@@ -204,9 +221,26 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 
+## Düğme yazıları: kumandayla oynanırken A / B, masaüstünde F1 / F2, telefonda yalnız EVET / HAYIR.
+func _sync_button_labels() -> void:
+	var yes_t: String = "EVET"
+	var no_t: String = "HAYIR"
+	if GameManager.pad_hints_active():
+		yes_t = "A  EVET"
+		no_t = "B  HAYIR"
+	elif not MobileUIScript.enabled:
+		yes_t = "F1  EVET"
+		no_t = "F2  HAYIR"
+	if _yes.text != yes_t:
+		_yes.text = yes_t
+	if _no.text != no_t:
+		_no.text = no_t
+
+
 func _process(delta: float) -> void:
 	if not _panel.visible:
 		return
+	_sync_button_labels()
 	if _result_t > 0.0:
 		_result_t -= delta
 		if _result_t <= 0.0:

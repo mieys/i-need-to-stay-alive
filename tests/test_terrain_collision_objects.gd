@@ -64,10 +64,26 @@ func _player(pos: Vector2) -> Node2D:
 
 
 ## Oyuncuyu gerçek hareket engeliyle (player.gd _block_movement_into_terrain) dir yönünde yürütür; ayak = kök + 15.
-func _walk(p: Node2D, dir: Vector2, steps: int) -> void:
+## Dönüş: engel hücresine girilen adım sayısı (takılınca yandan dolanma - madde 634 - gövdeyi/küçük suyu dolaşıp ötesine geçebilir; şart İÇİNE girmemek).
+func _walk(p: Node2D, dir: Vector2, steps: int) -> int:
+	var inside: int = 0
 	for i in range(steps):
 		p.velocity = dir.normalized() * SPEED
 		p._block_movement_into_terrain()
+		p.global_position += p.velocity * DT
+		if _blocked_cell(_forest.local_to_map(_forest.to_local(p.global_position))):
+			inside += 1
+	return inside
+
+
+## dir yönünde yürür, ileri hız ilk kez kesildiği (engele dayandığı) adımda durur. Takılınca yandan dolanma (madde 634) duvar geniş değilse
+## oyuncuyu köşeden dolaştırır; duvar tabanı ölçümü dayanma anına bakar.
+func _walk_until_stopped(p: Node2D, dir: Vector2, steps: int) -> void:
+	for i in range(steps):
+		p.velocity = dir.normalized() * SPEED
+		p._block_movement_into_terrain()
+		if p.velocity.dot(dir) <= 0.0:
+			return
 		p.global_position += p.velocity * DT
 
 
@@ -101,13 +117,13 @@ func test_player_stops_at_the_smithy_wall_from_the_front_and_from_behind() -> vo
 	helper.free()
 	var front: Node2D = _player(Vector2(x, base - 15.0 + 60.0))
 	assert(not GameManager.is_position_blocked_by_walls(front.global_position), "başlangıç noktası serbest olmalı")
-	_walk(front, Vector2.UP, 60)
+	_walk_until_stopped(front, Vector2.UP, 60)
 	assert(_feet(front) >= base - 3.0 and _feet(front) <= base + 22.0,
 		"önden: ayak duvar tabanında durmalı (taban %s, ayak %s)" % [base, _feet(front)])
 	front.free()
 	var behind: Node2D = _player(Vector2(x, base - 15.0 - 130.0))
 	assert(not GameManager.is_position_blocked_by_walls(behind.global_position), "arka başlangıç noktası serbest olmalı")
-	_walk(behind, Vector2.DOWN, 60)
+	_walk_until_stopped(behind, Vector2.DOWN, 60)
 	assert(_feet(behind) < base - 18.0 and _feet(behind) > base - 130.0,
 		"arkadan: duvar bandının içine girmemeli (taban %s, ayak %s)" % [base, _feet(behind)])
 	behind.free()
@@ -124,9 +140,9 @@ func test_player_cannot_walk_into_a_tree_trunk() -> void:
 		if _blocked_cell(below) or _blocked_cell(c + Vector2i(0, 3)) or _blocked_cell(c + Vector2i(0, 2)) or _blocked_cell(c + Vector2i(0, 1)):
 			continue ## altı serbest bir gövde hücresi (düz yaklaşma)
 		var p: Node2D = _player(_cell_center(below))
-		_walk(p, Vector2.UP, 40)
+		var inside: int = _walk(p, Vector2.UP, 40)
 		var fc: Vector2i = _forest.local_to_map(_forest.to_local(p.global_position))
-		assert(not _blocked_cell(fc) and fc.y > c.y, "gövde hücresine %s girildi: oyuncu hücresi %s" % [str(c), str(fc)])
+		assert(inside == 0, "gövde hücresine %s girildi (%d adım): oyuncu hücresi %s" % [str(c), inside, str(fc)])
 		p.free()
 		checked += 1
 		if checked >= 12:
@@ -148,9 +164,9 @@ func test_player_stops_at_the_water_and_bridge_decks_stay_open() -> void:
 		if not ok:
 			continue
 		var p: Node2D = _player(_cell_center(c + Vector2i(0, 4)))
-		_walk(p, Vector2.UP, 30)
+		var inside: int = _walk(p, Vector2.UP, 30)
 		var fc: Vector2i = _forest.local_to_map(_forest.to_local(p.global_position))
-		assert(not _blocked_cell(fc) and fc.y > c.y, "suya girildi: su hücresi %s, oyuncu hücresi %s" % [str(c), str(fc)])
+		assert(inside == 0, "suya girildi (%d adım): su hücresi %s, oyuncu hücresi %s" % [inside, str(c), str(fc)])
 		p.free()
 		checked += 1
 		if checked >= 12:

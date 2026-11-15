@@ -1,39 +1,34 @@
 extends Control
 
 ## Sandık açılış animasyonu - ödül ekranında (normal + elit: chest_menu.gd; efsun elit sandığı: enchant_screen.gd intro_chest). Kartlar burst
-## anında sandığın ağzından fırlar (reward_reveal.gd). Kullanıcı isteği
-## (2026-09-25): "sandık açarken daha iyi ve ödüllendirici heyecan uyandırıcı sandık açma animasyonu ... pixel tarzda
-## sprite sheet olarak". Sayfalar: chest_art.gd (tools/gen_chest_sprites.py, 2026-10-17 "B Işık Sütunu": 20 kare x 96 px =
-## 48 dünya px, kare düzeni o dosyanın başında). Sırası: kısa bekleme -> sallanma + aralıktan ışık -> kapak patlar (ekran flaşı +
-## sarsıntı + ses) -> ışınlar/altınlar -> açık bekleme. Normal sandıkta ışığın (ve sandığın arkasındaki IŞIK SÜTUNUNUN) rengi
-## ÇIKACAK eşyanın nadirliği (tier 1-4) - kart görünmeden önce ipucu; sütun patlamada sandığa çöker.
+## anında sandığın ağzından fırlar (reward_reveal.gd). Kullanıcı isteği (2026-09-25): "sandık açarken daha iyi ve ödüllendirici heyecan
+## uyandırıcı sandık açma animasyonu".
+## 2026-11-11 (madde 557): sandık çizimi artık kullanıcının yeni 32x32 çizimi (chest_art.gd; kare 0 kapalı, kare 1 açık) - sallanma ve
+## kapak patlaması KODDAN: kısa bekleme -> sallanma (yatay +-1 sanat px) -> kapak patlar (kare 1 + ekran flaşı + sarsıntı + ses) -> açık
+## bekleme. Ödül ışığının rengi (ekran flaşı) çıkacak eşyanın nadirliği (tier 1-4) - kart görünmeden önce ipucu; ışık sütunu kalktı.
 ## Tıklama / herhangi bir tuş animasyonu atlar (çok oyunculuda 25 sn'lik sandık süresi zaten işliyor).
 ## Oyun duraklatılmışken çalışır: süreyi kendi _process'i sayar (sahibi PROCESS_MODE_ALWAYS bir CanvasLayer).
 
-signal burst ## kapağın açıldığı an (8. kare) - sahibi ödülü hazırlamaya başlayabilir
+signal burst ## kapağın açıldığı an (BURST_FRAME adımı) - sahibi ödülü hazırlamaya başlayabilir
 signal finished ## animasyon (ya da atlama) bitti
 
 const ChestArt := preload("res://scripts/chest_art.gd")
 const FRAME := ChestArt.FRAME_PX ## doku px
-const DISPLAY_SCALE := 8 ## dünya px başına ekran px (yalnız ışık sütunu açıkken, madde 242)
-## Madde 409 (paket sandıkları): kutu eski boyda (384 px, yerleşim aynı), sandık 1 doku px = TEXEL_SCALE ekran px (tam kat) ile kutunun
-## içinde; tabanı eski sandığın tabanıyla aynı yükseklikte (kutunun %87,5'i).
+## Kutu 384 px (yerleşim aynı), sandık 1 doku px = TEXEL_SCALE ekran px (tam kat) ile kutunun içinde; tabanı kutunun %87,5'inde.
 const BOX := 384.0
 const TEXEL_SCALE := 8
 const BASE_FRAC := 84.0 / 96.0
-const BURST_FRAME := 8
-const OPEN_LOOP := [16, 17, 18, 19]
-const OPEN_LOOP_STEP := 0.12
+const BURST_FRAME := 8 ## zaman çizelgesinde kapağın patladığı adım (bu adımdan itibaren AÇIK kare)
 const HOLD_AFTER := 0.3 ## açık beklemede ne kadar kalınır (finished'dan önce)
-## [kare, süre sn]: bekleme 0.46 + heyecan 0.52 + patlama 0.55 -> ~1.5 sn, + HOLD_AFTER.
+## [adım, süre sn]: 0-3 kapalı bekleme (0,46), 4-7 sallanma (0,52), 8 kapak patlar + açık (0,55) -> ~1,5 sn, + HOLD_AFTER.
 const TIMELINE := [
 	[0, 0.18], [1, 0.12], [2, 0.08], [3, 0.08],
 	[4, 0.14], [5, 0.12], [6, 0.12], [7, 0.14],
-	[8, 0.07], [9, 0.06], [10, 0.06], [11, 0.06], [12, 0.07], [13, 0.07], [14, 0.08], [15, 0.08],
+	[8, 0.55],
 ]
-const NORMAL_SHEETS := ChestArt.NORMAL_TIER_SHEETS
-const ELITE_SHEET := ChestArt.ELITE_SHEET
-## Ekran flaşının rengi - gen_chest_sprites.py LIGHTS (sandık içi + sütun) ile aynı aile.
+## Sallanma adımlarının yatay kayması (sanat px; çizimde sallanma karesi yok).
+const SHAKE := {4: -1.0, 5: 1.0, 6: -1.0, 7: 1.0}
+## Ekran flaşının rengi (nadirlik tier 1-4).
 const LIGHT_COLORS := [Color("#e6ebf2"), Color("#9cc4ff"), Color("#dcb0ff"), Color("#ffc65a")]
 const ELITE_LIGHT := Color("#c77dff")
 
@@ -43,20 +38,15 @@ const SFX_REWARD := preload("res://Sound FX Starter Pack Vol. 1/Hollywood/Reward
 const SFX_ELITE := preload("res://Sound FX Starter Pack Vol. 1/Magic/Magic Seal.wav")
 
 var _sheet: Texture2D = null
-var _beam_sheet: Texture2D = null
-var _beam_rect: TextureRect = null
-var _beam_atlas: AtlasTexture = null
-var _elapsed: float = 0.0
-var _since_burst: float = -1.0
 var _light: Color = Color.WHITE
 var _elite: bool = false
 var _tier: int = 1
 var _rect: TextureRect = null
 var _atlas: AtlasTexture = null
+var _home: Vector2 = Vector2.ZERO ## sandık dikdörtgeninin dinlenme konumu (sallanma/sarsıntı buna göre)
 var _step: int = -1
 var _t: float = 0.0
 var _last_us: int = 0
-var _loop_t: float = 0.0
 var _hold_left: float = -1.0
 var _burst_sent: bool = false
 var _done: bool = false
@@ -67,12 +57,12 @@ var skipped: bool = false
 var chime_on_burst: bool = true
 
 
-## elite=false: reward_tier (1-4) ekran flaşının rengini seçer; kademe_band (0-5, chest_menu _chest_tier) sandığın görünüşünü.
-func setup(elite: bool, reward_tier: int = 1, kademe_band: int = 0) -> void:
+## elite=false: reward_tier (1-4) ekran flaşının rengini seçer. kademe_band (0-5, chest_menu _chest_tier) artık sandığın görünüşünü
+## DEĞİŞTİRMEZ (tek sıradan sandık çizimi var, madde 557); imza çağıranlar için aynı kaldı.
+func setup(elite: bool, reward_tier: int = 1, _kademe_band: int = 0) -> void:
 	_elite = elite
 	_tier = clampi(reward_tier, 1, 4)
-	_sheet = ELITE_SHEET if elite else ChestArt.normal_sheet(kademe_band)
-	_beam_sheet = ChestArt.ELITE_BEAM_SHEET if elite else ChestArt.BEAM_TIER_SHEETS[_tier - 1]
+	_sheet = ChestArt.sheet(elite)
 	_light = ELITE_LIGHT if elite else LIGHT_COLORS[_tier - 1]
 
 
@@ -81,28 +71,8 @@ func _ready() -> void:
 	custom_minimum_size = Vector2(BOX, BOX)
 	if _sheet == null:
 		setup(false, 1)
-	if not ChestArt.BEAM_ENABLED:
-		_build_chest_rect(Vector2(FRAME, FRAME) * TEXEL_SCALE,
-				Vector2((BOX - FRAME * TEXEL_SCALE) * 0.5, BOX * BASE_FRAC - ChestArt.CHEST_ANCHOR_PX.y * TEXEL_SCALE))
-		_show_frame(0)
-		_advance(0)
-		return
-	## Işık sütunu: sandığın ARKASINDA (önce eklenir), kutunun dışına (yukarı) taşar; sandığın alt-ortasına hizalı.
-	var k: float = ChestArt.TEXEL * DISPLAY_SCALE
-	_beam_atlas = AtlasTexture.new()
-	_beam_atlas.atlas = _beam_sheet
-	_beam_atlas.region = Rect2(0, 0, ChestArt.BEAM_W, ChestArt.BEAM_H)
-	_beam_rect = TextureRect.new()
-	_beam_rect.texture = _beam_atlas
-	_beam_rect.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_beam_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_beam_rect.stretch_mode = TextureRect.STRETCH_SCALE
-	_beam_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_beam_rect.size = Vector2(ChestArt.BEAM_W, ChestArt.BEAM_H) * k
-	_beam_rect.position = (ChestArt.CHEST_ANCHOR_PX - ChestArt.BEAM_ANCHOR_PX) * k
-	add_child(_beam_rect)
-	_build_chest_rect(custom_minimum_size, Vector2.ZERO)
-	_show_frame(0)
+	_build_chest_rect(Vector2(FRAME, FRAME) * TEXEL_SCALE,
+			Vector2((BOX - FRAME * TEXEL_SCALE) * 0.5, BOX * BASE_FRAC - ChestArt.CHEST_ANCHOR_PX.y * TEXEL_SCALE))
 	_advance(0)
 
 
@@ -118,11 +88,15 @@ func _build_chest_rect(sz: Vector2, pos: Vector2) -> void:
 	_rect.size = sz
 	_rect.position = pos
 	_rect.pivot_offset = sz * 0.5
+	_home = pos
 	add_child(_rect)
 
 
-func _show_frame(i: int) -> void:
-	_atlas.region = Rect2(i * FRAME, 0, FRAME, FRAME)
+## Zaman çizelgesindeki adımın görüntüsü: BURST_FRAME'den itibaren AÇIK kare, öncesi KAPALI (+ sallanma adımlarında yatay kayma).
+func _show_step(step_id: int) -> void:
+	var f: int = ChestArt.FRAME_OPEN if step_id >= BURST_FRAME else ChestArt.FRAME_CLOSED
+	_atlas.region = Rect2(f * FRAME, 0, FRAME, FRAME)
+	_rect.position = _home + Vector2(float(SHAKE.get(step_id, 0.0)) * TEXEL_SCALE, 0.0)
 
 
 func _advance(step: int) -> void:
@@ -130,10 +104,10 @@ func _advance(step: int) -> void:
 	_t = 0.0
 	if step >= TIMELINE.size():
 		_hold_left = HOLD_AFTER
-		_show_frame(OPEN_LOOP[0])
+		_show_step(BURST_FRAME)
 		return
 	var f: int = int(TIMELINE[step][0])
-	_show_frame(f)
+	_show_step(f)
 	if f == 4 or f == 6:
 		_play(SFX_KNOCK, -10.0, 1.5 if f == 4 else 1.7)
 	if f == BURST_FRAME:
@@ -149,10 +123,7 @@ func _process(_delta: float) -> void:
 	var now: int = Time.get_ticks_usec()
 	var dt: float = 0.0 if _last_us == 0 else float(now - _last_us) / 1000000.0
 	_last_us = now
-	_update_beam(dt)
 	if _hold_left >= 0.0:
-		_loop_t += dt
-		_show_frame(OPEN_LOOP[int(_loop_t / OPEN_LOOP_STEP) % OPEN_LOOP.size()])
 		_hold_left -= dt
 		if _hold_left < 0.0:
 			_finish()
@@ -164,32 +135,10 @@ func _process(_delta: float) -> void:
 		_t = carry
 
 
-## Işık sütunu: beklemede döngü, sallanmada sandıkla eş kareler, patlamadan sonra 0,05 sn arayla çöker ve gizlenir.
-func _update_beam(dt: float) -> void:
-	if _beam_rect == null or not _beam_rect.visible:
-		return
-	_elapsed += dt
-	var f: int
-	if _since_burst >= 0.0:
-		_since_burst += dt
-		var j: int = int(_since_burst / ChestArt.BEAM_COLLAPSE_STEP)
-		if j >= ChestArt.BEAM_COLLAPSE_FRAMES:
-			_beam_rect.visible = false
-			return
-		f = ChestArt.BEAM_COLLAPSE + j
-	elif _step >= 0 and _step < TIMELINE.size() and int(TIMELINE[_step][0]) >= 4:
-		f = ChestArt.BEAM_SHAKE + mini(3, int(TIMELINE[_step][0]) - 4)
-	else:
-		f = int(_elapsed / ChestArt.BEAM_IDLE_STEP) % ChestArt.BEAM_IDLE
-	_beam_atlas.region = Rect2(f * ChestArt.BEAM_W, 0, ChestArt.BEAM_W, ChestArt.BEAM_H)
-
-
 func skip() -> void:
 	if _done or _hold_left >= 0.0:
 		return
 	skipped = true
-	if _beam_rect != null:
-		_beam_rect.visible = false
 	if not _burst_sent:
 		_on_burst()
 	_advance(TIMELINE.size())
@@ -199,7 +148,9 @@ func skip() -> void:
 func _input(event: InputEvent) -> void:
 	if _done or _hold_left >= 0.0 or not is_visible_in_tree():
 		return
-	var pressed: bool = (event is InputEventMouseButton and event.pressed) or (event is InputEventKey and event.pressed and not event.echo)
+	## Kumanda düğmesi de atlatır (denetim 547: yalnız fare/klavye vardı); çubuk hareketi atlatmaz.
+	var pressed: bool = (event is InputEventMouseButton and event.pressed) or (event is InputEventKey and event.pressed and not event.echo) \
+			or (event is InputEventJoypadButton and event.pressed)
 	if pressed:
 		get_viewport().set_input_as_handled()
 		skip()
@@ -209,15 +160,14 @@ func _on_burst() -> void:
 	if _burst_sent:
 		return
 	_burst_sent = true
-	_since_burst = 0.0
 	_play(SFX_COINS, -2.0, 1.0)
 	if chime_on_burst:
 		play_reward_chime(get_tree(), _tier, _elite)
 	_flash_screen()
-	## Sarsıntı: 3 kısa itme (sprite, kutunun kendisi değil - yerleşim bozulmasın).
+	## Sarsıntı: 3 kısa itme (sprite, kutunun kendisi değil - yerleşim bozulmasın); dinlenme konumuna (_home) göre.
 	var tw := create_tween()
 	for off: Vector2 in [Vector2(-6, 3), Vector2(5, -3), Vector2(-3, 2), Vector2.ZERO]:
-		tw.tween_property(_rect, "position", off, 0.035)
+		tw.tween_property(_rect, "position", _home + off, 0.035)
 	var pop := create_tween()
 	pop.tween_property(_rect, "scale", Vector2(1.08, 1.08), 0.06)
 	pop.tween_property(_rect, "scale", Vector2.ONE, 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
@@ -270,5 +220,5 @@ static func _play_on_root(tree: SceneTree, stream: AudioStream, volume_db: float
 
 func _finish() -> void:
 	_done = true
-	_show_frame(OPEN_LOOP[0])
+	_show_step(BURST_FRAME)
 	finished.emit()

@@ -30,12 +30,13 @@ const EnemyQueryScript := preload("res://scripts/enemy_world/enemy_query.gd")
 signal died
 
 const PixelDraw := preload("res://scripts/pixel_draw.gd")
+const DepthOccluders := preload("res://scripts/depth_occluders.gd")
+## Gölge: oyunun yerdeki nesne gölgesi (sandık/altın/mıknatıs ile aynı ince hilal; madde 557 ek, kullanıcı: "gölgelerini oyun içi
+## gölgelerinden biri ile yerleştir, kendin üretme") - eski 1 texel dama (dither) elips gölge kaldırıldı.
+const DropShadowScript := preload("res://scripts/drop_shadow.gd")
 const ShamanSfx := preload("res://scripts/shaman_sfx.gd")
-## "shield" | "attack" | "area" - alt sınıflar _init'te atar: dikilme sesini, rün biçimini ve aura görünümünü seçer.
+## "shield" | "attack" - alt sınıflar _init'te atar: dikilme sesini seçer.
 var totem_kind: String = "shield"
-## Aura yalnızca ~20 kez/sn yeniden çizilir (halka çizimi pahalı, gerisi Godot'nun önceki çizimi tutmasıyla bedava).
-const REDRAW_INTERVAL := 0.05
-var _redraw_acc: float = 0.0
 
 var caster: Node = null
 var network_instance_id: String = ""
@@ -48,22 +49,29 @@ var _is_network_visual: bool = false
 var _tick_timer: float = 0.0
 const TICK_INTERVAL := 1.0
 
-## Alt sınıflar override eder - HUD/aura rengi ve yarıçapı.
+## Alt sınıflar override eder - efekt rengi ve etki yarıçapı. Taban menzili yere ÇİZMEZ (madde 557 ek 2, kullanıcı: "dış halkaları kaldır,
+## onları istemiyorum": noktalı menzil halkası + soluk ikinci halka + halkada dönen 6 rün + Alan Totemi dolgusu silindi). İSTİSNA (madde 586,
+## kullanıcı isteği): Kalkan Totemi (E) kendi aura sınırını "Işık Perdesi" olarak çizer - totem_shield.gd + totem_aura_border.gd.
 var totem_color: Color = Color(0.6, 0.8, 1.0)
 var totem_radius: float = 220.0
-## Alan Totemi'nin (TotemArea) içi hafif dolgun göstermesi için - diğer
-## totemlerde 0 kalır (sadece halka çizilir). Kozmetiktir.
-var aura_fill_alpha: float = 0.0
-## true => menzil halkası/rünleri/dolgu TotemBase tarafından ÇİZİLMEZ (alt sınıf kendi aurasını çizer - ör. Alan Totemi'nin shader aurası).
-var use_custom_aura: bool = false
-## Aura halkasının dönen rünleri ve nabız animasyonu için - KOZMETİK zaman
-## biriktirici. _process zaten hem gerçek totemde hem ağ görsel kopyasında
-## çalışır (mantık _tick'te korumalı), bu yüzden animasyon HER client'ta akar.
-var visual_time: float = 0.0
 
-## Totem sahnesindeki bespoke sprite (totem_*.tscn içindeki AnimatedSprite2D).
-## Yoksa (eski sahne) sessizce yok sayılır - _draw sadece aura çizer.
-@onready var _totem_sprite: AnimatedSprite2D = get_node_or_null("TotemSprite")
+## Totem sahnesindeki gövde (madde 557'den beri RÜN TAŞI: totem_*.tscn içindeki TotemRuneStone Sprite2D'si; rünler + parıltı onun çocukları).
+## Yoksa (eski sahne) sessizce yok sayılır.
+@onready var _totem_sprite: Node2D = get_node_or_null("TotemSprite")
+## Taşın rün merkezi (düğüm kökünden): dikilme parlaması, gece ışığı ("o", night_glow_catalog.gd), Q ateş topu / E kalkan dalgası çıkışı.
+## Alt sınıflar _init'te kendi taşlarının merkezine ayarlar (TotemAttack.BOLT_ORIGIN_OFFSET / TotemShield.ORB_ORIGIN_OFFSET).
+var rune_center: Vector2 = Vector2(-1.0, -10.0)
+## Yerdeki gölge (DropShadow; ShadowsFlag.entities kapalıysa null) - süzülen taş yükseldikçe daralır.
+var _ground_shadow: Node2D = null
+const SHADOW_SHRINK := 0.15
+## Derinlik (bkz. _ready): ayak hizası = totem kökü (taşın altındaki gölge), taş süzülmesiyle birlikte ~26 birim yükselir.
+const DEPTH_SORT_GROUP := "ysort_props" ## main.gd CREATURE_SORT_GROUPS
+const DEPTH_Z := 0
+const DEPTH_FRONT_Z := 2
+const FOOT_Y := 2.0
+const STONE_HALF_W := 12.0
+const STONE_HEIGHT := 30.0
+const DEPTH_EVERY := 3 ## kare - karakter taşın arkasına 3 karede geçemez
 
 
 func setup_from_player(p_caster: Node) -> void:
@@ -101,6 +109,14 @@ func _ready() -> void:
 	## aynı yakınlıktaki müttefik totemleri) taranır, uzak bir kopyanın grup
 	## üyeliği başka bir client'ın hesaplamasını etkilemez.
 	add_to_group("shaman_totems")
+	## DERİNLİK (2026-11-11, kullanıcı: "rün taşının y ekseni sorunu var, yukarısındayken üstünde görünüyorum"): totem hiçbir y-sıralama
+	## grubunda değildi (z 0, sahneye eklenme sırası) ve yerel oyuncu z 1 -> taşın ARKASINDAKİ (yukarıdaki) oyuncu taşın üstüne çiziliyordu.
+	## Oakley çiçeğiyle (oakley_flower.gd DERİNLİK) aynı yöntem: "ysort_props" ile yaratık/evcil ayak sıralamasına katılır (ayak = kök,
+	## taş süzülse de gölge yerde) + arkasında duran karakter varsa z 2 (oyuncu z 1'in üstü, ağaç/ev ön kopyası z 3'ün altı).
+	add_to_group(DEPTH_SORT_GROUP)
+	set_meta("_foot_visual", self)
+	set_meta("_foot_local", FOOT_Y)
+	z_index = DEPTH_Z
 	get_tree().create_timer(duration).timeout.connect(_on_expire)
 	## Dikilme sesi: konum player.gd'de add_child'dan HEMEN SONRA atandığı için ses bir kare ertelenir. Kozmetik ağ kopyaları da
 	## _ready çalıştırdığı için ses her oyuncuda aynı çalar (kastta doğru, diğerlerinde yok hatası olmasın).
@@ -119,7 +135,15 @@ func _ready() -> void:
 	## hiç z_index set ETMİYOR, sadece varsayılan (0) + Y-sort'a bırakıyor -
 	## totem de artık AYNI şekilde varsayılanda, diğer oyuncu/yaratıklarla
 	## aynı katmanda Y konumuna göre doğal olarak sıralanıyor.
+	## Gölge dikilme animasyonu taşı aşağı kaydırmadan ÖNCE ölçülür (immediate): taşın dinlenme konumundaki alt kenarının altında kalır.
+	if _totem_sprite:
+		## Taş süzülse de (madde 569) gölge YERDE: süzülme ilk _process'te başlar, ölçü burada (offset 0) alınır.
+		_ground_shadow = DropShadowScript.attach(self, _totem_sprite, false, 2, Rect2(), true)
 	_play_plant_animation()
+	## Rün taşı (madde 557): rün döngüsü sahibin evrimlerini okur - gerçek totemde Player, ağ kopyasında RemotePlayer (caster
+	## setup_from_player'da _ready'den sonra gelir; Callable her çağrıda güncel caster'a bakar).
+	if _totem_sprite and "has_evo_func" in _totem_sprite:
+		_totem_sprite.set("has_evo_func", _caster_has_evo)
 	if area_damage_enabled and show_area_aura:
 		_build_area_aura()
 
@@ -132,7 +156,7 @@ const CollapseDustScene := preload("res://scenes/fx_totem_collapse_dust.tscn")
 const RuneFlashScene := preload("res://scenes/fx_totem_rune_flash.tscn")
 
 ## Dikilirken totemin "topraktan yükselme" mesafesi (piksel).
-const PLANT_RISE_PIXELS := 14.0
+const PLANT_RISE_PIXELS := 10.0 ## rün taşı ~19 birim boy (madde 557 ek: %30 küçüldü; eski totem 14)
 
 ## Dikilme anı: totem topraktan PİKSEL ADIMLARIYLA yükselerek belirir +
 ## tabanında toprak patlaması + yetenek renginde rün parlaması.
@@ -161,7 +185,20 @@ func _play_plant_animation() -> void:
 		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	tw.tween_property(_totem_sprite, "modulate:a", 1.0, 0.20)
 	_spawn_dust_child(PlantDustScene)
-	_spawn_rune_flash(Vector2(0, -16), 0.75)  ## v4 totem (madde 176): altın bilezik/taş hizası
+	_spawn_rune_flash(rune_center, 0.75)  ## rün taşının rün merkezi (madde 557)
+
+
+## Rün taşı kısa parlar (Q ateş topu / E kalkan dalgası çıkarken; gerçek totemde ve ağ kopyasında aynı yerden çağrılır).
+## Süzülen rün taşının o anki kayması (madde 569): ateş topu / kalkan şeridi çıkışı taşla birlikte hareket eder.
+func _stone_hover() -> Vector2:
+	if _totem_sprite and _totem_sprite.has_method("hover_world"):
+		return Vector2(0.0, float(_totem_sprite.call("hover_world")))
+	return Vector2.ZERO
+
+
+func _flare_stone() -> void:
+	if _totem_sprite and _totem_sprite.has_method("flare"):
+		_totem_sprite.call("flare")
 
 
 ## Yetenek renginde rün parlaması (bkz. totem_color). Kozmetik ağ kopyaları da
@@ -218,14 +255,24 @@ func _on_expire() -> void:
 	queue_free()
 
 
+## Arkasında (ayağı kökün üstünde, taşın tepesinin altında) ve yatayda örtüşen bir karakter varsa totem onun üstüne çıkar.
+func _update_depth() -> void:
+	var base_y: float = global_position.y + FOOT_Y
+	var top_y: float = base_y - STONE_HEIGHT
+	var behind: bool = false
+	for c: Vector4 in DepthOccluders.collect_characters(get_tree()):
+		if c.y < base_y and c.y > top_y and absf(c.x - global_position.x) < STONE_HALF_W + c.z:
+			behind = true
+			break
+	z_index = DEPTH_FRONT_Z if behind else DEPTH_Z
+
+
 func _process(delta: float) -> void:
-	## Aura nabzı/dönen rünler için kozmetik saat - ağ görsel kopyalarında DA
-	## işler (çizim sadece çizimdir, oyun durumu paylaşmaz; bkz. dosya başı).
-	visual_time += delta
-	_redraw_acc += delta
-	if _redraw_acc >= REDRAW_INTERVAL:
-		_redraw_acc = 0.0
-		queue_redraw()
+	if (Engine.get_process_frames() + get_instance_id()) % DEPTH_EVERY == 0:
+		_update_depth()
+	## Süzülen taşın gölgesi taş yükseldikçe daralır (madde 569).
+	if is_instance_valid(_ground_shadow) and _totem_sprite and _totem_sprite.has_method("lift_frac"):
+		_ground_shadow.scale.x = 1.0 - SHADOW_SHRINK * float(_totem_sprite.call("lift_frac"))
 	## Alan hasarı (bkz. dosya sonundaki "ALAN HASARI" bloğu): görseller her kopyada, hasar sadece dikenin client'ında.
 	if area_damage_enabled:
 		_process_area_visuals(delta)
@@ -267,77 +314,6 @@ func _current_tick_interval() -> float:
 	return TICK_INTERVAL
 
 
-func _draw() -> void:
-	## Kullanıcı isteği (2026-09-21): totem görsellerini SIFIRDAN pixel tarzında (1 texel detay, bkz. hafıza "Pixel density 48x48").
-	## Totemin gövdesini yeni 48x48 sprite (totem_*.tscn) çizer; burası SADECE zemin gölgesi + yetenek menzili/aura sihri:
-	##  - kaide altında 1 texel dither elips gölge
-	##  - menzil sınırı: totem_radius'ta nabız atan NOKTALI pixel halka + içte küçük ikinci halka
-	##  - halkada yavaşça dönen 6 rün (yetenek türüne göre biçim)
-	##  - alan totemi: alanın içi seyrek pixel "toz" noktalarıyla yanıp söner (eski düz dolgu yerine)
-	var texel: float = PixelDraw.TEXEL
-	## Zemin gölgesi
-	for iy in range(-3, 4):
-		var hw: int = int(round(sqrt(maxf(0.0, 1.0 - pow(float(iy) / 3.5, 2.0))) * 10.0))  ## v4 totem kaidesi ~19 birim geniş (madde 176)
-		for ix in range(-hw, hw + 1):
-			if ((ix + iy) & 1) == 0:
-				continue
-			PixelDraw.px(self, Vector2(float(ix) * texel, float(iy) * texel + 6.0), 1, Color(0.0, 0.0, 0.0, 0.32))
-	if use_custom_aura:
-		return
-	var pulse: float = sin(visual_time * 2.0) * 3.0
-	var ring_col := Color(totem_color.r, totem_color.g, totem_color.b, 0.85)
-	_draw_dotted_ring(totem_radius + pulse, ring_col, 3.0, visual_time * 6.0)
-	_draw_dotted_ring(totem_radius + pulse - 3.0, Color(ring_col.r, ring_col.g, ring_col.b, 0.22), 6.0, -visual_time * 4.0)
-	var inner_pulse: float = sin(visual_time * 2.0 + PI * 0.5) * 2.0
-	_draw_dotted_ring(26.0 + inner_pulse, Color(ring_col.r, ring_col.g, ring_col.b, 0.42), 2.0, visual_time * 8.0)
-	## Dönen rünler
-	var rune_alpha: float = 0.65 + 0.25 * sin(visual_time * 3.0)
-	for i in range(6):
-		var ang: float = visual_time * 0.6 + float(i) * TAU / 6.0
-		_draw_rune(Vector2(cos(ang), sin(ang)) * (totem_radius + pulse), ang, Color(totem_color.r, totem_color.g, totem_color.b, rune_alpha))
-	## İç dolgu (Alan Totemi): seyrek yanıp sönen pixel noktaları
-	if aura_fill_alpha > 0.0:
-		var dots: int = int(totem_radius * totem_radius * 0.011)
-		for i in range(dots):
-			var rr: float = totem_radius * sqrt(PixelDraw.hash01(i * 3 + 1))
-			var aa: float = TAU * PixelDraw.hash01(i * 5 + 7)
-			var tw: float = 0.5 + 0.5 * sin(visual_time * 2.0 + float(i) * 1.7)
-			PixelDraw.px(self, Vector2(cos(aa), sin(aa)) * rr, 1, Color(totem_color.r, totem_color.g, totem_color.b, aura_fill_alpha * 7.0 * tw))
-
-
-## Noktalı pixel halka: her `step_texels` texel'de bir nokta (kesikli/noktalı görünüm, ucuz).
-func _draw_dotted_ring(radius: float, col: Color, step_texels: float, phase: float) -> void:
-	var count: int = maxi(12, int(TAU * radius / (PixelDraw.TEXEL * step_texels)))
-	var offset: float = phase / float(count)
-	for i in range(count):
-		var a: float = TAU * (float(i) / float(count)) + offset
-		var p: Vector2 = Vector2(cos(a), sin(a)) * radius
-		## Koyu 1 texel alt gölge: açık çim üstünde de okunur (pixel-art kontur mantığı)
-		PixelDraw.px(self, p + Vector2(0, PixelDraw.TEXEL), 1, Color(col.r * 0.25, col.g * 0.25, col.b * 0.25, col.a * 0.55))
-		PixelDraw.px(self, p, 1, col)
-
-
-## Halkadaki küçük rün: shield = artı, attack = alev üçgeni, area = sarmal nokta çifti (her biri 5-6 texel).
-func _draw_rune(pos: Vector2, ang: float, col: Color) -> void:
-	var t: float = PixelDraw.TEXEL
-	PixelDraw.px(self, pos, 1, col.lerp(Color(1, 1, 1, col.a), 0.5))
-	match totem_kind:
-		"attack":
-			PixelDraw.px(self, pos + Vector2(-t, t), 1, col)
-			PixelDraw.px(self, pos + Vector2(t, t), 1, col)
-			PixelDraw.px(self, pos + Vector2(0, -t), 1, col)
-			PixelDraw.px(self, pos + Vector2(0, -t * 2.0), 1, col)
-		"area":
-			var d: Vector2 = Vector2(cos(ang * 2.0), sin(ang * 2.0)) * t * 1.6
-			PixelDraw.px(self, pos + d, 1, col)
-			PixelDraw.px(self, pos - d, 1, col)
-		_:
-			PixelDraw.px(self, pos + Vector2(t, 0), 1, col)
-			PixelDraw.px(self, pos - Vector2(t, 0), 1, col)
-			PixelDraw.px(self, pos + Vector2(0, t), 1, col)
-			PixelDraw.px(self, pos - Vector2(0, t), 1, col)
-
-
 ## ---------- ALAN HASARI (opsiyonel; 2026-10-21'den beri YALNIZ Kalkan Totemi - Saldırı Totemi'nden kaldırıldı) ----------
 ## Kullanıcı istekleri: 2026-09-29 eski Alan Saldırı Totemi'nin (R) alan hasarı yavaşlatmasız Saldırı Totemi'ne (Q) birleşti;
 ## 2026-09-30 "Q yeteneğinin alan hasarı özelliğini E yeteneğine eklemeni istiyorum" - Kalkan Totemi'ne (E) de. Tek kod burada:
@@ -351,9 +327,9 @@ var area_damage_enabled: bool = false
 var area_radius: float = AREA_RADIUS
 ## Yetenek evrimi sayıları (kart metinleriyle birebir - skill_evolutions.gd DEFS[12]).
 const EVO_AREA_MULT := 1.3 ## Geniş Alan (shaman_e1)
-## false => alan hasarı aynen çalışır ama sabit mor çember (AreaAura) çizilmez. Şu an kullanan yok (Saldırı Totemi'nin alan hasarı
-## 2026-10-21'de kaldırıldı); Kalkan Totemi (E) çemberi korur. Görsel her kopyada aynı _ready yolundan kurulduğu için
-## ağ kopyaları da otomatik aynı kararı verir.
+## false => alan hasarı aynen çalışır ama sabit mor çember (AreaAura) ve her tikteki mor nabız halkası çizilmez (ses + hasar yiyen
+## yaratıktaki ruh kalır). Kalkan Totemi (E) madde 557 ek 2'den beri false (kullanıcı: "dış halkaları kaldır, onları istemiyorum").
+## Görsel her kopyada aynı _ready / _process yolundan kurulduğu için ağ kopyaları da otomatik aynı kararı verir.
 var show_area_aura: bool = true
 const AREA_RADIUS := 180.0
 const AREA_DAMAGE_ATTACK_POWER_RATIO := 0.20
@@ -392,9 +368,10 @@ func _process_area_visuals(delta: float) -> void:
 	var scene: Node = get_tree().current_scene
 	if scene == null or not is_instance_valid(scene):
 		return
-	var pulse: Node2D = FxSprite.spawn(self, global_position, PULSE_FRAMES, &"play", 0)
-	if pulse:
-		move_child(pulse, 1) ## auranın üstünde, totem gövdesinin altında (zemindeki halka)
+	if show_area_aura:
+		var pulse: Node2D = FxSprite.spawn(self, global_position, PULSE_FRAMES, &"play", 0)
+		if pulse:
+			move_child(pulse, 1) ## auranın üstünde, totem gövdesinin altında (zemindeki halka)
 	ShamanSfx.play_at(scene, ShamanSfx.AREA_PULSE, global_position, -18.0, 0.05)
 	if _is_network_visual:
 		for e in get_tree().get_nodes_in_group("enemies"):

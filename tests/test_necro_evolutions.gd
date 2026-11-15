@@ -193,6 +193,7 @@ func test_golem_attack_knocks_back_only_with_evolution() -> void:
 	g._focus_target = e
 	g._attack_timer = 0.0
 	g._process_attack(0.1)
+	g._process_attack(1.0) ## vuruş karesi (ATTACK_HIT_FRAME) gelince iner
 	assert(e.hits.size() == 1, "golem vurmalı")
 	assert(e.pushes.is_empty(), "evrimsiz itme yok")
 	p.apply_skill_evolution("necro_e2", true)
@@ -201,6 +202,7 @@ func test_golem_attack_knocks_back_only_with_evolution() -> void:
 	g2._focus_target = e
 	g2._attack_timer = 0.0
 	g2._process_attack(0.1)
+	g2._process_attack(1.0) ## vuruş karesi (ATTACK_HIT_FRAME) gelince iner
 	assert(e.pushes.size() == 1, "Yıkıcı Yumruk: yaratık geri itilmeli")
 	assert((e.pushes[0][0] as Vector2).x > 0.0, "golemden uzağa doğru")
 	_cleanup()
@@ -214,6 +216,7 @@ func test_golem_big_form_hits_wider_area() -> void:
 	g._focus_target = near
 	g._attack_timer = 0.0
 	g._process_attack(0.1)
+	g._process_attack(1.0) ## vuruş karesi (ATTACK_HIT_FRAME) gelince iner
 	assert(far.hits.is_empty(), "taban alanın dışındaki yaratığa vurmaz")
 	p.apply_skill_evolution("necro_e4", true)
 	var big: Node2D = p._spawn_necro_golem()
@@ -221,6 +224,7 @@ func test_golem_big_form_hits_wider_area() -> void:
 	big._focus_target = near
 	big._attack_timer = 0.0
 	big._process_attack(0.1)
+	big._process_attack(1.0) ## vuruş karesi (ATTACK_HIT_FRAME) gelince iner
 	assert(far.hits.size() == 1, "Dev Golem: vuruş alanı %20 geniş")
 	_cleanup()
 
@@ -304,4 +308,37 @@ func test_curse_expires_without_death() -> void:
 	await get_tree().create_timer(0.05).timeout
 	p._process_necro_curse()
 	assert(p._necro_curse.is_empty(), "süresi dolan lanet kaydı temizlenir")
+	_cleanup()
+
+
+## 2026-11-13 ("golem tuhaf konumlara tuhaf saldırılar"): hasar klibin 0. karesinde değil vuruş karesinde iner, golem saldırırken
+## hedefe döner ve hedef eski 90-140 px ölü bandındayken de vurur.
+func test_golem_hit_lands_on_hit_frame_and_faces_target() -> void:
+	var p: Node = _make_player()
+	var g: Node2D = p._spawn_necro_golem()
+	g._update_facing(Vector2(0, 1)) ## aşağı bakıyor
+	var e: FakeEnemy = _fake_enemy(g.global_position + Vector2(-60, 0)) ## solunda
+	g._focus_target = e
+	g._attack_timer = 0.0
+	g._process_attack(0.05)
+	assert(g._animation_state == "attack", "saldırı klibi başlamalı")
+	assert(g.facing == "left", "saldırırken hedefe (sola) dönmeli")
+	assert(e.hits.is_empty(), "hasar klibin başında inmemeli")
+	g._process_attack(0.2)
+	assert(e.hits.is_empty(), "vuruş karesinden önce hasar yok")
+	g._process_attack(0.3)
+	assert(e.hits.size() == 1, "vuruş karesinde hasar inmeli")
+	_cleanup()
+
+
+func test_golem_attacks_target_in_old_dead_band() -> void:
+	var p: Node = _make_player()
+	var g: Node2D = p._spawn_necro_golem()
+	var e: FakeEnemy = _fake_enemy(g.global_position + Vector2(96, 0)) ## eskiden ne kovalanır ne vurulurdu
+	g._focus_target = e
+	g._in_melee_stance = true
+	g._attack_timer = 0.0
+	g._process_attack(0.1)
+	g._process_attack(1.0)
+	assert(e.hits.size() == 1, "duruş bandındaki hedef vurulmalı")
 	_cleanup()

@@ -16,12 +16,14 @@ const CAN := "can"
 const ADC := "adc"
 const TANK := "tank"
 const TAKTIK := "taktik"
-const DUKKAN := "dukkan"
 const SAVAS_SEVKI := "savas_sevki"
 const KALKAN_BAGI := "kalkan_bagi"
+const TOPLAYICI := "toplayici" ## 2026-11-12 (madde 625)
+## 2026-11-09: "Dükkan" (seyyar satıcıya ışınlanma, eski kimlik "dukkan") kullanıcı isteğiyle SİLİNDİ (madde 543).
+## Kayıtlı/eski seçim "dukkan" artık is_valid değil -> çağıranlar DEFAULT_ID'ye düşer.
 
 ## Seçim ekranındaki sıra.
-const ORDER := [PARA, CAN, ADC, TANK, TAKTIK, DUKKAN, SAVAS_SEVKI, KALKAN_BAGI]
+const ORDER := [PARA, CAN, ADC, TANK, TAKTIK, SAVAS_SEVKI, KALKAN_BAGI, TOPLAYICI]
 ## Seçim yapılmamışsa (ör. editörden doğrudan sahne açılırsa) kullanılan varsayılan.
 const DEFAULT_ID := PARA
 
@@ -39,7 +41,7 @@ const ADC_DURATION := 10.0
 const ADC_ATTACK_SPEED := 0.30 ## +%30 saldırı hızı
 const ADC_SHIELD_PEN := 0.15 ## +%15 kalkan delme
 const ADC_LIFESTEAL := 0.02 ## +%2 can emme (2026-11-09: %1 -> %2, kullanıcı isteği)
-const ADC_COOLDOWN := 120.0
+const ADC_COOLDOWN := 75.0 ## 2026-11-14 denge turu: 120 -> 75 (10 sn güçlenme = %8 çalışma süresi yerine %13)
 
 const TANK_DURATION := 10.0
 const TANK_REFLECT := 2.0 ## alınan hasarın %200'ü hasarı verene yansır (2026-10-10: %60 -> %200, kullanıcı isteği)
@@ -51,16 +53,13 @@ const TAKTIK_SPEED_BONUS := 0.30 ## +%30 hareket hızı
 const TAKTIK_SPEED_TIME := 3.0
 const TAKTIK_COOLDOWN := 30.0
 
-const DUKKAN_CHANNEL := 3.0 ## odaklanma süresi
-const DUKKAN_COOLDOWN := 120.0
-## Odaklanma iptal edilirse (hareket/hasar) kısa bir kilit - ışınlanma tamamlanmadığı için tam bekleme süresi YOK, ama
-## art arda basıp spam'lenmesin.
-const DUKKAN_CANCEL_LOCKOUT := 4.0
-
 ## Kullanıcı isteği (2026-09-23): "Savaş şevki (Pasif)". PARA gibi "active": false - F tuşuna basmaya gerek yok, sürekli işler.
 const SAVAS_SEVKI_KILL_STACK := 1 ## normal düşman öldürünce
 const SAVAS_SEVKI_BOSS_KILL_STACK := 25 ## boss öldürünce
-const SAVAS_SEVKI_STACKS_FOR_AP := 50 ## bu kadar yığılınca dönüşür
+const SAVAS_SEVKI_STACKS_FOR_AP := 50 ## ilk dönüşüm için gereken şevk (sonrakiler savas_sevki_threshold)
+## 2026-11-14 denge turu: eşik her dönüşümde SAVAS_SEVKI_STACKS_STEP artar (50, 55, 60 ...; 3500 öldürmede +70 yerine +29 saldırı gücü).
+## (Asist şevki 2026-11-15'te kaldırıldı: asist altını yolu ölüydü, kanca hiç çalışmıyordu.)
+const SAVAS_SEVKI_STACKS_STEP := 5
 const SAVAS_SEVKI_AP_PER_THRESHOLD := 1.0 ## ... kalıcı +1 saldırı gücüne
 const SAVAS_SEVKI_EXECUTE_PERCENT := 0.06 ## normal düşman: canı bunun altındaysa anında ölür
 const SAVAS_SEVKI_EXECUTE_PERCENT_BOSS := 0.03 ## boss: daha düşük eşik
@@ -78,11 +77,43 @@ const KALKAN_BAGI_WEAKER_GAIN_RATIO := 0.80
 const KALKAN_BAGI_BORROW_PROTECTION := 0.50
 ## 2026-09-25: "kalkan yenilenmesini %1'den %0.5'e düşür".
 const KALKAN_BAGI_REGEN_PERCENT_PER_SEC := 0.005 ## aktifken ikisinin de saniyede yenilenen maksimum kalkan payı
-const KALKAN_BAGI_ABSORPTION_BONUS := 0.10 ## aktifken ikisinin de kazandığı ekstra kalkan hasar soğurması
+const KALKAN_BAGI_ABSORPTION_BONUS := 0.05 ## aktifken ikisinin de kazandığı ekstra kalkan hasar soğurması
 const KALKAN_BAGI_COOLDOWN := 60.0 ## bağ koparsa/kapatılırsa
 ## "active" fazının güvenlik tavanı - Paladin ultisi/Vampir R toggle'larıyla AYNI desen (bkz. o SKILL_TIMING
 ## kayıtlarının "9999.0" notları): gerçek süre YOK, tekrar kapatılana/bağ koparana kadar sürer.
 const KALKAN_BAGI_ACTIVE_CAP := 99999.0
+
+## TOPLAYICI (pasif, 2026-11-12, madde 625; kullanıcı: "toplayıcı iyi ama diğer oyunculara haksızlık olmaz mı"): YALNIZ XP kristali.
+## XP takım havuzuna gider (kimin topladığı fark etmez), altın/yiyecek ise toplayanın - onlar çekilmez. Çekilen kristalde toplayanın
+## XP bonusu İŞLEMEZ (xp_orb.gd PULLED_META), yoksa +EXP eşyasıyla birleşip bütün XP'yi şişirirdi.
+## 2v2 (GameMode.is_pvp): XP toplayanın TAKIMINA gider -> yalnız kendi takımının öldürmesinden düşen kristal çekilir (xp_orb.gd
+## KILL_TEAM_META, host'ta), menzil/aralık kısık, çekiş sırasında rakipten hasar alırsan yarıda kalır (kristaller düştüğü yerde kalır).
+## Çekiş host yetkili: player.gd _toplayici_* -> NetworkManager.request_toplayici_pull (host seçer) -> sync_toplayici_pull (herkes çeker).
+const TOPLAYICI_XP_RANGE_BONUS := 0.40 ## XP toplama menzili +%40 (altın/yiyecek menzili aynı)
+const TOPLAYICI_PULL_INTERVAL := 60.0 ## bu kadar saniyede bir görüşteki XP kristalleri çekilir
+const TOPLAYICI_PVP_XP_RANGE_BONUS := 0.20
+const TOPLAYICI_PVP_PULL_INTERVAL := 90.0
+const TOPLAYICI_COOLDOWN := 20.0 ## F ile elle çekiş bekleme süresi (otomatik çekiş de bunu başlatır; host sıklık sınırı bunun %80'i)
+const TOPLAYICI_PVP_COOLDOWN := 30.0
+const TOPLAYICI_PULL_WINDOW := 2.5 ## 2v2: çekişten sonra bu kadar saniye içinde rakipten hasar alırsan çekiş kesilir
+
+
+## `conversions` kez dönüşmüş oyuncunun bir sonraki dönüşüm için gereken şevki.
+static func savas_sevki_threshold(conversions: int) -> int:
+	return SAVAS_SEVKI_STACKS_FOR_AP + SAVAS_SEVKI_STACKS_STEP * maxi(conversions, 0)
+
+
+static func toplayici_range_bonus(pvp: bool) -> float:
+	return TOPLAYICI_PVP_XP_RANGE_BONUS if pvp else TOPLAYICI_XP_RANGE_BONUS
+
+
+static func toplayici_cooldown(pvp: bool) -> float:
+	return TOPLAYICI_PVP_COOLDOWN if pvp else TOPLAYICI_COOLDOWN
+
+
+static func toplayici_interval(pvp: bool) -> float:
+	return TOPLAYICI_PVP_PULL_INTERVAL if pvp else TOPLAYICI_PULL_INTERVAL
+
 
 const DEFS := {
 	PARA: {
@@ -108,7 +139,7 @@ const DEFS := {
 		"duration": ADC_DURATION,
 		"icon": "res://assets/skills/spirit_adc_icon.png",
 		"sound": "res://assets/audio/spiritual/spirit_adc.wav",
-		"desc": "10 saniyeliğine %30 saldırı hızı ve %15 kalkan delme kazanırsın, ayrıca %2 can emme kazanırsın. (120sn bekleme)",
+		"desc": "10 saniyeliğine %30 saldırı hızı ve %15 kalkan delme kazanırsın, ayrıca %2 can emme kazanırsın. (75sn bekleme)",
 	},
 	TANK: {
 		"name": "Tank",
@@ -128,21 +159,12 @@ const DEFS := {
 		"sound": "res://assets/audio/spiritual/spirit_taktik.wav",
 		"desc": "İleriye doğru ışınlanırsın ve hareket hızın 3 saniyeliğine %30 artar. (30sn bekleme)",
 	},
-	DUKKAN: {
-		"name": "Dükkan",
-		"active": true,
-		"cooldown": DUKKAN_COOLDOWN,
-		"duration": DUKKAN_CHANNEL,
-		"icon": "res://assets/skills/spirit_dukkan_icon.png",
-		"sound": "res://assets/audio/spiritual/spirit_dukkan.wav",
-		"desc": "3 saniye odaklanıp dükkana (seyyar satıcıya) ışınlanırsın. Odaklanırken hareket edersen iptal olur (hasar almak iptal etmez); satıcı yokken kullanılamaz. (120sn bekleme)",
-	},
 	SAVAS_SEVKI: {
 		"name": "Savaş Şevki",
 		"active": false,
 		"cooldown": 0.0,
 		"icon": "res://assets/skills/spirit_savas_sevki_icon.png",
-		"desc": "PASİF: Her düşman öldürmede 1 savaş şevki kazanırsın (bosslar 25 verir). 50 savaş şevkine ulaşınca maç boyunca kalıcı +1 saldırı gücü kazanırsın (yükler sıfırlanıp yeniden birikmeye başlar). Ayrıca canı %6'dan az olan düşmanları (bosslarda %3) anında katledersin.",
+		"desc": "PASİF: Her düşman öldürmede 1 savaş şevki kazanırsın (bosslar 25 verir). 50 savaş şevkine ulaşınca maç boyunca kalıcı +1 saldırı gücü kazanırsın; her dönüşümde gereken şevk 5 artar (50, 55, 60...). Ayrıca canı %6'dan az olan düşmanları (bosslarda %3) anında katledersin.",
 	},
 	KALKAN_BAGI: {
 		"name": "Kalkan Bağı",
@@ -150,7 +172,15 @@ const DEFS := {
 		"cooldown": KALKAN_BAGI_COOLDOWN,
 		"icon": "res://assets/skills/spirit_kalkan_bagi_icon.png",
 		"sound": "res://assets/audio/spiritual/spirit_kalkan_bagi.wav",
-		"desc": "En yakın arkadaşınla kalkan bağı kurarsın: hasarlar, yetenek bedelinden giden mana kalkanları ve mana kalkanı artışları gibi her türlü mana kalkanı değişikliği %50 birbirinize yansır; mana kalkanı daha az olan, arkadaşının mana kalkanı artışlarından %80 pay alır. Mana kalkanı biten, arkadaşının mana kalkanını kullanır. Aktifken ikinizin de mana kalkanı saniyede %0.5 yenilenir ve %10 mana kalkanı hasar soğurması kazanırsınız. Tekrar kullanana ya da uzaklaşıp bağ kopana kadar sürer. (60sn bekleme)",
+		"desc": "En yakın arkadaşınla kalkan bağı kurarsın: hasarlar, yetenek bedelinden giden mana kalkanları ve mana kalkanı artışları gibi her türlü mana kalkanı değişikliği %50 birbirinize yansır; mana kalkanı daha az olan, arkadaşının mana kalkanı artışlarından %80 pay alır. Mana kalkanı biten, arkadaşının mana kalkanını kullanır. Aktifken ikinizin de mana kalkanı saniyede %0.5 yenilenir ve %5 mana kalkanı hasar soğurması kazanırsınız. Tekrar kullanana ya da uzaklaşıp bağ kopana kadar sürer. (60sn bekleme)",
+	},
+	TOPLAYICI: {
+		"name": "Toplayıcı",
+		"active": true,
+		"cooldown": TOPLAYICI_COOLDOWN,
+		"icon": "res://assets/skills/spirit_toplayici_icon.png",
+		"sound": "res://assets/audio/spiritual/spirit_teleport.wav", ## 2026-11-15: ruhani paketinin kullanılmayan sesi; yalnız F ile çekişte (otomatik çekiş sessiz)
+		"desc": "XP toplama menzilin %40 artar. F'ye basınca haritadaki TÜM XP kristalleri mıknatıs gibi sana çekilir (20sn bekleme); ayrıca 60 saniyede bir bu çekiş kendiliğinden yapılır. Altın ve yiyecek çekilmez, çekilen kristallerde XP bonusun işlemez. 2v2'de: menzil %20, 30sn bekleme, 90 saniyede bir otomatik, yalnız kendi takımının düşürdüğü kristaller; çekiş sırasında rakipten hasar alırsan yarıda kalır.",
 	},
 }
 

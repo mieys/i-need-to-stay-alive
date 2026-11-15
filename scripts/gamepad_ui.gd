@@ -28,8 +28,16 @@ const RING_COLOR := Color(1.0, 0.86, 0.35, 1.0)
 const RING_PAD := 4.0
 const SEARCH_INTERVAL := 0.1
 
+## Girdi türü değişti (true = kumanda). Tuş adı ipuçları (GameManager.get_action_hint_label) ve HUD tuş kapakları bunu dinleyip yenilenir.
+signal input_mode_changed(joypad: bool)
+
 ## Son girdi kumandadan mı geldi (fare/klavye/dokunma gelince kapanır).
-var joypad_active: bool = false
+var joypad_active: bool = false:
+	set(v):
+		if v == joypad_active:
+			return
+		joypad_active = v
+		input_mode_changed.emit(v)
 var _ring_layer: CanvasLayer = null
 var _ring: Panel = null
 var _search_cd: float = 0.0
@@ -51,6 +59,39 @@ func _ready() -> void:
 	sb.set_corner_radius_all(6)
 	_ring.add_theme_stylebox_override("panel", sb)
 	_ring_layer.add_child(_ring)
+	Input.joy_connection_changed.connect(_on_joy_connection_changed)
+
+
+## Kumanda oyun sırasında çıkarsa (kablo / pil) karakter sessizce hareketsiz kalmasın: duraklatma menüsü açılır (kumanda 547 denetimi).
+## Yalnız oynarken kumandayla oynayan (son girdi kumanda) için; menüde / oyun bitince / başka kumanda takılıyken / zaten duraklıyken yapmaz.
+func _on_joy_connection_changed(_device: int, connected: bool) -> void:
+	if connected or not joypad_active:
+		return
+	if not Input.get_connected_joypads().is_empty():
+		return
+	joypad_active = false ## kumanda yok: halka/odak yönetimi bırakılır, klavye/fare ile devam edilebilir
+	var scene: Node = get_tree().current_scene
+	if scene == null or scene.name != "Main" or GameManager.is_game_over or get_tree().paused:
+		return
+	if GameManager.is_any_blocking_panel_open() or in_game_modal_open():
+		return
+	var existing: Variant = scene.get("pause_menu_instance")
+	if existing != null and is_instance_valid(existing):
+		return
+	if scene.has_method("_toggle_pause"):
+		scene.call("_toggle_pause")
+
+
+## Oyun içinde (Main sahnesi) kumandayla gezinilen bir pencere açık mı: GROUP + ReadingUiWatcher.GROUP üyelerinden biri görünüyor.
+## (_top_modal'dan farkı: Main olmayan sahneyi pencere saymaz - oyun içi kısayollar "başka pencere açıkken" susmak için bunu sorar.)
+func in_game_modal_open(ignore: Node = null) -> bool:
+	var tree: SceneTree = get_tree()
+	for n: Node in tree.get_nodes_in_group(GROUP) + tree.get_nodes_in_group(ReadingUiWatcherScript.GROUP):
+		if n == ignore or not is_instance_valid(n) or not n.is_inside_tree() or n.is_queued_for_deletion():
+			continue
+		if ReadingUiWatcherScript._is_shown(n):
+			return true
+	return false
 
 
 func _input(event: InputEvent) -> void:

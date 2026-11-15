@@ -231,7 +231,7 @@ func _refresh() -> void:
 	speed_value.text = str(int(round(player.get_base_move_speed()))) if player.has_method("get_base_move_speed") else str(int(player.speed))
 	var w = player.get_primary_weapon()
 	if w:
-		damage_value.text = str(int(w.damage))
+		damage_value.text = str(int(round(player.get_displayed_attack_power())))
 		## bkz. player.gd get_attack_speed_bonus_percent - ilk silahın atış/sn'si DEĞİL, oyuncunun toplam saldırı hızı bonusu.
 		fire_rate_value.text = "+%%%d" % int(round(player.get_attack_speed_bonus_percent()))
 		crit_value.text = "%%%d (x%.2f)" % [int(w.crit_chance * 100), w.crit_damage]
@@ -409,7 +409,7 @@ const STAT_TIPS: Dictionary = {
 	"crit_chance": "Kritik Oran/Hasar: Kritik vuruş yapma şansını ve kritik hasar çarpanını arttırır.",
 	"shield_pen_percent": "Kalkan Delme: Düşmanların kalkan soğurmasını yüzde olarak yok sayar.",
 	"exp_gain": "Tecrübe Kazanımı: Kazanılan tecrübe puanını (XP) arttırır.",
-	"luck": "Şans (puan): Her 1 puan öldürdüğün yaratıkların yemek/mıknatıs/sandık düşürme ihtimalini %5 (20 puan = 2 kat), altın düşürme ihtimalini %1 arttırır; seviye kartlarında, sandık ödüllerinde ve satıcı eşyalarında üst kademe çıkma ağırlığını %1.5 arttırır.",
+	"luck": "Şans (puan): Her 1 puan öldürdüğün yaratıkların yemek/mıknatıs/sandık düşürme ihtimalini %5 (20 puan = 2 kat), altın düşürme ihtimalini %1 arttırır; seviye kartlarında, sandık ödüllerinde ve satıcı eşyalarında üst kademe çıkma ağırlığını da arttırır (bu etki en çok 20 puan sayılır).",
 	"range": "Menzil: Silahların vuruş ve menzil uzaklığını arttırır.",
 	"dodge": "Sıvışma: Saldırılardan kaçınma şansı verir (Maks %40, Rüzgâr Yürüyen Çizmeleri ile %50; fazlası boşa gider).",
 	"knockback": "Geri Tepme: Silahların düşmanları geri itme gücünü arttırır.",

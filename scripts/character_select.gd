@@ -272,6 +272,25 @@ func _on_start_pressed() -> void:
 	GameManager.selected_char_id = selected_char
 	GameManager.selected_character = def["skill"]
 	LastLoadoutScript.save() ## ana menünün "Son seçim" kartı + HIZLI BAŞLA (telefon, madde 279)
+	## DÜNYA HARİTASI (madde 606): harita OYUNU BAŞLAT'tan sonra dünya haritasında seçilir; YOLA ÇIK -> yükleme ekranı.
+	if _world_map != null:
+		return
+	_world_map = WorldMapScript.new()
+	_world_map.set("initial_map", GameManager.selected_map)
+	_world_map.connect("chosen", _on_world_map_chosen)
+	_world_map.connect("cancelled", func() -> void:
+		_world_map.queue_free()
+		_world_map = null)
+	add_child(_world_map)
+	UISound.connect_all_buttons(_world_map)
+
+
+const WorldMapScript: GDScript = preload("res://scripts/world_map_screen.gd")
+var _world_map: Control = null
+
+
+func _on_world_map_chosen(map_id: String) -> void:
+	GameManager.selected_map = map_id
 	## Kullanıcı isteği: "oyuna başla dediğimizde yükleme ekranı olsun" -
 	## artık main.tscn'e doğrudan değil, önce loading_screen.gd'nin kendi
 	## yüklediği (ve barını doldurduğu) yükleme ekranına geçiliyor.

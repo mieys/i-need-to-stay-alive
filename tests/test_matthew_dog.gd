@@ -187,7 +187,7 @@ func test_dog_bite_uses_the_owner_stats_at_100_percent_and_hits_only_the_nearest
 	var prev_scene: Node = get_tree().current_scene
 	get_tree().current_scene = self
 	var PetScript: GDScript = load("res://scripts/player_pet.gd")
-	assert(float(PetScript.FOX_STAT_RATIO) == 1.0 and int(PetScript.FOX_MAX_TARGETS) == 5, "köpek oranı 1,0 ve ısırık başına en çok 5 hedef")
+	assert(float(PetScript.FOX_STAT_RATIO) == 1.0 and int(PetScript.FOX_MAX_TARGETS) == 3, "köpek oranı 1,0 ve ısırık başına en çok 3 hedef (2026-11-14: 5 -> 3)")
 	var pair: Array = _make(Vector2(3000, 3000))
 	var o: FakeOwner = pair[0]
 	var pet: Node2D = pair[1]
@@ -203,9 +203,9 @@ func test_dog_bite_uses_the_owner_stats_at_100_percent_and_hits_only_the_nearest
 	await _phys(2)
 	var hp0: float = float(front[0].health)
 	var targets: Array = pet.call("cone_targets", Vector2.RIGHT)
-	assert(targets.size() == 5, "ısırık en çok 5 yaratığı seçer: %d" % targets.size())
+	assert(targets.size() == 3, "ısırık en çok 3 yaratığı seçer: %d" % targets.size())
 	for t in targets:
-		assert(front.find(t) >= 0 and front.find(t) < 5, "seçilenler köpeğe en yakın 5 yaratık (indeks %d)" % front.find(t))
+		assert(front.find(t) >= 0 and front.find(t) < 3, "seçilenler köpeğe en yakın 3 yaratık (indeks %d)" % front.find(t))
 	assert(not targets.has(behind), "yarım daire dışındaki (arkadaki) yaratık seçilmez")
 	pet.call("_do_cone_attack", Vector2.RIGHT)
 	var hit_count: int = 0
@@ -216,7 +216,7 @@ func test_dog_bite_uses_the_owner_stats_at_100_percent_and_hits_only_the_nearest
 			## Hasar = sahibin saldırı gücü x 1: ana hedef (odak yoksa en yakın) tam 40, alandaki diğerleri %50 = 20 (2026-10-10 FOX_SPLASH_RATIO)
 			var want: float = 40.0 if i == 0 else 40.0 * float(PetScript.FOX_SPLASH_RATIO)
 			assert(absf(lost - want) < 0.5, "yaratık %d hasarı %.0f olmalı: %.2f" % [i, want, lost])
-	assert(hit_count == 5, "tek ısırıkta tam 5 yaratık hasar alır: %d" % hit_count)
+	assert(hit_count == 3, "tek ısırıkta tam 3 yaratık hasar alır: %d" % hit_count)
 	assert(is_equal_approx(float(behind.health), 600000.0), "arkadaki yaratık hasar almaz")
 	assert(is_equal_approx(float(pet.call("_owner_attack_power")), 40.0), "saldırı gücü okunur")
 	## Kritik şansı / kritik çarpanı / saldırı hızı da sahibinkine EŞİT (eskiden x2): şans 5 + 10 = %15, çarpan 1,5 + 0,3 = 1,8, hız +%40 -> 1,4.

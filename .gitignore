@@ -33,3 +33,7 @@ eos_credentials.cfg
 docs/hata_tespit/ham/
 docs/hata_tespit/defter.md.bak
 tools/gorev_goruntu/out/
+
+# Dünya haritası ara çıktıları (madde 606): tam çözünürlüklü harita çizimleri ~40 MB, tools/dunya_haritasi/uret.ps1 yeniden üretir
+tools/dunya_haritasi/out/
+tools/tanitim/out/sahne1_tr.mp4

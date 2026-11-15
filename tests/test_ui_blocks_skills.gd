@@ -31,6 +31,7 @@ func _make_player() -> Node:
 	p.global_position = Vector2(1000.0, 1000.0)
 	p.item_shield_max = 1000.0
 	p.item_shield_hp = 1000.0
+	p.level = 10 ## dash (Şahin Hamlesi) E'de: E 5. seviyede açılır (2026-11-12)
 	return p
 
 
@@ -76,8 +77,8 @@ func _frames(n: int) -> void:
 func test_skill_key_works_without_any_panel() -> void:
 	var p := _make_player()
 	var charges_before: int = p.assasin_dash2_charges
-	await _press("skill")
-	assert(p.assasin_dash2_charges == charges_before - 1, "kontrol: panel yokken Q hamle atmalı (yük %d -> %d)" % [charges_before, p.assasin_dash2_charges])
+	await _press("skill2")
+	assert(p.assasin_dash2_charges == charges_before - 1, "kontrol: panel yokken E hamle atmalı (yük %d -> %d)" % [charges_before, p.assasin_dash2_charges])
 	_cleanup()
 
 
@@ -86,14 +87,14 @@ func test_skill_key_is_ignored_while_a_shop_or_inventory_panel_is_open() -> void
 	var panel := _fake_panel()
 	await _frames(3) ## panel açıkken kaç kare geçtiği önemsiz
 	var charges_before: int = p.assasin_dash2_charges
-	await _press("skill")
-	assert(p.assasin_dash2_charges == charges_before, "dükkan/envanter açıkken Q hamle ATMAMALI (yük %d -> %d)" % [charges_before, p.assasin_dash2_charges])
+	await _press("skill2")
+	assert(p.assasin_dash2_charges == charges_before, "dükkan/envanter açıkken E hamle ATMAMALI (yük %d -> %d)" % [charges_before, p.assasin_dash2_charges])
 	assert(p.skill_state == "ready", "yetenek durumu değişmemeli")
 	## Panel kapanınca (kuyruk süresi sonra) yetenek yine çalışır.
 	panel.visible = false
 	await get_tree().create_timer(0.4).timeout
-	await _press("skill")
-	assert(p.assasin_dash2_charges == charges_before - 1, "panel kapandıktan sonra Q yine çalışmalı (yük %d -> %d)" % [charges_before, p.assasin_dash2_charges])
+	await _press("skill2")
+	assert(p.assasin_dash2_charges == charges_before - 1, "panel kapandıktan sonra E yine çalışmalı (yük %d -> %d)" % [charges_before, p.assasin_dash2_charges])
 	_cleanup()
 
 
@@ -104,29 +105,29 @@ func test_the_press_that_closes_the_panel_does_not_fire_the_skill() -> void:
 	await _frames(3)
 	var charges_before: int = p.assasin_dash2_charges
 	panel.visible = false ## ekran kendi _process'inde basışı işleyip kapandı
-	Input.action_press("skill") ## aynı karedeki basış
+	Input.action_press("skill2") ## aynı karedeki basış
 	await get_tree().physics_frame
 	await get_tree().physics_frame
-	Input.action_release("skill")
+	Input.action_release("skill2")
 	await get_tree().physics_frame
 	assert(p.assasin_dash2_charges == charges_before, "kapatan basış yeteneği tetiklememeli (yük %d -> %d)" % [charges_before, p.assasin_dash2_charges])
 	_cleanup()
 
 
-func test_chat_typing_still_blocks_and_e_key_is_blocked_too() -> void:
+func test_chat_typing_still_blocks_and_q_key_is_blocked_too() -> void:
 	var p := _make_player()
 	p.level = 10
 	var panel := _fake_panel()
 	await _frames(3)
-	var before_state: String = p.skill2_state
-	await _press("skill2")
-	assert(p.skill2_state == before_state, "açık dükkanda E (skill2) de tetiklenmemeli: %s -> %s" % [before_state, p.skill2_state])
+	var before_state: String = p.skill_state
+	await _press("skill")
+	assert(p.skill_state == before_state, "açık dükkanda Q (skill) de tetiklenmemeli: %s -> %s" % [before_state, p.skill_state])
 	panel.visible = false
 	await get_tree().create_timer(0.4).timeout
 	p.is_chat_typing = true
 	var charges_before: int = p.assasin_dash2_charges
-	await _press("skill")
-	assert(p.assasin_dash2_charges == charges_before, "sohbet yazarken Q yine tetiklenmemeli")
+	await _press("skill2")
+	assert(p.assasin_dash2_charges == charges_before, "sohbet yazarken E yine tetiklenmemeli")
 	_cleanup()
 
 
@@ -139,10 +140,10 @@ func test_real_smithy_screen_blocks_skill_keys_until_it_closes() -> void:
 	screen.setup(p)
 	await _frames(3)
 	var charges_before: int = p.assasin_dash2_charges
-	await _press("skill")
-	assert(p.assasin_dash2_charges == charges_before, "demirci ekranı açıkken Q hamle atmamalı (yük %d -> %d)" % [charges_before, p.assasin_dash2_charges])
+	await _press("skill2")
+	assert(p.assasin_dash2_charges == charges_before, "demirci ekranı açıkken E hamle atmamalı (yük %d -> %d)" % [charges_before, p.assasin_dash2_charges])
 	screen._on_close_pressed()
 	await get_tree().create_timer(0.5).timeout
-	await _press("skill")
-	assert(p.assasin_dash2_charges == charges_before - 1, "ekran kapanınca Q çalışmalı (yük %d -> %d)" % [charges_before, p.assasin_dash2_charges])
+	await _press("skill2")
+	assert(p.assasin_dash2_charges == charges_before - 1, "ekran kapanınca E çalışmalı (yük %d -> %d)" % [charges_before, p.assasin_dash2_charges])
 	_cleanup()

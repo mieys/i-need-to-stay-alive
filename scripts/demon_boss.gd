@@ -309,7 +309,7 @@ func _launch_fireball(target: Node2D) -> void:
 	var dir: Vector2 = aim.rotated(randf_range(-FIRE_SPREAD, FIRE_SPREAD))
 	var pos: Vector2 = origin + dir * 40.0
 	var data: Dictionary = {"dir": dir, "speed": FIRE_SPEED, "life": 3.2, "radius": 9.0, "blast": FIRE_BLAST}
-	AbilitiesScript.spawn_world_fx(e.get_tree(), "demon_fire", pos, data, true, e, FIREBALL_DAMAGE)
+	AbilitiesScript.spawn_world_fx(e.get_tree(), "demon_fire", pos, data, true, e, FIREBALL_DAMAGE * _dmg_mult())
 	AbilitiesScript._broadcast_world_fx("demon_fire", pos, data)
 
 
@@ -320,7 +320,7 @@ func _begin_beam(target: Node2D) -> void:
 	var angle: float = (target.global_position - origin).angle() if target != null else randf() * TAU
 	var data: Dictionary = {"angle": angle, "sign": 1.0 if randf() < 0.5 else -1.0, "half_angle": BEAM_HALF_ANGLE, "length": BEAM_LENGTH,
 			"warn": BEAM_WARN, "spin_time": BEAM_SPIN, "tick": BEAM_TICK, "boss": int(e.get_meta("network_enemy_id", 0))}
-	AbilitiesScript.spawn_world_fx(e.get_tree(), "cosmic_beam", origin, data, true, e, BEAM_DAMAGE)
+	AbilitiesScript.spawn_world_fx(e.get_tree(), "cosmic_beam", origin, data, true, e, BEAM_DAMAGE * _dmg_mult())
 	AbilitiesScript._broadcast_world_fx("cosmic_beam", origin, data)
 	_anim("cast", 0.75)
 	_voice(true)
@@ -351,7 +351,7 @@ func _process_strike(delta: float) -> void:
 		_struck = true
 		for p in AbilitiesScript.damageable_players(e.get_tree()):
 			if e.global_position.distance_to((p as Node2D).global_position) <= STRIKE_RANGE + AbilitiesScript.TARGET_BODY_RADIUS + 14.0:
-				AbilitiesScript.deal_special_damage(p, MELEE_DAMAGE, e, "demonslash")
+				AbilitiesScript.deal_special_damage(p, MELEE_DAMAGE * _dmg_mult(), e, "demonslash")
 	if _t >= STRIKE_TIME:
 		_go(S.DASH_OUT)
 
@@ -391,3 +391,8 @@ func _process_heal(delta: float) -> void:
 ## Sahip öldü: ışın vb. kendiliğinden söner (cosmic_beam.gd boss ölünce kapanır); iyileşme rengi sıfırlanır.
 func on_owner_died() -> void:
 	pass
+
+
+## Sabit hasarlar eski Final (16) için yazılı: kademe yuvasına göre çarpan (enemy_spawner.gd BOSS_HOME_TIER; madde 682: Batık Nekropol K10'unda ~x0,65).
+func _dmg_mult() -> float:
+	return float(e.get_meta("boss_damage_mult", 1.0))

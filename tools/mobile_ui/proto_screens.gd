@@ -40,14 +40,14 @@ const WEAPON_ICONS := {
 	"yay": "res://assets/weapons/yay/draw1.png",
 	"buz_asasi": "res://assets/weapons/buz_asasi/icon_v3.png",
 	"fire_staff": "res://assets/weapons/fire/firestaff_icon_v3.png",
-	"boomerang": "res://assets/weapons/boomerang/icon.png",
+	"boomerang": "res://assets/weapons/yeni/chakram.png",
 }
 const WEAPON_NAMES := {"dagger": "Bıçak", "tufek": "Tüfek", "yay": "Yay", "buz_asasi": "Buz Asası",
 		"fire_staff": "Ateş Asası", "boomerang": "Bumerang"}
 const SPIRITS := [
 	["Para", "res://assets/skills/spirit_para_icon.png"], ["Can", "res://assets/skills/spirit_can_icon.png"],
 	["Nişancı", "res://assets/skills/spirit_adc_icon.png"], ["Tank", "res://assets/skills/spirit_tank_icon.png"],
-	["Taktik", "res://assets/skills/spirit_taktik_icon.png"], ["Dükkan", "res://assets/skills/spirit_dukkan_icon.png"],
+	["Taktik", "res://assets/skills/spirit_taktik_icon.png"],
 	["Savaş Şevki", "res://assets/skills/spirit_savas_sevki_icon.png"], ["Kalkan Bağı", "res://assets/skills/spirit_kalkan_bagi_icon.png"],
 ]
 ## Level atlama örnek kartları: [ad, kademe(0..3), kategori, değer, stat ikonu]

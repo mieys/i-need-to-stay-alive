@@ -95,6 +95,13 @@ const EnemyProjectileScene := preload("res://scenes/enemy_projectile.tscn")
 ## Lich "Ruh Alevi" (madde 280): mermi stili/rengi, asa ucu, saldırı klibinin parlama karesi - kuralları lich_soul_flame.gd'de.
 const LichFlame := preload("res://scripts/lich_soul_flame.gd")
 var _is_lich: bool = false
+## Yakın dövüş vuruşu saldırı klibinin vuruş karesinde iner (madde 571, creature_attack_timing.gd): _setup_attack_timing
+## (_ready) hesaplar; host ve istemci kuklası aynı sahne verisinden aynı sonucu bulur (ağ alanı yok).
+const AttackTiming := preload("res://scripts/creature_attack_timing.gd")
+var _attack_anim_mult: float = 1.0 ## düz saldırı klibinin oynama hızı çarpanı (özel/poz klipleri hariç)
+var _melee_hit_delay: float = 0.0 ## saldırı başı -> vuruş karesi (sn)
+var _attack_state_len: float = 0.0 ## düz saldırı durumunun süresi (klip + son karede bekleme; AttackTiming.state_duration), 0 = doğal
+var _melee_hit_pending: bool = false ## kurulmakta olan vuruş var (yenisi başlamaz - çift vuruş olmasın)
 const SpiritualSkillsScript: GDScript = preload("res://scripts/spiritual_skills.gd")
 const BossBarArtScript: GDScript = preload("res://scripts/boss_bar_art.gd")
 const CameraShakeScript: GDScript = preload("res://scripts/camera_shake.gd")
@@ -433,6 +440,40 @@ func on_ability_vfx(kind: String, data: Dictionary) -> void:
 				play_special_anim(str(data.get("n", "")), float(data.get("d", 0.0)))
 			elif bk == "dismiss":
 				dismiss_without_reward()
+			elif bk == "netcap":
+				## Üç Kardeş atılma / geri sıçrama (kardes_boss.gd): istemci kuklasının ağ hızı tavanı (0 = normal; Minotaur pozuyla aynı alan)
+				_net_speed_cap_override = float(data.get("cap", 0.0))
+			elif bk == "warp":
+				## Üç Kardeş ışınlanma (kardes_boss.gd _begin_blink): kukla kayarak değil anında yeni yere geçsin (vampir ışınlanmasıyla aynı, sissiz)
+				var wto: Vector2 = Vector2(data.get("to", global_position))
+				global_position = wto
+				_network_target_position = wto
+				_network_velocity = Vector2.ZERO
+				if _ew_slot >= 0 and _ew_puppet:
+					_ew_world.set_net_target(_ew_slot, wto, Vector2.ZERO)
+			elif bk == "blink":
+				## Anında yer değiştirme (madde 682, Zehirli Gonca Kök Göçü): host C++ konumunu, kukla ağ hedefini atlatır (kayarak gitmesin).
+				var to: Vector2 = Vector2(data.get("to", global_position))
+				if _ew_slot >= 0 and _ew_puppet:
+					global_position = to
+					_network_target_position = to
+					_network_velocity = Vector2.ZERO
+					_ew_world.set_net_target(_ew_slot, to, Vector2.ZERO)
+				elif _ew_slot >= 0:
+					teleport_to(to)
+				else:
+					global_position = to
+					_network_target_position = to
+					_network_velocity = Vector2.ZERO
+			elif bk == "pop":
+				## Bomba Pelte patladı (madde 575, enemy_abilities.gd _bomb_explode): patlama kareleri creature_nova.gd "blast"ta oynar,
+				## gövde (gölgesi sayfada) anında gizlenir, ölüm klibi görünmeden ödülsüz dağılır.
+				for spr: CanvasItem in [anim_sprite, frame_sprite]:
+					if spr:
+						spr.visible = false
+				if _overhead_bar and is_instance_valid(_overhead_bar):
+					_overhead_bar.visible = false
+				dismiss_without_reward()
 			elif _abilities != null and _abilities.has_method("on_boss_event"):
 				_abilities.on_boss_event(data)
 
@@ -580,8 +621,6 @@ var is_dead: bool = false
 ## can/ölüm senkronu hiç uygulanmıyordu) - katılımcıların yaratıkları
 ## göremeyip oyunun bozulmasının asıl nedeni muhtemelen buydu.
 var last_attacker_peer_id: int = 0
-## ASİST (bkz. assist.gd): bu yaratığa vuran her oyuncunun {peer: {"dmg": toplam hasar, "t": son vuruş msec}} kaydı. Sadece host'ta dolar.
-var _assist_damage: Dictionary = {}
 
 ## Ruhani Yetenek "Savaş Şevki"nin infaz kontrolü (bkz. _apply_damage() içindeki kullanımı) - "bu isabeti
 ## verenin seçtiği ruhani yetenek Savaş Şevki mi" sorusuna cevap verir. GameManager.selected_spiritual HER
@@ -641,10 +680,9 @@ var _idle_timer: float = 0.0
 const DamageNumbersScript := preload("res://scripts/damage_numbers.gd")
 const XpOrb := preload("res://scenes/xp_orb.tscn")
 const KillGold := preload("res://scripts/kill_gold.gd")
-const AssistScript := preload("res://scripts/assist.gd")
 const DropMerge := preload("res://scripts/drop_merge.gd") ## yerdeki XP/altın birleştirme + üst sınır (kullanıcı isteği 2026-10-12)
 const FoodDrop := preload("res://scenes/food_drop.tscn")
-const GoldDrop := preload("res://scenes/gold_drop.tscn") ## yaratık altını yine yere düşer (2026-10-24, kill_gold.gd GROUND_DROPS)
+const GoldDrop := preload("res://scenes/gold_drop.tscn") ## yaratık altını yere düşer (2026-10-24; eski doğrudan teslim + asist yolu 2026-11-15 silindi)
 const ShieldOrbDrop := preload("res://scenes/shield_orb_drop.tscn")
 const ShieldOrbDropScript := preload("res://scripts/shield_orb_drop.gd")
 const ChestDropScene := preload("res://scenes/chest_drop.tscn")
@@ -870,8 +908,90 @@ const MELEE_HIT_TOLERANCE := 20.0
 const MELEE_RETRY_SECONDS := 0.08
 
 
-func _schedule_melee_hit(delay: float, target_player: Node) -> void:
-	await get_tree().create_timer(delay).timeout
+## Saldırı klibinin vuruş karesi -> hız çarpanı + vuruş gecikmesi (madde 571). Yalnız düz saldırı sayfası (frame_sprite);
+## AnimatedSprite2D'li eski yaratıklarda gecikme 0 kalır.
+func _setup_attack_timing() -> void:
+	_attack_anim_mult = 1.0
+	_melee_hit_delay = 0.0
+	_attack_state_len = 0.0
+	if frame_sprite == null or attack_texture == null or sprite_fps <= 0.0:
+		return
+	var cols: int = maxi(int(attack_texture.get_width() / float(cell_size)), 1)
+	var start: int = LichFlame.FLASH_FRAME if _is_lich else 0 ## lich klibi parlama karesinden başlar (bkz. _enter_state)
+	var hit: int = AttackTiming.hit_frame(scene_file_path, cols)
+	_attack_anim_mult = AttackTiming.attack_speed(cols, sprite_fps, hit, start, contact_interval, is_ranged)
+	_melee_hit_delay = AttackTiming.hit_delay(hit, start, sprite_fps, _attack_anim_mult)
+	_attack_state_len = AttackTiming.state_duration(cols, sprite_fps, _attack_anim_mult, contact_interval)
+
+
+## Düz saldırı klibi mi oynuyor (vuruş karesi hızı geçerli): özel boss klibi / Minotaur ve uzuv pozları hariç.
+func _plain_attack_clip() -> bool:
+	return _state == State.ATTACK and _special_tex == null and _pose_override == 0
+
+
+## Vuruşu kur (madde 571): hasar köprü saatinde `delay` sn sonra (_ew_resolve_hit) iner - yaratığın kendi tikine bağlı
+## değil (saldırı sırasında uyuyan yaratıkta da iner), saat köprünün fizik delta'ları (duraklama / zaman ölçeği / elle
+## adımlanan testler doğru). kind: HIT_MELEE / HIT_DIRECT (menzillinin temas vuruşu) / HIT_BARRIER (Şovalye kubbesi).
+const HIT_MELEE := 0
+const HIT_DIRECT := 1
+const HIT_BARRIER := 2
+## Tuzak: kurulu vuruşun hedefi (ağaç görevinin ağacı, müttefik, oyuncu) vuruş gecikmesi boyunca silinebilir. Serbest kalmış
+## nesne TİPLİ (Node) değişkene / parametreye geçerse GDScript "Invalid type in function ... (previously freed)" hatasıyla
+## oyunu durdurur - bu yüzden vuruş zincirinde hedef Variant tutulur, `is_instance_valid` ile yoklanır.
+var _pending_hit_target = null
+var _pending_hit_kind: int = HIT_MELEE
+
+
+## Yakın dövüş vuruşu kurulmakta mı (saldırı klibi başladı, hasar henüz inmedi): bu sürede hareket kilidi YOK ve yaratık uyutulmaz.
+func _in_melee_windup() -> bool:
+	return _melee_hit_pending and _pending_hit_kind == HIT_MELEE
+
+
+## Boşa giden vuruş (hedef kurulma bitmeden menzilden çıktı: yaratıktan hızlı koştu / atıldı): tam vuruş aralığı (0,75 sn)
+## beklenmez - bekleme sayacı kısa yeniden deneme aralığına çekilir ve saldırı duruşu bırakılır (yürüyüp yetişsin).
+func _melee_whiff() -> void:
+	if _ew_slot >= 0 and _ew_world != null:
+		_ew_world.set_contact_timer(_ew_slot, MELEE_RETRY_SECONDS)
+	if _plain_attack_clip():
+		_enter_state(State.WALK)
+
+
+func _queue_hit(delay: float, target: Node, kind: int) -> void:
+	if delay <= 0.0 or _ew_bridge == null or not is_instance_valid(_ew_bridge):
+		if kind == HIT_MELEE:
+			_schedule_melee_hit(0.0, target)
+		else:
+			_apply_direct_hit(target, kind == HIT_BARRIER)
+		return
+	_melee_hit_pending = true
+	_pending_hit_target = target
+	_pending_hit_kind = kind
+	_ew_bridge.schedule_hit(self, delay)
+
+
+## Köprü: kurulan vuruşun saati geldi.
+func _ew_resolve_hit() -> void:
+	if not _melee_hit_pending:
+		return
+	_melee_hit_pending = false
+	var t = _pending_hit_target ## Variant: hedef bu arada silinmiş olabilir (bkz. _pending_hit_target)
+	_pending_hit_target = null
+	if _pending_hit_kind == HIT_MELEE:
+		_apply_melee_hit(t)
+	else:
+		_apply_direct_hit(t, _pending_hit_kind == HIT_BARRIER)
+
+
+## target_player TİPSİZ (Variant): await sırasında silinebilir, tipli parametre serbest nesneyle hata verir.
+func _schedule_melee_hit(delay: float, target_player) -> void:
+	## process_always = false: oyun duraklarsa kurulan vuruş da bekler, menüdeyken hasar inmez.
+	await get_tree().create_timer(delay, false).timeout
+	_apply_melee_hit(target_player)
+
+
+## target_player TİPSİZ (Variant): vuruş gecikmesinde hedef (ağaç görevinin ağacı bitince queue_free) silinmiş olabilir;
+## tipli (Node) olsaydı çağrı anında "previously freed" hatası verirdi, aşağıdaki is_instance_valid'e hiç ulaşılmazdı.
+func _apply_melee_hit(target_player) -> void:
 	if is_dead or not is_instance_valid(target_player):
 		return
 	if not target_player.has_method("take_damage"):
@@ -898,7 +1018,8 @@ func _schedule_melee_hit(delay: float, target_player: Node) -> void:
 	## hasarıyla ilgiliydi).
 	var target_is_invisible: bool = (target_player.has_method("is_invisible_now") and target_player.is_invisible_now()) \
 		or (target_player.has_method("is_indoors_now") and target_player.is_indoors_now()) \
-		or (target_player.has_method("is_in_merchant_zone_now") and target_player.is_in_merchant_zone_now()) 		or target_player.get("in_limbo") == true
+		or (target_player.has_method("is_in_merchant_zone_now") and target_player.is_in_merchant_zone_now()) 		or target_player.get("in_limbo") == true \
+		or BaseZonesScript.shelters(target_player.global_position)
 	if target_is_invisible:
 		return
 	var d: float = global_position.distance_to(target_player.global_position)
@@ -907,11 +1028,24 @@ func _schedule_melee_hit(delay: float, target_player: Node) -> void:
 	## hesaplanıyor.
 	var true_contact_separation_now: float = (_body_radius + PLAYER_BODY_RADIUS) * GameManager.BODY_BLOCK_SCALE
 	if d > true_contact_separation_now + MELEE_HIT_TOLERANCE:
+		_melee_whiff()
 		return
 	if _abilities != null and _abilities.handle_melee_hit(target_player):
 		return ## yaratığa özel vuruş (yarasa ısırığı: kanama) - normal hasar atlanır
 	target_player.take_damage(contact_damage, self)
 	_apply_mutual_bounce(target_player)
+
+
+## Menzilli yaratığın temas vuruşu (barrier = false) ve Şovalye kubbesine vuruş (barrier = true): eskiden saldırı başında
+## anında inerdi; artık o da vuruş karesinde (madde 571). Kurallar eskisi gibi (yalnız ölü/donmuş/korkmuş iptal eder).
+func _apply_direct_hit(target, barrier: bool) -> void: ## target tipsiz: silinmiş olabilir (bkz. _apply_melee_hit)
+	if is_dead or is_feared or is_frozen or not is_instance_valid(target):
+		return
+	if barrier:
+		if target.has_method("take_paladin_barrier_damage"):
+			target.take_paladin_barrier_damage(contact_damage, self)
+	elif target.has_method("take_damage"):
+		target.take_damage(contact_damage, self)
 
 
 ## DÜZELTME (kullanıcı isteği: "oyunda bir düşman bize hasar verdiğinde
@@ -2669,6 +2803,8 @@ func apply_bee_poison(tick_damage_per_stack: float, plague: bool = false) -> voi
 const BEE_PLAGUE_RADIUS := 150.0
 const BEE_PLAGUE_MAX_TARGETS := 6
 const EnemyQueryScript := preload("res://scripts/enemy_world/enemy_query.gd")
+## PvPvE takım üssü (madde 607): üsteki oyuncu satıcı bölgesindeki gibi hedef dışı (bağımlılıksız sorgu).
+const BaseZonesScript := preload("res://scripts/pvp/base_zones.gd")
 var _bee_plague: bool = false
 
 
@@ -3036,7 +3172,7 @@ func _find_closest_target_player() -> Node2D:
 		## üstündeki yorum) - is_indoors ile BİREBİR AYNI muamele.
 		var is_in_merchant_zone: bool = local_p.has_method("is_in_merchant_zone_now") and local_p.is_in_merchant_zone_now()
 		var is_d: bool = (local_p.get("is_dead") if "is_dead" in local_p else false) or local_p.get("in_limbo") == true
-		if not is_inv and not is_indoors and not is_in_merchant_zone and not is_d:
+		if not is_inv and not is_indoors and not is_in_merchant_zone and not is_d and not BaseZonesScript.shelters(local_p.global_position):
 			var d: float = global_position.distance_to(local_p.global_position)
 			if d < min_d:
 				min_d = d
@@ -3063,7 +3199,8 @@ func _find_closest_target_player() -> Node2D:
 			var rp_indoors: bool = rp.get("is_indoors") if "is_indoors" in rp else false
 			## Seyyar satıcının güvenli bölgesi - rp_indoors ile AYNI desen.
 			var rp_in_merchant_zone: bool = rp.get("is_in_merchant_zone") if "is_in_merchant_zone" in rp else false
-			if not is_inv and not is_d and not is_downed and not rp_indoors and not rp_in_merchant_zone and rp.get("in_limbo") != true:
+			if not is_inv and not is_d and not is_downed and not rp_indoors and not rp_in_merchant_zone and rp.get("in_limbo") != true \
+					and not BaseZonesScript.shelters(rp.global_position):
 				var d: float = global_position.distance_to(rp.global_position)
 				if d < min_d:
 					min_d = d
@@ -3165,10 +3302,11 @@ func apply_fear(source_pos: Vector2, duration: float = FEAR_DURATION) -> void:
 		return
 	## DÜZELTME: eskiden `max(duration, _fear_timer if is_feared else 0.0)` is_feared=true atamasından SONRA okunuyordu
 	## (koşul hep doğru) - sonuç aynıydı ama niyet belirsizdi; artık açıkça "kalan süreden kısa bir korku onu kısaltmaz".
-	var was_feared: bool = is_feared
+	var was_feared: bool = is_feared and not _base_repel ## üs geri dönüşü (madde 607) görselsiz: gerçek korku göstergeyi yine duyurur
 	_fear_timer = max(duration, _fear_timer if is_feared else 0.0)
 	is_feared = true
 	_fear_wander = false
+	_base_repel = false
 	_fear_source_pos = source_pos
 	if _ew_slot >= 0:
 		_ew_world.set_fear_source(_ew_slot, source_pos)
@@ -3188,10 +3326,11 @@ func apply_fear_wander(duration: float, affect_boss: bool = false) -> void:
 		if net_id > 0:
 			NetworkManager.request_enemy_effect.rpc_id(NetworkManager._host_peer_id(), net_id, "fear_wander", duration, 1.0 if affect_boss else 0.0, 0.0)
 		return
-	var was_feared: bool = is_feared
+	var was_feared: bool = is_feared and not _base_repel
 	_fear_timer = max(duration, _fear_timer if is_feared else 0.0)
 	is_feared = true
 	_fear_wander = true
+	_base_repel = false
 	_set_fear_visual(true, _fear_timer, not was_feared)
 
 
@@ -3202,7 +3341,32 @@ func _process_fear(delta: float) -> void:
 	if _fear_timer <= 0.0:
 		is_feared = false
 		_fear_wander = false
+		if _base_repel:
+			_base_repel = false ## görselsiz geri dönüş: gösterge yok, kapatma yayını da yok
+			return
 		_set_fear_visual(false)
+
+
+## TAKIM ÜSSÜ (PvPvE, madde 607; kullanıcı: "yaratıklar bu bölgeye yaklaşmasın hızlıca geri dönsün"): üssün geri dönüş halkasına giren yaratık
+## hedefini bırakıp üs merkezinden uzağa BASE_REPEL_SPEED_MULT hızla kaçar. Korku kaçışının (F_FEAR_FLEE) görselsiz, kontrol sayılmayan,
+## bosslara da işleyen sürümü. Yalnız host / tek oyunculu çağırır (team_bases.gd), ağ yayını yok (konum zaten eşitlenir). Gerçek bir korku
+## (Melek / Necro) bunu ezer (apply_fear / apply_fear_wander _base_repel'i kapatır).
+const BASE_REPEL_SPEED_MULT := 1.5
+var _base_repel: bool = false
+
+func apply_base_repel(center: Vector2, duration: float) -> void:
+	if is_dead:
+		return
+	if is_feared and not _base_repel:
+		return ## gerçek korku sürüyor: kendi kaynağından kaçmaya devam etsin
+	_ew_wake()
+	_fear_timer = max(duration, _fear_timer if is_feared else 0.0)
+	is_feared = true
+	_fear_wander = false
+	_fear_source_pos = center
+	_base_repel = true
+	if _ew_slot >= 0:
+		_ew_world.set_fear_source(_ew_slot, center)
 
 
 ## Korku göstergesi: SADECE host (ya da tek oyunculu) karar verir, diğer istemcilere broadcast_enemy_vfx ile yayınlar.
@@ -3761,6 +3925,7 @@ func _ready() -> void:
 		walk_texture = frame_sprite.texture
 	if frame_sprite and idle_texture == null:
 		idle_texture = _derive_idle_texture(walk_texture)
+	_setup_attack_timing()
 
 	if anim_sprite and anim_sprite.sprite_frames and anim_sprite.sprite_frames.has_animation("walk"):
 		anim_sprite.play("walk")
@@ -4011,7 +4176,7 @@ func _ew_still_active() -> bool:
 ## İSTİSNA (madde 286): saldırı karesini C++ yazıyorsa (_ew_hold) saldırı durumu ve süresi "iş" sayılmaz - süre dolmadan 2 kare önce köprü uyandırır (_ew_try_dormant).
 func _ew_hard_active() -> bool:
 	return _flash_time_left > 0.0 or is_frozen or is_feared or is_stunned or not _abilities_checked \
-			or ability_move_lock > 0.0 or (not _ew_hold and (_state_duration > 0.0 or (_state != State.WALK and _state != State.IDLE))) \
+			or ability_move_lock > 0.0 or _in_melee_windup() or (not _ew_hold and (_state_duration > 0.0 or (_state != State.WALK and _state != State.IDLE))) \
 			or (_overhead_bar_hide_timer > 0.0 and _overhead_bar != null and not _overhead_bar_always_visible) \
 			or not _poison_stack_time.is_empty() or burn_time_left > 0.0 or mark_stacks > 0 or bleed_stacks > 0 \
 			or shock_time_left > 0.0 or _sleep_time > 0.0 or not _plague.is_empty() or not _enchant_flags.is_empty() \
@@ -4114,6 +4279,10 @@ func _ew_on_event(type: int, target: Node2D) -> void:
 				return
 			if _abilities != null and _abilities.melee_blocked():
 				return ## Minotaur hücum/toparlanma sırasında temas vuruşu yok (hücum hasarı minotaur_charge.gd'de)
+			## Vuruş karesinde iner (madde 571): saldırı klibi başlar, hasar _melee_hit_delay sonra. Önceki vuruş henüz inmediyse
+			## (ör. HitArea girişi sayacı sıfırladı) yenisi başlamaz - klip yarıda kesilip iki vuruş üst üste binmesin.
+			if _melee_hit_pending:
+				return
 			if not is_ranged:
 				if _melee_too_far(target):
 					if _ew_slot >= 0 and _ew_world != null:
@@ -4122,18 +4291,20 @@ func _ew_on_event(type: int, target: Node2D) -> void:
 				var dur: float = _anim_length_for(State.ATTACK)
 				_enter_state(State.ATTACK, dur if dur > 0.0 else 0.35)
 				_broadcast_attack_state()
-				_schedule_melee_hit(0.0, target)
+				_queue_hit(_melee_hit_delay, target, HIT_MELEE)
 			elif target.has_method("take_damage"):
-				target.take_damage(contact_damage, self)
 				var dur2: float = _anim_length_for(State.ATTACK)
 				_enter_state(State.ATTACK, dur2 if dur2 > 0.0 else 0.35)
 				_broadcast_attack_state()
+				_queue_hit(_melee_hit_delay, target, HIT_DIRECT)
 		EW_E_BARRIER_HIT:
+			if _melee_hit_pending:
+				return
 			if target != null and target.has_method("take_paladin_barrier_damage"):
-				target.take_paladin_barrier_damage(contact_damage, self)
 				var shield_dur: float = _anim_length_for(State.ATTACK)
 				_enter_state(State.ATTACK, shield_dur if shield_dur > 0.0 else 0.35)
 				_broadcast_attack_state()
+				_queue_hit(_melee_hit_delay, target, HIT_BARRIER)
 		EW_E_GHOST_REVEAL:
 			if _abilities != null:
 				_abilities.ghost_reveal(true)
@@ -4142,7 +4313,7 @@ func _ew_on_event(type: int, target: Node2D) -> void:
 				var to_t: Vector2 = target.global_position - global_position
 				_fire_ranged_attack(to_t.normalized() if to_t.length() > 0.1 else Vector2.ZERO, target)
 		EW_E_HOMING_FIRE:
-			_fire_homing_attack()
+			_fire_homing_attack(target)
 		EW_E_TAUNT_LOST:
 			_taunt_target = null
 			_set_taunt_visual(false)
@@ -4161,8 +4332,9 @@ func _ew_anim_state_changed() -> void:
 	if s == EW_A_OTHER and _ew_hold_ok():
 		s = EW_A_HOLD
 	_ew_hold = s == EW_A_HOLD
-	_ew_world.set_anim_state(_ew_slot, s, frame_sprite.hframes if frame_sprite else 1, sprite_fps, _walk_anim_mult,
-			idle_texture != null)
+	## A_HOLD = düz saldırı klibi (_ew_hold_ok): C++ kareyi vuruş karesi hızıyla yazar (madde 571).
+	_ew_world.set_anim_state(_ew_slot, s, frame_sprite.hframes if frame_sprite else 1,
+			sprite_fps * (_attack_anim_mult if _ew_hold else 1.0), _walk_anim_mult, idle_texture != null)
 	_ew_sent_walk_mult = _walk_anim_mult
 	if s == EW_A_OTHER or s == EW_A_HOLD:
 		_ew_wake()
@@ -4294,7 +4466,9 @@ func _ew_push_state() -> void:
 		f |= EW_F_FROZEN
 	if is_rooted:
 		f |= EW_F_ROOTED
-	if _state == State.ATTACK:
+	## Hareket kilidi vuruş İNDİKTEN sonra başlar (madde 571 düzeltmesi): kurulma (windup) sırasında yaratık hedefi izlemeye devam eder,
+	## yoksa yürüyen oyuncu 0,2-0,4 sn'lik kurulmada menzilden çıkar, vuruş boşa gider ve yaratık neredeyse hiç vuramazdı.
+	if _state == State.ATTACK and not _in_melee_windup():
 		f |= EW_F_ATTACK_LOCK
 	if ability_move_lock > 0.0:
 		f |= EW_F_ABILITY_LOCK
@@ -4317,6 +4491,8 @@ func _ew_push_state() -> void:
 		_ew_sent_speed = speed
 		_ew_world.set_speed(_ew_slot, speed)
 	var sm: float = maxf(0.0, 1.0 - chill_stacks * 0.20) * maxf(0.0, 1.0 - _slow_percent) ## _chill_speed_mult x _slow_speed_mult
+	if _base_repel:
+		sm *= BASE_REPEL_SPEED_MULT ## takım üssünden hızla geri dönüş (madde 607)
 	if sm != _ew_sent_speed_mult:
 		_ew_sent_speed_mult = sm
 		_ew_world.set_speed_mult(_ew_slot, sm)
@@ -4540,8 +4716,11 @@ func _fire_ranged_attack(dir: Vector2, target: Node = null) -> void:
 ## Ayrıca hedef artık SADECE host'un kendi yerel oyuncusu değil, en yakın
 ## oyuncu (yerel VEYA uzak) - bkz. _find_closest_target_player, diğer tüm
 ## saldırı mantığıyla tutarlı olsun diye.
-func _fire_homing_attack() -> void:
-	var player := _find_closest_target_player()
+## `target` = C++ olayının hedefi (gizlilik/bölge süzgecinden geçmiş). Verilmezse eski yol: en yakın oyuncu. ESKİDEN olay hedefi yok sayılıp
+## `_find_closest_target_player` çağrılıyordu - o fonksiyon saklanma çalığını (C++ stealth) bilmez, menzilli yaratık çalıdaki oyuncuya
+## da atış yapıyordu.
+func _fire_homing_attack(target: Node2D = null) -> void:
+	var player: Node2D = target if (target != null and is_instance_valid(target)) else _find_closest_target_player()
 	if not player or not is_instance_valid(player):
 		return
 	if not _has_line_of_sight(player): ## en yakın oyuncu çağıranın hedefinden farklı olabilir - onu da görmeli
@@ -4826,6 +5005,10 @@ func _anim_length_for(state: int) -> float:
 		var tex: Texture2D = _texture_for_state(state)
 		if tex:
 			var cols: int = max(int(tex.get_width() / float(cell_size)), 1)
+			## Düz saldırı: klip vuruş karesi hızıyla oynar, durum bir sonraki vuruşa kadar son karede bekler (madde 571;
+			## _plain_attack_clip ile aynı kural, doku üzerinden).
+			if state == State.ATTACK and tex == attack_texture and _pose_override == 0 and _attack_state_len > 0.0:
+				return _attack_state_len
 			return cols / max(sprite_fps, 1.0)
 	if anim_sprite and anim_sprite.sprite_frames:
 		var anim_name: String = _anim_name_for_state(state)
@@ -4839,7 +5022,12 @@ func _anim_length_for(state: int) -> float:
 
 func _advance_frame_sprite(delta: float) -> void:
 	var cols: int = max(frame_sprite.hframes, 1)
-	_frame_time += delta * sprite_fps * (_walk_anim_mult if _state == State.WALK else 1.0)
+	if _state == State.WALK:
+		_frame_time += delta * sprite_fps * _walk_anim_mult
+	elif _plain_attack_clip():
+		_frame_time += delta * (sprite_fps * _attack_anim_mult) ## C++ A_HOLD ile aynı çarpım sırası (fps x çarpan önce) - kare sınırında iki yol aynı kareyi bulsun
+	else:
+		_frame_time += delta * sprite_fps
 	var col: int
 	if _state == State.WALK:
 		col = int(_frame_time) % cols
@@ -5030,16 +5218,6 @@ func take_damage_host(amount: float, is_crit: bool, shield_pen_percent: float, a
 	_post_direct_hit(amount)
 
 
-## ASİST: vuranın (last_attacker_peer_id) bu yaratığa verdiği hasarı ve son vuruş zamanını biriktirir (sadece çok oyunculu + host).
-func _record_assist_damage(amount: float) -> void:
-	if amount <= 0.0 or last_attacker_peer_id <= 0 or not NetworkManager.is_multiplayer_active or not NetworkManager.is_host:
-		return
-	var e: Dictionary = _assist_damage.get(last_attacker_peer_id, {"dmg": 0.0, "t": 0})
-	e["dmg"] = float(e["dmg"]) + minf(amount, max_health)
-	e["t"] = Time.get_ticks_msec()
-	_assist_damage[last_attacker_peer_id] = e
-
-
 ## Süreli hasar tikinin sayısı kaç parçaya bölünür: tik aralığı x DOT_NUMBERS_PER_SEC (aşağı yuvarlanır: 0,5 sn'lik kanama 1,5 -> 1 parça),
 ## en az 1, en çok görünen tamsayı kadar (3 hasarlık tik 3 parçadan fazlasına bölünmez). Parçalar tamsayı, toplamı görünen sayıya eşit, büyükler başta.
 static func dot_number_parts(shown_amount: float, tick_interval: float) -> Array[int]:
@@ -5134,7 +5312,6 @@ func _apply_damage(amount: float, is_crit: bool, shield_pen_percent: float) -> v
 	## vuruş "10" yazıyor, boss zırhlıymış gibi görünüyordu. Artık kalkandan ÖNCEKİ tam vuruş (hasar alma çarpanları
 	## dahil) yazılır; can/kalkan hesabı değişmedi.
 	_show_hit_number(max(amount, 1.0), is_crit)
-	_record_assist_damage(amount)
 
 	if remaining <= 0.0:
 		return
@@ -5239,6 +5416,14 @@ func die() -> void:
 	if is_dead:
 		return
 	is_dead = true
+	if is_boss:
+		BalanceLogScript.note_boss_death(str(get_meta("creature_id", ""))) ## boss dövüş süresi kaydı (madde 597)
+		if not NetworkManager.is_multiplayer_active or NetworkManager.is_host: ## die() istemcide de çalışır: anahtar kararı yalnız host / tek oyunculuda
+			GameManager.award_boss_keys(_current_tier) ## K5 / K10 bossu = haritanın anahtarı herkese (madde 605)
+			if _current_tier == 5 and last_attacker_peer_id > 0: ## 2v2 PvP: K5 bossunu öldüren takıma 3 dk güç (madde 617; PvP değilse host_boss_defeated hiçbir şey yapmaz)
+				var pvp_net: Node = NetworkManager.get_node_or_null("PvpNet")
+				if pvp_net != null:
+					pvp_net.host_boss_defeated(last_attacker_peer_id)
 	if _abilities != null:
 		_abilities.on_owner_died() ## bossa özel kapanış (Banshee: gece kilidi açılır)
 	_ew_unregister() ## EnemyWorld yolu: C++ kaydı silinir, ölüm animasyonu eski _physics_process'ten
@@ -5253,6 +5438,7 @@ func die() -> void:
 	## Korku göstergesi ölüm animasyonunda kalmasın (her istemcide yerel - die() istemcide de çalışır).
 	is_feared = false
 	_fear_wander = false
+	_base_repel = false
 	_remove_fear_status_fx()
 	_remove_entangle_fx()
 	_remove_frost_chill_fx() ## Don Nova buz kristalleri ölüm animasyonunda kalmasın
@@ -5372,6 +5558,7 @@ func dismiss_without_reward() -> void:
 		set_ability_invisible(false)
 	is_feared = false
 	_fear_wander = false
+	_base_repel = false
 	_remove_fear_status_fx()
 	_remove_entangle_fx()
 	_remove_frost_chill_fx()
@@ -5544,6 +5731,8 @@ func _drop_xp() -> void:
 	if NetworkManager.is_multiplayer_active and _current_tier >= MP_XP_SPLIT_MIN_TIER:
 		per_orb /= float(maxi(1, NetworkManager.game_player_count()))
 	var scene_root: Node = get_tree().current_scene
+	## 2v2: küre öldürenin takımını taşır (Toplayıcı ruhanisi yalnız kendi takımının küresini çeker, madde 625); ortak modda -1.
+	var kill_team: int = preload("res://scripts/toplayici.gd").kill_team_of(last_attacker_peer_id)
 	for i in range(count):
 		## Her orb KENDİ tier'ını ayrı ayrı zar atarak seçiyor (bkz.
 		## _roll_orb_tier) - tek bir yaratık aynı anda birden fazla orb
@@ -5560,8 +5749,12 @@ func _drop_xp() -> void:
 		## çökertiyordu (bkz. kullanıcı bildirimi: "oyun birden kapandı, 5sn
 		## oynadıktan sonra"). call_deferred ile güvenli bir ana ertelenir.
 		_queue_drop_spawn(func() -> void:
+			## Sahne (oyundan çıkış / yeniden başlatma) kuyruk boşalmadan silindiyse scene_root ölüdür: release'te tipli null'a
+			## çağrı motoru çökertir (2026-11-13 "oyun beni attı": "Lambda capture at index 4 was freed" -> 0xc0000005).
+			if not is_instance_valid(scene_root):
+				return
 			## Birleştirme + üst sınır (bkz. drop_merge.gd): yakında aynı kademede küre varsa yeni düğüm açılmaz; sınır doluysa değer doğrudan yazılır.
-			if DropMerge.absorb_xp(drop_pos, orb_tier, tiered_value):
+			if DropMerge.absorb_xp(drop_pos, orb_tier, tiered_value, kill_team):
 				return
 			if DropMerge.xp_over_cap() and DropMerge.credit_xp(scene_root.get_tree(), drop_pos, tiered_value):
 				return
@@ -5569,6 +5762,8 @@ func _drop_xp() -> void:
 			orb.xp_value = tiered_value
 			orb.xp_tier = orb_tier
 			orb.global_position = drop_pos
+			if kill_team >= 0:
+				orb.set_meta(&"kill_team", kill_team)
 			if NetworkManager.is_multiplayer_active:
 				var drop_id: int = NetworkManager._gen_drop_id()
 				orb.set_meta("drop_network_id", drop_id)
@@ -5639,12 +5834,12 @@ func _drop_gold() -> void:
 	## Miktar (kademeye göre garanti, 2026-10-15): gelir bu hesaptan, düşme biçiminden bağımsız. Minyonlar (boss çağrıları) garanti vermez -
 	## eskisi gibi şansa bağlı (yoksa boss başında sınırsız altın kasılırdı).
 	var chance: float = minf(gold_chance * _luck_mult(LUCK_GOLD_MULT_PER_POINT), 1.0)
-	var amount: int = KillGold.amount_for(gold_min, gold_max, chance, is_in_group("summons"))
+	var amount: int = KillGold.scale_amount(KillGold.amount_for(gold_min, gold_max, chance, is_in_group("summons"))) ## +%15 gelir (2026-11-13)
 	if amount > 0:
-		if KillGold.GROUND_DROPS:
-			_spawn_gold_drop(amount) ## 2026-10-24: altın yine yere düşer, oyuncu toplama mesafesiyle (XP gibi) toplar
-		else:
-			_award_gold_directly(amount)
+		if not is_boss:
+			amount = KillGold.pool_take(amount) ## küçük paylar birikir, MIN_COIN'e varınca tek büyük altın düşer
+		if amount > 0:
+			_spawn_gold_drop(amount)
 	_roll_extra_item_gold()
 
 
@@ -5655,6 +5850,8 @@ func _spawn_gold_drop(amount: int) -> void:
 	var drop_pos: Vector2 = global_position + Vector2(randf_range(-10.0, 10.0), randf_range(-10.0, 10.0))
 	var scene_root: Node = get_tree().current_scene
 	_queue_drop_spawn(func() -> void:
+		if not is_instance_valid(scene_root): ## sahne silindiyse (bkz. _drop_xp lambda'sı) release'te çökerdi
+			return
 		if not is_boss:
 			if DropMerge.absorb_gold(drop_pos, amount):
 				return
@@ -5672,97 +5869,6 @@ func _spawn_gold_drop(amount: int) -> void:
 	)
 
 
-## KillGold.GROUND_DROPS = false yolu (2026-10-15/21 sistemi): altın yere düşmeden öldürene / asistçilere dönen para olarak gider.
-func _award_gold_directly(amount: int) -> void:
-	var pos: Vector2 = global_position
-	if is_boss and NetworkManager.is_multiplayer_active:
-		## Boss altını tüm canlı katılımcılar arasında eşit bölünür (eski yerden toplama paylaşımıyla aynı kural).
-		var peers: Array = []
-		for part: Dictionary in NetworkManager.get_reward_participants():
-			peers.append(int(part["peer_id"]))
-		var local_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1
-		var killer: Node = _killer_node()
-		var killer_id: int = int(killer.peer_id) if killer != null and "peer_id" in killer and not killer.is_in_group("player") else local_id
-		if peers.size() > 1:
-			var shares: Dictionary = NetworkManager.compute_gold_shares(amount, peers, killer_id)
-			for pid in shares.keys():
-				var share: int = int(shares[pid])
-				if share <= 0:
-					continue
-				if int(pid) == local_id:
-					KillGold.award(get_tree(), share, pos, get_tree().get_first_node_in_group("player"))
-				else:
-					NetworkManager.grant_kill_gold.rpc_id(int(pid), share, pos)
-			amount = 0
-	if amount > 0:
-		_award_with_assists(amount, pos)
-
-
-## Normal yaratık altını: tek oyunculuda/tek katılımcıda öldürene; çok oyunculuda ASİST payı (bkz. assist.gd) - hasar veren / destek
-## sağlayan (can-kalkan-buff, Şovalye E/R) oyuncular da pay alır. Asist alan kendi ekranında soluk "ASİST +N" görür.
-## 2026-10-19 (madde 308): altının %20'si önce yakındaki canlı oyunculara EŞİT ayrılır (takım payı, "TAKIM +N"), kalanı hasar/asist kuralıyla bölünür.
-func _award_with_assists(amount: int, pos: Vector2) -> void:
-	var killer: Node = _killer_node()
-	if not NetworkManager.is_multiplayer_active:
-		KillGold.award(get_tree(), amount, pos, killer)
-		return
-	var local_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1
-	var killer_id: int = local_id
-	if killer != null and not killer.is_in_group("player") and "peer_id" in killer:
-		killer_id = int(killer.peer_id)
-	var team: Dictionary = AssistScript.team_share(amount, killer_id, AssistScript.nearby_mates(_team_candidates(), pos), AssistScript.carry)
-	var rest: int = amount
-	for tpid in team.keys():
-		rest -= int(team[tpid])
-	var kinds: Dictionary = {}
-	var shares: Dictionary = {killer_id: rest}
-	if not _assist_damage.is_empty():
-		var support: Dictionary = AssistScript.active_support()
-		var paladin: Dictionary = AssistScript.paladin_support(get_tree())
-		for sup in paladin.keys():
-			var list: Array = support.get(sup, [])
-			list.append_array(paladin[sup])
-			support[sup] = list
-		shares = AssistScript.compute(rest, killer_id, _assist_damage, support, -1, kinds, AssistScript.carry)
-	for tpid in team.keys():
-		shares[tpid] = int(shares.get(tpid, 0)) + int(team[tpid])
-		if not kinds.has(tpid):
-			kinds[tpid] = AssistScript.KIND_TEAM
-	var lost: int = 0 ## ayrılan (kuklası kalmayan) asistçinin payı öldürene döner
-	for pid in shares.keys():
-		var share: int = int(shares[pid])
-		if share <= 0 or int(pid) == killer_id:
-			continue
-		var target: Node = _node_for_peer(int(pid), local_id)
-		if target == null:
-			lost += share
-			continue
-		KillGold.award(get_tree(), share, pos, target, int(kinds.get(int(pid), AssistScript.KIND_DAMAGE)))
-	var killer_share: int = int(shares.get(killer_id, amount)) + lost
-	if killer_share > 0:
-		KillGold.award(get_tree(), killer_share, pos, killer)
-
-
-## Takım payı adayları (host): ölü olmayan oyuncular (NetworkManager.get_reward_participants) + konumları + düşmüş mü (assist.gd nearby_mates).
-func _team_candidates() -> Array:
-	var out: Array = []
-	for part: Dictionary in NetworkManager.get_reward_participants():
-		var n: Node = part.get("node") as Node
-		if n == null or not is_instance_valid(n) or not (n is Node2D):
-			continue
-		out.append({"peer_id": int(part["peer_id"]), "pos": (n as Node2D).global_position, "down": n.get("is_downed") == true})
-	return out
-
-
-func _node_for_peer(pid: int, local_id: int) -> Node:
-	if pid == local_id:
-		return get_tree().get_first_node_in_group("player")
-	for rp in get_tree().get_nodes_in_group("remote_players"):
-		if is_instance_valid(rp) and "peer_id" in rp and int(rp.peer_id) == pid:
-			return rp
-	return null
-
-
 ## Şanslı Zar: temel altın düşme şansından TAMAMEN BAĞIMSIZ - "düşmanlar %4
 ## ihtimalle FAZLADAN 1 altın düşürür" (kullanıcı isteği), yani üsttekinin
 ## tetiklenip tetiklenmediğine bakılmaksızın ayrıca kendi şansını dener.
@@ -5773,10 +5879,7 @@ func _roll_extra_item_gold() -> void:
 	var extra_chance: float = _killer_stat("item_extra_gold_chance")
 	if extra_chance <= 0.0 or randf() > extra_chance:
 		return
-	if KillGold.GROUND_DROPS:
-		_spawn_gold_drop(1)
-		return
-	KillGold.award(get_tree(), 1, global_position, _killer_node())
+	_spawn_gold_drop(1)
 
 
 ## Kullanıcı isteği: "Tierlara göre yemek düşme şansını azaltarak ilerle" -
@@ -5947,26 +6050,27 @@ func _drop_chest() -> void:
 ## SİLAH PARÇACIĞI (kullanıcı isteği 2026-10-08): "silah parçacığı yaratıklardan %0.5 ihtimalle düşecek. elit yaratıklardan kesin 1 tane düşecek
 ## bosslardan 5 tane düşecek. bu silah parçacıkları oyunculara eşit miktarda gidecek". Demirci dükkanında silah almak için gerekir (bkz.
 ## weapon_shop_logic.gd SHARD_COST_*). Yerdeki drop'lar yemek gibi durur (weapon_shard_drop.gd); toplanınca yaşayan HER oyuncuya aynı miktar gider.
-## Şans: sıradan yaratığın %0.5'i diğer drop'larla AYNI çarpımsal şansla büyür (bkz. LUCK_DROP_MULT_PER_POINT) - elit/boss garantisi şansa bağlı değil.
+## Şans (2026-11-14, kullanıcı): parçacık ŞANSTAN ETKİLENMEZ - sıradan yaratıkta sabit %0,5, elit/boss garantisi de şansa bağlı değil
+## (diğer drop'lar hâlâ LUCK_DROP_MULT_PER_POINT ile büyür; 20 şansla parçacık %1'e çıkıp bol bol düşüyordu).
 ## Boss 5 AYRI drop düşürür (her biri 1 parça, etrafa saçılır), elit 1. Çağrı sırası/ağ kapısı diğer _drop_* ile aynı: sadece host/tek oyunculu.
 const WEAPON_SHARD_CHANCE := 0.005 ## 2026-10-12: %1 -> %0,5 (kullanıcı). 2026-10-11: %1,5 -> %1 (kullanıcı). 2026-10-10: %0,5 -> %1,5
 const WEAPON_SHARD_ELITE_COUNT := 1
 const WEAPON_SHARD_BOSS_COUNT := 5
 
 
-## Bu ölümde kaç silah parçacığı düşer. roll: 0..1 zar (testler sabitleyebilsin diye parametre), luck_mult: killer'ın şans çarpanı.
-static func weapon_shard_count(boss: bool, elite: bool, roll: float, luck_mult: float = 1.0) -> int:
+## Bu ölümde kaç silah parçacığı düşer. roll: 0..1 zar (testler sabitleyebilsin diye parametre). Şans çarpanı YOK (2026-11-14).
+static func weapon_shard_count(boss: bool, elite: bool, roll: float) -> int:
 	if boss:
 		return WEAPON_SHARD_BOSS_COUNT
 	if elite:
 		return WEAPON_SHARD_ELITE_COUNT
-	return 1 if roll <= WEAPON_SHARD_CHANCE * luck_mult else 0
+	return 1 if roll <= WEAPON_SHARD_CHANCE else 0
 
 
 func _drop_weapon_shards() -> void:
 	if NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
 		return
-	var count: int = weapon_shard_count(is_boss, is_elite and not has_meta(&"mission_elite"), randf(), _luck_mult(LUCK_DROP_MULT_PER_POINT)) ## ritüel cezası eliti sıradan sayılır (madde 496)
+	var count: int = weapon_shard_count(is_boss, is_elite and not has_meta(&"mission_elite"), randf()) ## ritüel cezası eliti sıradan sayılır (madde 496)
 	if count <= 0:
 		return
 	var tree: SceneTree = get_tree()

@@ -99,7 +99,9 @@ func test_other_ap_changes_are_preserved_when_overflow_ends() -> void:
 func test_elara_passive_is_true_fifty_percent_and_not_in_overflow() -> void:
 	var p: Node = _make_player()
 	var saved: int = GameManager.selected_character
-	GameManager.selected_character = 12
+	var saved_char: int = GameManager.selected_char_id
+	GameManager.selected_character = 11 ## Elara Q (Gerçek Hasar; dash'ler E'de)
+	GameManager.selected_char_id = 8 ## pasif kimliği roster'dan okunur
 	p.level = 50
 	assert(absf(p._elara_passive_fire_rate_mult() - 1.0 / 1.3) < 0.0001, "50. seviyede sınır +%%30: aralık çarpanı 1/1,3 olmalı: %f" % p._elara_passive_fire_rate_mult())
 	p.level = 30
@@ -116,4 +118,5 @@ func test_elara_passive_is_true_fifty_percent_and_not_in_overflow() -> void:
 	_set_total_bonus(p, GameManager.ATTACK_SPEED_CAP_PERCENT + 100.0)
 	assert(absf(p.get_attack_speed_overflow_percent() - 100.0) < 0.01, "kart kaynaklı taşma aynen sayılır: %f" % p.get_attack_speed_overflow_percent())
 	GameManager.selected_character = saved
+	GameManager.selected_char_id = saved_char
 	_cleanup()

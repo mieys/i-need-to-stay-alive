@@ -53,6 +53,10 @@ if (Test-Path $stateFile) {
 }
 
 $headers = @{ Authorization = "Bot $token"; "User-Agent" = "DiscordBot (hata-tespit-toplayici, 1.0)" }
+# Ekran goruntuleri: yalniz PNG/JPG/WebP, Discord CDN'den, ham/ekler/ klasorune (bkz. gorsel_kaydet.ps1)
+. (Join-Path $PSScriptRoot "gorsel_kaydet.ps1")
+$imgDir = Join-Path $OutDir "ekler"
+Remove-OldImages $imgDir 30
 $newCount = 0
 $emptyContent = 0
 $humanCount = 0
@@ -101,6 +105,7 @@ for ($page = 0; $page -lt $MaxPages; $page++) {
       reply_to   = [string]$m.message_reference.message_id
       reactions  = $react
       attachments = @(@($m.attachments) | Where-Object { $_ } | ForEach-Object { [string]$_.url })
+      images     = [string[]]@(Save-MessageImages $m $imgDir)
     }
     $lines.Add(($rec | ConvertTo-Json -Compress -Depth 4))
     $newCount++

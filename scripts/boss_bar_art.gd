@@ -9,6 +9,8 @@ extends RefCounted
 ##
 ## Yazı: m5x7, 16 boyutunda 1x (büyük harf 7 px) - s ile çarpılır (s=3 -> 48, oyundaki FS_TITLE ile aynı).
 
+const SkullIcon := preload("res://scripts/skull_icon.gd") ## kafatası: kullanıcının çizimi (2026-11-11), eski 9x9 ASCII kafatası kalktı
+
 const OUT := Color("#382011")
 const OUT2 := Color("#1e120a")
 const W_HI := Color("#ae956d")
@@ -52,18 +54,6 @@ const TOP_H := 38
 ## Kafatası plakası (boss üstü) ölçüsü ve kafanın üstünde bırakılan boşluk (yerel birim = 2 ekran px -> 12 px).
 const PLATE_SIZE := 15
 const PLATE_GAP := 6.0
-
-const SKULL_ROWS: Array[String] = [
-	"..XXXXX..",
-	".XWWWWWX.",
-	"XWWWWWWWX",
-	"XWKKWKKWX",
-	"XWKKWKKWX",
-	".XWWXWWX.",
-	"..XWWWX..",
-	"..XWXWX..",
-	"...XXX...",
-]
 
 static var _font: Font = null
 ## doku -> en üstteki opak satır (hücre içinde, texel); aynı sayfa için bir kez ölçülür.
@@ -142,11 +132,9 @@ static func blit(ci: CanvasItem, o: Vector2, s: float, rows: Array[String], pal:
 			xx += run
 
 
+## Eski 9x9 kafanın yerine (sol-üst x, y sanat pikseli): yeni kafatası, 9s x 9s yuvanın ortasında tam katlı boyda.
 static func skull(ci: CanvasItem, o: Vector2, s: float, x: float, y: float) -> void:
-	blit(ci, o, s, SKULL_ROWS, {"X": OUT, "W": BONE, "K": OUT2}, x, y)
-	r(ci, o, s, x + 1, y + 5, 1, 1, BONE_D)
-	r(ci, o, s, x + 7, y + 5, 1, 1, BONE_D)
-	r(ci, o, s, x + 6, y + 6, 1, 1, BONE_D)
+	SkullIcon.draw_fit(ci, o + Vector2(x + 4.5, y + 4.5) * s, 9.0 * s)
 
 
 static func nail(ci: CanvasItem, o: Vector2, s: float, x: float, y: float) -> void:
@@ -205,20 +193,7 @@ static func bar_label(ci: CanvasItem, o: Vector2, s: float, x: float, y: float, 
 ## solda büyük yuvarlak kafatası madalyonu, iki çubuk sağa doğru bıçak ucu gibi sivrilir, isim çubuğun üstünde sola yaslı.
 ## Kırmızının arkasında açık renkli "son hasar izi" (trail = izin ulaştığı can oranı, >= hp; boss_bar_top.gd geriden getirir).
 ## Değere bağlı olmayan parçalar (gövde/uç/anahat ve madalyon) bir kez piksel koşularına çevrilip önbelleğe alınır.
-const MEDAL_SKULL_ROWS: Array[String] = [
-	"...XXXXXXX...",
-	"..XWWWWWWWX..",
-	".XWWWWWWWWWX.",
-	"XWWWWWWWWWWWX",
-	"XWKKKWWWKKKWX",
-	"XWKKKWWWKKKWX",
-	"XWKKWWWWWKKWX",
-	".XWWWWKWWWWX.",
-	"..XWWKKKWWX..",
-	"..XWWWWWWWX..",
-	"..XWXWXWXWX..",
-	"...XXXXXXX...",
-]
+## Madalyonun kafası kodla değil kullanıcı çizimidir (SkullIcon): top_plaque kırmızı iç diskin ortasına tam katlı boyda çizer.
 const IRON := Color("#3b3640")
 const IRON_L := Color("#5b5563")
 const TRACK_RED := Color("#2a0f10")
@@ -280,6 +255,36 @@ static func top_plaque(ci: CanvasItem, o: Vector2, s: float, name_: String, hp: 
 	bar_label(ci, o, s, BAR_X0, BODY_Y + 11, bw, 10, hp_text)
 	text(ci, o, s, BAR_X0 + 6, 2, name_, CREAM, OUT2)
 	_draw_runs(ci, o, s, parts["front"])
+	## Madalyon kafatası: iç disk çapı (MEDAL_R - 4,2 yarıçap) kadar yüksekliğe en uygun tam katlı boy (s 3: 2 kat 44x60, s 2: 1 kat).
+	SkullIcon.draw_fit(ci, o + Vector2(float(MEDAL_C.x) + 0.5, float(MEDAL_C.y)) * s, 2.0 * (float(MEDAL_R) - 4.2) * s)
+
+
+## ÜÇ KARDEŞ: top_plaque ile aynı madalyon, ama kalkan ve can çubukları eşit 3 PARÇA (aralarında 1 px koyu çentik); her parça bir kardeşin kendi
+## kalkan/can oranıyla soldan dolar (ölen kardeşin parçası boş). segs: [{"hp": 0..1, "sh": 0..1}, ...]; yazılar üçünün TOPLAMI.
+@warning_ignore("integer_division")
+static func top_plaque_trio(ci: CanvasItem, o: Vector2, s: float, name_: String, segs: Array, w: int = TOP_W, hp_text: String = "",
+		sh_text: String = "") -> void:
+	var parts: Dictionary = _medal_parts(w)
+	_draw_runs(ci, o, s, parts["base"])
+	var bw: int = medal_bar_w(w)
+	r(ci, o, s, BAR_X0, BODY_Y + 1, bw, 9, EMPTY_BLUE)
+	r(ci, o, s, BAR_X0, BODY_Y + 11, bw, 10, TRACK_RED)
+	var n: int = maxi(segs.size(), 1)
+	for i in range(segs.size()):
+		var x0: int = BAR_X0 + int(roundf(float(bw) * float(i) / float(n)))
+		var x1: int = BAR_X0 + int(roundf(float(bw) * float(i + 1) / float(n)))
+		var sw: int = x1 - x0 - (2 if i < n - 1 else 0)
+		var seg: Dictionary = segs[i]
+		_fill(ci, o, s, x0, BODY_Y + 1, sw, 9, float(seg.get("sh", 0.0)), SH_BANDS)
+		_fill(ci, o, s, x0, BODY_Y + 11, sw, 10, float(seg.get("hp", 0.0)), HP_BANDS)
+		if i < n - 1: ## parçalar arası 2 px gövde (demir) çentiği: üç ayrı tüp gibi okunur
+			r(ci, o, s, x1 - 2, BODY_Y, 2, BODY_H, IRON_D)
+			r(ci, o, s, x1 - 2, BODY_Y, 1, BODY_H, IRON_L)
+	bar_label(ci, o, s, BAR_X0, BODY_Y + 1, bw, 9, sh_text)
+	bar_label(ci, o, s, BAR_X0, BODY_Y + 11, bw, 10, hp_text)
+	text(ci, o, s, BAR_X0 + 6, 2, name_, CREAM, OUT2)
+	_draw_runs(ci, o, s, parts["front"])
+	SkullIcon.draw_fit(ci, o + Vector2(float(MEDAL_C.x) + 0.5, float(MEDAL_C.y)) * s, 2.0 * (float(MEDAL_R) - 4.2) * s)
 
 
 static func _draw_runs(ci: CanvasItem, o: Vector2, s: float, runs: Array) -> void:
@@ -360,14 +365,6 @@ static func _medal_parts(w: int) -> Dictionary:
 			else:
 				c = RED_M if y < MEDAL_C.y - 3 else RED_D
 			front[Vector2i(x, y)] = c
-	var pal: Dictionary = {"X": OUT2, "W": BONE, "K": OUT2}
-	for yy in range(MEDAL_SKULL_ROWS.size()):
-		var row: String = MEDAL_SKULL_ROWS[yy]
-		for xx in range(row.length()):
-			if pal.has(row[xx]):
-				front[Vector2i(MEDAL_C.x - 6 + xx, MEDAL_C.y - 6 + yy)] = pal[row[xx]]
-	front[Vector2i(MEDAL_C.x - 4, MEDAL_C.y + 1)] = BONE_D
-	front[Vector2i(MEDAL_C.x + 4, MEDAL_C.y + 1)] = BONE_D
 	var parts := {"base": _to_runs(pm), "front": _to_runs(front)}
 	_medal_cache[w] = parts
 	return parts
@@ -430,16 +427,14 @@ static func top_plaque_wood(ci: CanvasItem, o: Vector2, s: float, name_: String,
 	bar_label(ci, o, s, x0, hy, bw, hp_h, hp_text)
 
 
-# ---------------------------------------------------------------- boss üstü kafatası plakası (O1'in kafatası parçası)
-## origin = plakanın sol-üst köşesi; PLATE_SIZE x PLATE_SIZE sanat pikseli.
+# ---------------------------------------------------------------- boss üstü kafatası işareti
+## origin = 15x15 yuvanın sol-üst köşesi (s = 1 yerel birim = 2 ekran px). Eski altın kenarlı demir plaka kalktı (2026-11-11): artık yalnız
+## kullanıcının kafatası çizimi, 1 doku pikseli = 1 ekran piksel (0,5 yerel birim) -> 11x15 birim; yükseklik PLATE_SIZE ile aynı,
+## genişlikte yuvanın ortasında (enemy.gd get_boss_marker_offset ve boss_skull_marker.gd yerleşimi değişmedi).
 static func skull_plate(ci: CanvasItem, o: Vector2, s: float) -> void:
-	rrect(ci, o, s, 0, 0, PLATE_SIZE, PLATE_SIZE, OUT2)
-	r(ci, o, s, 1, 1, 13, 13, IRON_D)
-	box(ci, o, s, 1, 1, 13, 13, GOLD_D)
-	r(ci, o, s, 1, 1, 1, 1, GOLD_L)
-	r(ci, o, s, 13, 1, 1, 1, GOLD_L)
-	r(ci, o, s, 2, 2, 11, 11, RED_D)
-	skull(ci, o, s, 3, 3)
+	var k: float = 0.5 * s
+	var sz: Vector2 = SkullIcon.BIG_SIZE * k
+	SkullIcon.draw(ci, o + Vector2((float(PLATE_SIZE) * s - sz.x) * 0.5, 0.0), k)
 
 
 # ---------------------------------------------------------------- kafa konumu (kafatası plakasının yerleşimi)
@@ -496,7 +491,13 @@ const NAMES := {
 	"agac": "AĞAÇ", "bitki": "BİTKİ", "demon": "DEMON", "golem": "GOLEM", "hayalet": "HAYALET", "iblis": "İBLİS",
 	"iskelet": "İSKELET", "lich": "LICH", "mantar": "MANTAR", "ork": "ORK", "rat": "FARE", "rontgen": "RÖNTGEN",
 	"slime": "SLIME", "vampire": "VAMPİR", "zombie": "ZOMBİ", "minotaur": "MİNOTAUR", "underground": "YERALTI CANAVARI", "sandworm": "SOLUCAN", "balkabagi": "BALKABAĞI KAFA", "wendigo": "WENDİGO", "banshee": "BANSHEE", "ucansetan": "UÇAN ŞEYTAN",
+	"goblin": "GOBLİN", "gnoll": "GNOLL", "kertenkele": "KERTENKELE ADAM", "pelte": "PELTE", ## madde 575
+	"gonca": "ZEHİRLİ GONCA", "filiz": "FİLİZ", "medusa": "MEDUSA", ## madde 682
+	"kardes_kilic": "KILIÇ KARDEŞ", "kardes_ok": "OK KARDEŞ", "kardes_buyu": "BÜYÜ KARDEŞ", ## Üç Kardeş (kafatası plaketleri)
 }
+## ÜÇ KARDEŞ tek boss: üst barda TEK ad + 3 parçalı çubuk (boss_bar_top.gd trio_entry). Sıra = barda soldan sağa (kardes_boss.gd TRIO_IDS ile AYNI).
+const TRIO_IDS := ["kardes_kilic1", "kardes_ok1", "kardes_buyu1"]
+const TRIO_NAME := "ÜÇ KARDEŞ"
 
 
 static func display_name(creature_id: String) -> String:

@@ -171,6 +171,17 @@ func test_class_cards_need_a_weapon_of_that_class() -> void:
 	player.owned_weapon_nodes.append(melee_w)
 	var avail: Array = Special.available_ids(player)
 	assert(avail.has("class_melee") and not avail.has("class_ranged"), "yalnız yakın dövüş silahı varken sadece Yakın Dövüş Ustalığı: %s" % [avail])
+	## Karma kurgu (bir yakın dövüş + bir menzilli): iki tür kartı da çıkmaz; yalnız menzilliye dönünce Nişancılık çıkar.
+	var ranged_w: Node = (player.WEAPON_SCENES_BY_KEY["tabanca"] as PackedScene).instantiate()
+	player.add_child(ranged_w)
+	player.owned_weapon_nodes.append(ranged_w)
+	avail = Special.available_ids(player)
+	assert(not avail.has("class_melee") and not avail.has("class_ranged"), "karma kurguda silah türü kartı çıkmamalı: %s" % [avail])
+	player.owned_weapon_nodes.erase(melee_w)
+	avail = Special.available_ids(player)
+	assert(avail.has("class_ranged") and not avail.has("class_melee"), "yalnız menzilli kurguda sadece Nişancılık: %s" % [avail])
+	player.owned_weapon_nodes.erase(ranged_w)
+	player.owned_weapon_nodes.append(melee_w)
 	player._apply_weapon_bonuses() ## silah hasarı sahibin saldırı gücünden gelir (taban 0): önce oyuncunun bonusunu silaha it
 	var before: float = melee_w.damage
 	assert(before > 0.0, "taban hasar hesaplanmalı: %s" % before)

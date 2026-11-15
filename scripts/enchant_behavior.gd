@@ -787,6 +787,11 @@ func on_boomerang_caught(_proj: Node2D) -> void:
 	pass
 
 
+## Çakram sekti (boomerang_projectile.gd _try_bounce) - yalnız kasterde.
+func on_boomerang_bounce(_proj: Node2D, _from_body: Node, _to_body: Node) -> void:
+	pass
+
+
 ## Fişek patlaması (firework_projectile.gd _explode) - vurduğu düşmanlar ayrıca on_hit ile gelir.
 func on_explode(_proj: Node2D, _pos: Vector2) -> void:
 	pass

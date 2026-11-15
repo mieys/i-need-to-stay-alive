@@ -35,10 +35,10 @@ func test_table_is_sane() -> void:
 		seen[id] = true
 		assert(int(d["max"]) >= 1 and float(d["per"]) > 0.0 and int(d["first"]) > 0 and int(d["step"]) >= 0, "geçersiz satır: %s" % id)
 		assert(str(d["name"]) != "" and str(d["desc"]) != "", "ad/açıklama boş: %s" % id)
-	assert(MetaUpgradesScript.LIST.size() == 20, "kullanıcı listesi 20 geliştirme: %d" % MetaUpgradesScript.LIST.size())
+	assert(MetaUpgradesScript.LIST.size() == 21, "kullanıcı listesi 20 + Evrim Karıştırma = 21 geliştirme: %d" % MetaUpgradesScript.LIST.size())
 	var want: Dictionary = {"pickup": 10, "attack": 15, "atk_speed": 10, "regen": 10, "health": 15, "lifesteal": 10, "speed": 8,
 			"shield_amount": 8, "shield_regen": 10, "heal_power": 8, "crit_chance": 10, "crit_damage": 10, "luck": 10, "discount": 5,
-			"shield_protection": 5, "free_reroll": 1, "revive": 1, "cooldown": 8, "skill_cost": 5, "shield_pen": 5}
+			"shield_protection": 5, "free_reroll": 1, "evo_reroll": 1, "revive": 1, "cooldown": 8, "skill_cost": 5, "shield_pen": 5}
 	for id: String in want.keys():
 		assert(MetaUpgradesScript.max_level(id) == int(want[id]), "%s seviye sayısı %d olmalı" % [id, int(want[id])])
 
@@ -167,14 +167,22 @@ func test_shop_discount_stacks_with_para_and_caps() -> void:
 func test_free_reroll_and_revive_are_applied_on_run_reset() -> void:
 	_begin(100000)
 	var saved_revives: int = GameManager.max_revives
+	var saved_char: int = GameManager.selected_char_id
+	GameManager.selected_char_id = 3 ## özel statı GameManager'a dokunmayan karakter (Talon/Shaman/Hadime/Korsan dokunur, madde 677)
 	GameManager.reset()
 	assert(GameManager.max_revives == 3 and GameManager.free_rerolls_per_card == 0 and GameManager.revives_remaining == 3)
+	assert(GameManager.free_evo_rerolls_left == 1, "geliştirmesiz koşuda 1 bedava evrim karıştırması")
 	assert(MetaUpgradesScript.buy("free_reroll") and MetaUpgradesScript.buy("revive"))
 	GameManager.reset()
 	assert(GameManager.max_revives == 4 and GameManager.revives_remaining == 4, "dirilme hakkı +1")
 	assert(GameManager.free_rerolls_per_card == 1, "geliştirme kart başına 1 bedava karıştırma verir")
+	assert(GameManager.free_evo_rerolls_left == 1, "evrim geliştirmesi alınmadıysa evrim hakkı 1")
+	assert(MetaUpgradesScript.buy("evo_reroll"))
+	GameManager.reset()
+	assert(GameManager.free_evo_rerolls_left == 2, "Evrim Karıştırma geliştirmesi koşu başına hakkı 2'ye çıkarır")
 	assert(GameManager.get_peer_revives(12345) == 3, "bildirilmemiş başka oyuncunun hakkı taban 3")
 	MetaUpgradesScript.reset_all()
+	GameManager.selected_char_id = saved_char
 	GameManager.reset()
 	GameManager.max_revives = saved_revives
 	_end()
@@ -270,7 +278,7 @@ func test_shop_upgrades_tab_builds_and_buys() -> void:
 	add_child(screen)
 	screen._on_tab_pressed("upgrades")
 	## 20 geliştirme satırı (açıklama ve sıfırla satırı ızgaranın dışında).
-	assert(screen._list.get_child_count() == 20, "satır sayısı: %d" % screen._list.get_child_count())
+	assert(screen._list.get_child_count() == 21, "satır sayısı: %d" % screen._list.get_child_count())
 	var before: int = MetaProgressScript.shards()
 	screen._on_upgrade_pressed("pickup")
 	assert(MetaUpgradesScript.level("pickup") == 1 and MetaProgressScript.shards() < before)

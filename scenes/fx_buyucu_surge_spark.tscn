@@ -1,9 +1,0 @@
-[gd_scene load_steps=2 format=3]
-
-[ext_resource type="Script" path="res://scripts/fx_buyucu_sheet.gd" id="1"]
-
-[node name="FxBuyucuSurgeSpark" type="Node2D"]
-z_index = 60
-script = ExtResource("1")
-sheet = "surge_muzzle"
-fps = 15.0

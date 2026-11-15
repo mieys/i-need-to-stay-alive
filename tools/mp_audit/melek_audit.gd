@@ -77,11 +77,17 @@ func _sample(player: Node2D, puppet: Node2D) -> void:
 			var n: int = int((bond as Object).get("pulses_received"))
 			_note("bag.%s.tik" % kind, n)
 			_max_pulses[kind] = maxi(int(_max_pulses.get(kind, 0)), n)
+			if kind == "shield": ## madde 565: kalkan bağı dostun baloncuğuna bağlı + Kutsal Zırh sarmalı (kaster evrimi ağdan)
+				_note("bag.shield.baloncuk_kipi", bool((bond as Object).call("is_bubble_mode")))
+				var st: Dictionary = (bond as Object).call("joint_state")
+				_note("bag.shield.sarmal", not st.is_empty() and bool(st.get("wrap", false)))
 		var halo: Node = _halo_on(melek, kind)
 		_note("hale.%s" % kind, halo != null)
 		if halo != null:
 			_note("hale.%s.boyuyor" % kind, bool(halo.call("is_tinting")))
 	_note("ip_dugumu", _ribbons())
+	var sv: Node2D = target.get_node_or_null("ShieldVisual") as Node2D if target != null else null
+	_note("baloncuk.gorunur", sv != null and sv.visible)
 
 
 func _run() -> void:
@@ -156,6 +162,9 @@ func _run() -> void:
 				did["q"] = true
 				player.call("_activate_skill")
 				_events.append([el, "ev.Q", str(player.get("skill_state"))])
+			if el > 12.0 and not did.has("evo"):
+				did["evo"] = true ## Kutsal Zırh: host'taki Melek kuklası bunu extra["evo"]'dan öğrenmeli (sarmal)
+				(player.get("skill_evolutions") as Dictionary)["melek_e1"] = true
 			if el > 13.0 and not did.has("e"):
 				did["e"] = true
 				player.call("_activate_skill2")

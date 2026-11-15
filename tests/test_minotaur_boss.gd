@@ -296,7 +296,7 @@ func test_charge_only_hits_players_inside_the_lane_and_each_only_once() -> void:
 
 
 func test_charge_stops_before_a_wall_and_the_boss_never_enters_it() -> void:
-	## Boğa koşusu: önizleme şeridi kısa, ama koşu planlanan uzunlukla sınırlı değil - duvar ancak çarpınca fark edilir. Hedef duvarın ARKASINDA (vuruş yok).
+	## Boğa koşusu: şerit duvara kısaltılır, koşu şeridin sonunda durur ve duvara çarpmış sayılır (uzun sersemleme). Hedef duvarın ARKASINDA (vuruş yok).
 	var r: Array = _rig(Vector2(500, 0))
 	var e: StubEnemy = r[0]
 	var mc: RefCounted = r[1]
@@ -335,7 +335,7 @@ func test_horn_charge_into_a_wall_right_in_front_just_staggers() -> void:
 	_cleanup()
 
 
-func test_stampede_accelerates_gradually_turns_with_a_limited_rate_and_ends_after_a_hit() -> void:
+func test_stampede_accelerates_gradually_runs_the_drawn_lane_straight_and_ends_after_a_hit() -> void:
 	var r: Array = _rig(Vector2(500, 0))
 	var e: StubEnemy = r[0]
 	var mc: RefCounted = r[1]
@@ -346,8 +346,10 @@ func test_stampede_accelerates_gradually_turns_with_a_limited_rate_and_ends_afte
 	var steps: Array = []
 	var prev: Vector2 = e.global_position
 	var max_turn: float = 0.0
+	var locked_dir: Vector2 = mc._dir
+	var start_pos: Vector2 = e.global_position
 	var prev_dir: Vector2 = mc._dir
-	p.global_position = Vector2(900, 700) ## hedef yana kaçtı: boss en fazla dönüş hızı kadar kıvrılır
+	p.global_position = Vector2(900, 700) ## hedef yana kaçtı: koşu çizilen şeritte DÜZ gider (kıvrılmaz)
 	var elapsed: float = 0.0
 	while elapsed < 1.6 and mc.phase == ChargeScript.Phase.CHARGE:
 		mc.process(DT, p, 1000.0)
@@ -359,8 +361,10 @@ func test_stampede_accelerates_gradually_turns_with_a_limited_rate_and_ends_afte
 	assert(steps.size() > 60, "koşu en az 1 sn sürdü")
 	assert(steps[5] < steps[40] and steps[40] < steps[steps.size() - 1] + 0.001, "adım boyu giderek büyür (yavaş yavaş hızlanır): %.2f < %.2f < %.2f" % [steps[5], steps[40], steps[-1]])
 	assert(steps[0] < MathScript.STAMPEDE_TOP_SPEED * DT * 0.4, "yavaş başlar: %.2f px/kare" % steps[0])
-	assert(max_turn <= deg_to_rad(MathScript.STAMPEDE_TURN_DEG) * DT + 0.0001, "dönüş hızı sınırlı: %.4f" % max_turn)
-	assert(mc._dir.y > 0.05, "hedefe doğru kıvrıldı")
+	assert(MathScript.STAMPEDE_TURN_DEG == 0.0 and max_turn < 0.0001, "koşu kıvrılmaz: %.4f" % max_turn)
+	assert(mc._dir.is_equal_approx(locked_dir), "yön kilitli kaldı")
+	var off_lane: float = MathScript.segment_distance(e.global_position, start_pos, start_pos + locked_dir * 2000.0)
+	assert(off_lane < 0.5, "boss çizilen şeridin ekseninden sapmadı: %.2f px" % off_lane)
 	## Birine vurunca koşu kısa süre sonra biter.
 	p.global_position = e.global_position + mc._dir * 40.0
 	var after: float = _run_until(mc, e, p, func() -> bool: return mc.phase == ChargeScript.Phase.RECOVER, 2.0)
@@ -436,7 +440,7 @@ func test_sheets_and_scene_follow_the_project_conventions() -> void:
 	assert(EnemyScript.family_of_id("minotaur1") == "minotaur" and AbilitiesScript.family_has_ability("minotaur"), "aile 'minotaur', yeteneği var")
 	assert(SpawnerScript.SCENES.has("minotaur1") and SpawnerScript.ID_FAMILY["minotaur1"] == "minotaur", "doğuş tablolarında kayıtlı")
 	assert(BossBarArtScript.display_name("minotaur1") == "MİNOTAUR", "üst boss barında adı: %s" % BossBarArtScript.display_name("minotaur1"))
-	assert(not SpawnerScript.ELITE_POOL.has("minotaur1"), "boss elit havuzunda değil")
+	assert(not SpawnerScript.ELITE_BY_TIER.values().has("minotaur1"), "boss elit tablosunda değil")
 	for tier: int in SpawnerScript.TIER_ROSTER.keys():
 		assert(not SpawnerScript.TIER_ROSTER[tier].has("minotaur1"), "sıradan doğuşta çıkmaz")
 	_cleanup()
@@ -484,37 +488,36 @@ func test_shield_absorbs_80_percent_of_every_hit_until_it_breaks() -> void:
 	_cleanup()
 
 
-func test_the_tier_3_boss_spawns_on_time_holds_the_tier_clock_and_no_other_tier_has_a_boss() -> void:
+func test_the_tier_5_boss_spawns_on_time_holds_the_tier_clock_and_only_tiers_5_and_10_have_a_boss() -> void:
 	var sp: Node = _spawner()
-	GameManager.bosses_enabled = false
-	assert(SpawnerScript.NEW_BOSS_TIERS[3] == ["minotaur1"], "yeni boss tablosu: Kademe 3 = Minotaur")
-	assert(sp._active_boss_tiers() == SpawnerScript.NEW_BOSS_TIERS, "bosses_enabled kapalıyken sadece yeni bosslar")
-	GameManager.game_time = 270.0 ## tetik (2 x 100 + 100 x 0,75 = 275 sn) öncesi
+	assert(SpawnerScript.NEW_BOSS_TIERS[5] == ["minotaur1"], "ana harita boss tablosu: Kademe 5 = Minotaur (madde 597; eskiden Kademe 3)")
+	assert(sp._active_boss_tiers() == SpawnerScript.NEW_BOSS_TIERS, "etkin boss tablosu = ana haritanın tablosu")
+	GameManager.game_time = 470.0 ## tetik (4 x 100 + 100 x 0,75 = 475 sn) öncesi
 	sp._check_boss_tiers()
 	assert(_boss_nodes().is_empty(), "tetikten önce boss yok")
-	GameManager.game_time = 280.0
+	GameManager.game_time = 480.0
 	sp._check_boss_tiers()
 	var bosses: Array = _boss_nodes()
-	assert(bosses.size() == 1 and str(bosses[0].get_meta("creature_id", "")) == "minotaur1", "Kademe 3'te tek boss: Minotaur: %s" % str(bosses))
-	assert(sp._boss_tiers_spawned.has(3) and sp._tier_bosses.has(3), "kayıtlı")
+	assert(bosses.size() == 1 and str(bosses[0].get_meta("creature_id", "")) == "minotaur1", "Kademe 5'te tek boss: Minotaur: %s" % str(bosses))
+	assert(sp._boss_tiers_spawned.has(5) and sp._tier_bosses.has(5), "kayıtlı")
 	sp._check_boss_tiers()
 	assert(_boss_nodes().size() == 1, "ikinci kez doğmaz")
-	## Boss sağken Kademe saati kademe sonunda (300 sn) durur; ölünce devam eder.
-	GameManager.game_time = 350.0
-	assert(sp._tier_time() < 300.0 and sp._tier_time() > 299.9 and sp.is_tier_held_by_boss(), "Kademe 4 boss ölmeden açılmaz: %.3f" % sp._tier_time())
+	## Boss sağken Kademe saati kademe sonunda (500 sn) durur; ölünce devam eder.
+	GameManager.game_time = 550.0
+	assert(sp._tier_time() < 500.0 and sp._tier_time() > 499.9 and sp.is_tier_held_by_boss(), "Kademe 6 boss ölmeden açılmaz: %.3f" % sp._tier_time())
 	bosses[0].set("is_dead", true)
-	GameManager.game_time = 360.0
-	assert(sp._tier_time() > 305.0 and not sp.is_tier_held_by_boss(), "boss ölünce kademe saati devam eder: %.3f" % sp._tier_time())
-	## Diğer boss kademelerinde (6/8/12/15) ve Final'de hâlâ boss yok (zaman atlandığı için Kademe 5'in Yeraltı Canavarı da tetik zamanını geçmiş sayılır).
-	for time in [590.0, 790.0, 1190.0, 1490.0]:
+	GameManager.game_time = 560.0
+	assert(sp._tier_time() > 505.0 and not sp.is_tier_held_by_boss(), "boss ölünce kademe saati devam eder: %.3f" % sp._tier_time())
+	## Diğer kademelerde (6-9) boss yok; Kademe 10'da (son boss) Wendigo gelir (zaman atlandığı için tetik zamanını geçmiş sayılır).
+	for time in [590.0, 790.0, 890.0]:
 		GameManager.game_time = time
 		sp._check_boss_tiers()
-	for b: Node in _boss_nodes():
-		assert(["minotaur1", "underground1"].has(str(b.get_meta("creature_id", ""))), "yeni bosslar dışında boss doğmadı: %s" % str(b.get_meta("creature_id", "")))
-	assert(_boss_nodes().size() <= 2, "Kademe 3 + 5 dışında boss yok")
-	## Eski tablo (bosses_enabled açıkken) değişmedi.
-	GameManager.bosses_enabled = true
-	assert(sp._active_boss_tiers() == SpawnerScript.BOSS_TIERS, "bosses_enabled açıkken eski bosslar")
+	assert(not sp._boss_tiers_spawned.has(10) and _boss_nodes().size() == 1, "Kademe 6-9'da yeni boss doğmadı")
+	GameManager.game_time = 1490.0
+	sp._check_boss_tiers()
+	for b2: Node in _boss_nodes():
+		assert(["minotaur1", "kardes_kilic1", "kardes_ok1", "kardes_buyu1"].has(str(b2.get_meta("creature_id", ""))), "yeni bosslar dışında boss doğmadı: %s" % str(b2.get_meta("creature_id", "")))
+	assert(_boss_nodes().size() <= 4, "Kademe 5 + 10 (Üç Kardeş) dışında boss yok")
 	_cleanup()
 
 
@@ -532,9 +535,9 @@ func test_a_boss_that_failed_to_spawn_is_retried() -> void:
 	var sp: Node = _spawner()
 	for p: Node in get_tree().get_nodes_in_group("player"):
 		p.remove_from_group("player") ## canlı oyuncu çapası yok: _spawn_boss_group boş döner
-	GameManager.game_time = 280.0
+	GameManager.game_time = 480.0
 	sp._check_boss_tiers()
-	assert(_boss_nodes().is_empty() and not sp._boss_tiers_spawned.has(3), "doğmadıysa 'doğdu' sayılmaz")
+	assert(_boss_nodes().is_empty() and not sp._boss_tiers_spawned.has(5), "doğmadıysa 'doğdu' sayılmaz")
 	for p: Node in _made:
 		if p is FakePlayer:
 			p.add_to_group("player")
@@ -862,7 +865,7 @@ func test_on_the_real_map_the_boss_charge_is_clipped_by_the_wall_and_never_enter
 	var mc: RefCounted = ChargeScript.new()
 	mc.setup(e)
 	mc._cd = 0.0
-	mc.forced_mode = MathScript.MODE_STAMPEDE ## koşu: duvarı ancak çarpınca fark eder (şerit sadece önizleme)
+	mc.forced_mode = MathScript.MODE_STAMPEDE ## koşu: şerit duvara kısalır, şeridin sonunda duvara çarpmış sayılır
 	var target := StubPlayer.new()
 	target.add_to_group("player")
 	_add(target)

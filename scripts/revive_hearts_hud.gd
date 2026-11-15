@@ -7,7 +7,7 @@ class_name ReviveHeartsHUD
 ## görünsün" - sayaç GameManager'da (bkz. _process_revive_regen), burada ilk kalbin altında m:ss gösterilir ve
 ## yenilenen kalp dolum oranında soluk kırmızıyla aşağıdan yukarı dolar.
 
-const MAX_REVIVES := 4 ## 3 + kalıcı "Dirilme Hakkı" geliştirmesi (meta_upgrades.gd); boş kalpler hep 3 çizilir, 4. sadece hak varsa
+const MAX_REVIVES := 5 ## 3 + kalıcı "Dirilme Hakkı" geliştirmesi (meta_upgrades.gd) + Hadime'nin özel statı (madde 677); boş kalpler hep 3 çizilir, fazlası sadece hak varsa
 const BASE_SLOTS := 3
 var revives_remaining: int = 3
 var _slots_shown: int = BASE_SLOTS
@@ -154,6 +154,8 @@ func _draw() -> void:
 	var slots: int = maxi(BASE_SLOTS, maxi(_slots_shown, mini(GameManager.max_revives, MAX_REVIVES))) ## 4. kalp geliştirmesi varsa boşken de görünür (yenilenir)
 	## 4 kalp 90 px'e sığsın diye sıkışık yerleşim (22 px kalp, boşluksuz); 3 kalpte eski aralık.
 	var spacing: float = 22.0 if slots > BASE_SLOTS else HEART_SPACING
+	if slots >= 5:
+		spacing = 17.0 ## 5 kalp (Hadime özel statı + Ruh Mağazası, madde 677) yine 90 px'e sığsın: 4 x 17 + 22 = 90, kalpler hafif üst üste
 	var left: float = 2.0 if slots > BASE_SLOTS else 4.0
 	if _dock_mode:
 		## Panel kipi: kalp sırası levhanın üstünde ortalı (3 kalp 74 px, 4 kalp 88 px), altında sayaç levhası.

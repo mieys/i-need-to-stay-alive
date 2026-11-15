@@ -80,6 +80,52 @@ func test_gold_popup_shows_gains_merges_them_and_ignores_spending() -> void:
 	anchor.free()
 
 
+## Pasif altın (2026-11-14): sayaç artar ama "+1" yazısı çıkmaz - sayaç aynı karede de bir kare sonra da güncellense.
+func test_gold_popup_ignores_silent_passive_gold() -> void:
+	var anchor := Control.new()
+	add_child(anchor)
+	var pop: Label = Label.new()
+	pop.set_script(PopupScript)
+	pop.anchor = anchor
+	pop.note_value(100, 7)
+	pop.note_value(101, 8) ## aynı karede
+	assert(pop.text == "", "sessiz altın yazı çıkarmaz: %s" % pop.text)
+	pop.note_value(101, 9) ## sayaç henüz görmedi
+	pop.note_value(102, 9) ## bir kare sonra gördü
+	assert(pop.text == "", "gecikmeli sessiz altın da yazı çıkarmaz: %s" % pop.text)
+	pop.note_value(111, 10) ## 8 gerçek kazanç + 1 sessiz
+	assert(pop.text == "+8", "gerçek kazanç sessiz pay düşülerek yazılır: %s" % pop.text)
+	pop.free()
+	anchor.free()
+
+
+func test_passive_gold_one_per_interval_only_with_a_player() -> void:
+	var old_gold: int = GameManager.gold
+	var old_total: int = GameManager.passive_gold_total
+	var old_enabled: bool = GameManager.passive_gold_enabled
+	GameManager.passive_gold_enabled = true ## test çalıştırıcısı kapatır (run_tests.gd)
+	GameManager._passive_gold_left = GameManager.PASSIVE_GOLD_INTERVAL
+	var iv: float = GameManager.PASSIVE_GOLD_INTERVAL
+	assert(is_equal_approx(iv, 5.0), "2026-11-15: 5 sn'de 1 altın (eskiden 2 sn)")
+	GameManager._process_passive_gold(iv + 0.1)
+	assert(GameManager.gold == old_gold, "oyuncu sahnede yokken (menü) altın verilmez")
+	var p := Node2D.new()
+	p.add_to_group("player")
+	add_child(p)
+	GameManager._process_passive_gold(iv * 0.5)
+	assert(GameManager.gold == old_gold, "süre dolmadan altın yok")
+	GameManager._process_passive_gold(iv * 0.5)
+	assert(GameManager.gold == old_gold + 1, "aralık başına 1 altın: %d" % (GameManager.gold - old_gold))
+	assert(GameManager.passive_gold_total == old_total + 1, "sessiz toplam artar")
+	for i in range(10):
+		GameManager._process_passive_gold(iv * 0.25)
+	assert(GameManager.gold == old_gold + 3, "2,5 aralık daha -> toplam 3: %d" % (GameManager.gold - old_gold))
+	p.free()
+	GameManager.gold = old_gold
+	GameManager._passive_gold_left = GameManager.PASSIVE_GOLD_INTERVAL
+	GameManager.passive_gold_enabled = old_enabled
+
+
 func test_gold_popup_sits_beside_the_frame() -> void:
 	var anchor := Control.new()
 	anchor.position = Vector2(20, 100)

@@ -4,8 +4,8 @@ extends RefCounted
 ## Koordinatlar dünya pikseli (Harita (0,0)'da). Oyun alanı hücre Rect2i(32, 20, 243, 243).
 
 const PLAY_CELLS := Rect2i(32, 20, 243, 243)
-const SPAWN := Vector2(2456, 3752)
+const SPAWN := Vector2(3880, 2216)
 ## Gece ışıkları: [tür, dünya konumu] (küre tapınağının mavi küresi)
 const LIGHTS := [
-	["kure", Vector2(1255.5, 994.0)],
+	["kure", Vector2(1191.5, 930.0)],
 ]

@@ -16,7 +16,7 @@ func test_character_is_gone_from_the_roster() -> void:
 
 
 func test_other_characters_keep_their_ids() -> void:
-	var expected: Dictionary = {1: "Talon", 2: "Oakley", 3: "Matthew", 4: "Büyücü Kız", 5: "Assasin Çocuk", 7: "Şovalye Adam", 8: "Elara", 9: "Korsan", 10: "Melek", 11: "Necromancer", 12: "Shaman"}
+	var expected: Dictionary = {1: "Talon", 2: "Oakley", 3: "Matthew", 4: "Lyra", 5: "Kestrel", 7: "Aldric", 8: "Elara", 9: "Flint", 10: "Seraphine", 11: "Corvina", 12: "Ulric"}
 	for id in expected:
 		assert(str(Characters.DEFS[id].get("name", "")) == expected[id], "id %s hâlâ %s olmalı, bulunan: %s" % [str(id), expected[id], str(Characters.DEFS[id].get("name", ""))])
 

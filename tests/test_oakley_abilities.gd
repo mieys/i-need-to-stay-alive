@@ -134,19 +134,20 @@ func test_r_is_life_tree_with_tree_lifetime_and_60s_cooldown() -> void:
 	var player: Node = _make_oakley_player()
 	assert(is_equal_approx(player.SKILL3_TIMING[39]["duration"], OakleyTree.DURATION),
 		"R ikonunun 'aktif' süresi ağacın ömrüyle AYNI olmalı (bulunan %s)" % player.SKILL3_TIMING[39]["duration"])
-	assert(is_equal_approx(OakleyTree.DURATION, 12.0), "ağaç 12 sn ayakta kalmalı")
+	assert(is_equal_approx(OakleyTree.DURATION, 20.0), "ağaç 20 sn ayakta kalmalı")
 	assert(is_equal_approx(player.SKILL3_TIMING[39]["cooldown"], 60.0), "bekleme 60 sn")
 	player.queue_free()
 
 
-## Kullanıcı isteği: "ağaç ve aurası %30 büyüsün" - prototipteki 130x65 elips ve 1:1 ağaç x1,3.
+## Kullanıcı isteği (2026-11-13): gölge alanı bir oyuncunun görüş genişliği kadar (250 x 1,4 = 350, 2:1 elips); ağaç x1,3 aynı.
 func test_tree_and_aura_are_30_percent_bigger() -> void:
+	var fog: GDScript = preload("res://scripts/vision_fog.gd")
 	assert(is_equal_approx(OakleyTree.TREE_SCALE, 1.3), "ağaç ölçeği 1,3")
-	assert(is_equal_approx(OakleyTree.ZONE_RX, 130.0 * 1.3) and is_equal_approx(OakleyTree.ZONE_RY, 65.0 * 1.3), "alan 169 x 84,5")
+	assert(is_equal_approx(OakleyTree.ZONE_RX, fog.VISION_RADIUS * fog.VISION_WIDTH_SCALE) and is_equal_approx(OakleyTree.ZONE_RY, OakleyTree.ZONE_RX * 0.5), "alan görüş genişliği x 2:1 (350 x 175)")
 	var tree := OakleyTree.new()
 	tree.position = Vector2(100.0, 100.0)
-	assert(tree.in_zone(Vector2(100.0 + 168.0, 100.0)) and not tree.in_zone(Vector2(100.0 + 171.0, 100.0)), "yatay kenar 169")
-	assert(tree.in_zone(Vector2(100.0, 100.0 + 84.0)) and not tree.in_zone(Vector2(100.0, 100.0 + 86.0)), "dikey kenar 84,5 (2:1)")
+	assert(tree.in_zone(Vector2(100.0 + 349.0, 100.0)) and not tree.in_zone(Vector2(100.0 + 352.0, 100.0)), "yatay kenar 350")
+	assert(tree.in_zone(Vector2(100.0, 100.0 + 174.0)) and not tree.in_zone(Vector2(100.0, 100.0 + 177.0)), "dikey kenar 175 (2:1)")
 	tree.free()
 
 
@@ -179,7 +180,7 @@ func test_tree_description_matches_constants() -> void:
 		assert(desc.contains(part), "açıklama '%s' içermeli: %s" % [part, desc])
 
 
-## Gerçek akış: R -> önüne ağaç (kaster kopyası), Oakley gölgesinde; meyve düşünce can + mana kalkanı; kök dalgası en yakın 3
+## Gerçek akış: R -> önüne ağaç (kaster kopyası), Oakley gölgesinde; can tikinde (elma yok, madde 704) can + mana kalkanı; kök dalgası en yakın 3
 ## yaratığa ağaç kökü stiliyle (1) sabitleme + hasar; açılışta alandaki yaratık itilir; solarken 3 çiçek.
 func test_full_cast_plants_tree_that_heals_roots_pushes_and_drops_flowers() -> void:
 	var previous_scene: Node = get_tree().current_scene
@@ -193,7 +194,7 @@ func test_full_cast_plants_tree_that_heals_roots_pushes_and_drops_flowers() -> v
 	player.damage_bonus = 50.0
 	player.facing = "right"
 	player._activate_skill3()
-	assert(player.skill3_state == "active" and is_equal_approx(player.skill3_timer, OakleyTree.DURATION), "R aktif, 12 sn")
+	assert(player.skill3_state == "active" and is_equal_approx(player.skill3_timer, OakleyTree.DURATION), "R aktif, 20 sn")
 	var tree: OakleyTree = null
 	for n in get_tree().get_nodes_in_group("oakley_trees"):
 		if n.get("caster") == player:
@@ -205,10 +206,20 @@ func test_full_cast_plants_tree_that_heals_roots_pushes_and_drops_flowers() -> v
 	var hp_before: float = player.health
 	tree._heal_target(player)
 	assert(player.health >= hp_before + 50.0 * OakleyTree.HEAL_AP_RATIO + 200.0 * OakleyTree.HEAL_MAX_HP_PERCENT - 0.01,
-		"meyve: saldırı gücü x %%15 + azami can x %%1 can (bulunan +%s)" % (player.health - hp_before))
+		"tik: saldırı gücü x %%15 + azami can x %%1 can (bulunan +%s)" % (player.health - hp_before))
+	## madde 704: elma uçmaz - tik anında iyileştirir, dostun üstünde artı; büyük ağacın tacında pırıltı + zerre
+	var hp_mid: float = player.health
+	tree._heal_tick()
+	assert(player.health > hp_mid, "can tiki anında iyileştirmeli (elma uçuşu yok)")
+	assert(get_children().filter(func(c: Node) -> bool: return c is OakleyTree.Rising).size() >= 1, "dostun üstünde can artısı belirmeli")
+	tree._last_size = 2
+	tree._t = 5.0
+	tree._magic_sparkles()
+	assert(get_children().filter(func(c: Node) -> bool: return c is OakleyTree.Twinkle).size() == 2, "tacın sihirli pırıltısı + zerresi")
+	assert(tree._c == tree.global_position.round() and is_equal_approx(float(tree._zone_mat.get_shader_parameter("rx")), OakleyTree.ZONE_RX), "alan shader ile dünya pikselinde")
 
 	var near := _fake_enemy(tree.global_position + Vector2(60.0, 0.0))
-	var far := _fake_enemy(tree.global_position + Vector2(OakleyTree.ROOT_RANGE + 40.0, 0.0))
+	var far := _fake_enemy(tree.global_position + Vector2(OakleyTree.OPEN_PUSH_RADIUS + 40.0, 0.0))
 	tree._t = OakleyTree.T_LARGE
 	tree._on_open()
 	assert(near.pushes == 1 and far.pushes == 0, "açılış darbesi sadece alandakini iter")

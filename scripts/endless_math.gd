@@ -5,17 +5,17 @@ extends RefCounted
 ## formül tek yerde (bkz. CLAUDE.md madde 3, "paylaşılan static func" kuralı).
 ##
 ## Kavramlar:
-##  - ROSTER kademesi 15'te kalır: enemy_spawner TIER_ROSTER'ında 16+ yok ve `TIER_ROSTER.get(tier, TIER_ROSTER.get(1))`
+##  - ROSTER kademesi LAST_TIER'da (10) kalır: enemy_spawner TIER_ROSTER'ında 11+ yok ve `TIER_ROSTER.get(tier, TIER_ROSTER.get(1))`
 ##    bilinmeyen kademede 1. kademenin (fare/slime) listesine düşer. Sadece İSTATİSTİK ölçeği (apply_tier_scaling /
 ##    apply_boss_stats'e geçen sayı) büyür -> `scale_tier(kat)`.
-##  - KAT: sonsuz mod başladığından beri geçen oyun saati / tier_duration (100 sn). Kat 1 = Final Kademe'nin ölçeği (16);
-##    yani Final'den sonra sert bir sıçrama yok, kat kat devam eder. Oyun saati herkes seyyar satıcı bölgesindeyken durur -
+##  - KAT: sonsuz mod başladığından beri geçen oyun saati / tier_duration (150 sn). Kat 1 = LAST_TIER + 1 ölçeği (11); zaferden sonra
+##    sert bir sıçrama yok, kat kat devam eder. (Madde 597: oyun 10 kademe oldu; eskiden 15 + Final 16'ydı, kat 1 ölçeği 16'ydı.) Oyun saati herkes seyyar satıcı bölgesindeyken durur -
 ##    kat saati de onunla durur (Kademe saatiyle aynı kural).
 ##  - BOSS DALGASI: her BOSS_EVERY_LAYERS katta bir, o katın %75'inde (boss_trigger_fraction ile aynı oran). Dalga boyutu
 ##    her dalgada WAVE_SIZE_STEP büyür, Final'in 13 bossunu aşmaz. Kademe boss kapısı (Kademe saatini tutma) sonsuzda YOK -
 ##    baskı zamana bağlı artmalı, boss öldürülene kadar beklememeli.
 
-const BASE_TIER := 15 ## Final'den önceki son normal kademe (roster bu kademede kalır)
+const BASE_TIER := 10 ## son normal kademe = enemy_spawner.gd LAST_TIER (roster bu kademede kalır; testte eşitliği sınanır)
 const BOSS_EVERY_LAYERS := 3
 const FIRST_WAVE_SIZE := 3
 const WAVE_SIZE_STEP := 2
@@ -49,7 +49,7 @@ static func layer_for_elapsed(elapsed: float, layer_seconds: float) -> int:
 	return 1 + int(maxf(elapsed, 0.0) / layer_seconds)
 
 
-## Kat -> yaratık/boss İSTATİSTİK kademesi (Kat 1 = 16 = Final'in kademesi).
+## Kat -> yaratık/boss İSTATİSTİK kademesi (Kat 1 = BASE_TIER + 1 = 11).
 static func scale_tier(layer: int) -> int:
 	return BASE_TIER + maxi(layer, 1)
 
@@ -79,7 +79,7 @@ static func pool_wave_size(layer: int) -> int:
 	return clampi(POOL_FIRST_WAVE_SIZE + (n - 1) * POOL_WAVE_SIZE_STEP, POOL_FIRST_WAVE_SIZE, WAVE_POOL.size())
 
 
-## Ölçek kademesi -> sonsuz kat (0 = sonsuz değil). scale_tier(kat) = 15 + kat'ın tersi. Kat 1 = kademe 16 = Final'in kademesi.
+## Ölçek kademesi -> sonsuz kat (0 = sonsuz değil). scale_tier(kat) = BASE_TIER + kat'ın tersi. Kat 1 = kademe 11.
 static func layer_for_scale_tier(scale_tier: int) -> int:
 	return maxi(scale_tier - BASE_TIER, 0)
 

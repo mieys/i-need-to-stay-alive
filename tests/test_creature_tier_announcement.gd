@@ -21,10 +21,8 @@ func _on_tier(tier: int) -> void:
 	_heard.append(tier)
 
 
-## 2026-10-08: boss sistemi varsayılan KAPALI (GameManager.bosses_enabled, bkz. CLAUDE.md madde 39) - bu dosya boss/Final akışını sınar, bu yüzden geçici açar
 func _spawner() -> Node:
 	_cleanup()
-	GameManager.bosses_enabled = true
 	GameManager.game_time = 0.0
 	var sp: Node = SpawnerScript.new()
 	add_child(sp)
@@ -42,7 +40,6 @@ func _cleanup() -> void:
 		if is_instance_valid(n):
 			n.free()
 	_made.clear()
-	GameManager.bosses_enabled = false
 	GameManager.game_time = 0.0
 	NetworkManager.is_multiplayer_active = false
 
@@ -84,14 +81,14 @@ func test_tier_held_by_a_living_boss_is_not_announced_until_it_dies() -> void:
 	_cleanup()
 
 
-func test_final_tier_announces_its_own_number_and_stops() -> void:
+func test_the_last_tier_announces_its_own_number_and_stops() -> void:
 	var sp: Node = _spawner()
-	GameManager.game_time = TIER_SECONDS * 15.0 + 1.0 ## Final Kademe (16)
+	GameManager.game_time = TIER_SECONDS * 9.0 + 1.0 ## son kademe (10, madde 597: ayrı Final kademesi yok)
 	sp._check_tier_announcement()
-	assert(_heard == [16], "Final Kademe tek bildirimle 16 olarak gelmeli: %s" % str(_heard))
+	assert(_heard == [10], "Son kademe tek bildirimle 10 olarak gelmeli: %s" % str(_heard))
 	GameManager.game_time = TIER_SECONDS * 20.0
 	sp._check_tier_announcement()
-	assert(_heard == [16], "Final'den sonra yeni bildirim gelmemeli: %s" % str(_heard))
+	assert(_heard == [10], "Son kademeden sonra yeni bildirim gelmemeli (Kademe XI yok): %s" % str(_heard))
 	_cleanup()
 
 

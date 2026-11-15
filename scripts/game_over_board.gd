@@ -12,18 +12,19 @@ const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / L
 ## Medallion (iç sınıf): pencerenin üst kenarına binen kuru kafa madalyonu.
 
 const DarkKit := preload("res://scripts/shop_dark_kit.gd")
-const BossArt := preload("res://scripts/boss_bar_art.gd")
+const SkullIcon := preload("res://scripts/skull_icon.gd")
 const TierDisplay := preload("res://scripts/tier_display.gd")
 const RunSummaryUI := preload("res://scripts/run_summary_ui.gd")
 const RunRecords := preload("res://scripts/run_records.gd")
 const Achievements := preload("res://scripts/achievements.gd")
 const MetaProgress := preload("res://scripts/meta_progress.gd")
+const KeyIcon := preload("res://scripts/key_icon.gd") ## harita anahtarı kazanımı satırı (madde 605)
 const DK := preload("res://scripts/menu_dark_kit.gd")
 const DamageStats := preload("res://scripts/damage_stats.gd")
 const WeaponCatalogScript := preload("res://scripts/weapon_catalog.gd")
 const FONT := preload("res://assets/fonts/m5x7.ttf")
-const ICON_DMG := preload("res://assets/ui/stat_mini/damage.png")
-const ICON_SHIELD := preload("res://assets/ui/stat_mini/shield_amount.png")
+const ICON_DMG := preload("res://assets/ui/stat_icons/damage.png")
+const ICON_SHIELD := preload("res://assets/ui/stat_icons/shield_amount.png")
 
 const W := 1120.0 ## gövde genişliği (pencere 1200 = W + 2 x 40 pay)
 const TILE_H := 112.0
@@ -50,11 +51,11 @@ class HT:
 	const PRICE := _HT.PRICE
 	const GOOD := _HT.GOOD
 	const BAD := _HT.BAD
+	const SOUL := _HT.SOUL ## Ruh Kıymığı sayısı
 
-const BONE := Color("#e9dcc0")
 const DMG := Color("#e8885a") ## verilen hasar
 const TANK := Color("#8cc0e6") ## tanklanan hasar (kalkan mavisi)
-const SOUL_L := Color("#e6dcff") ## Ruh Kıymığı sayısı (kristalin açık tonu)
+const SOUL_L := HT.SOUL ## Ruh Kıymığı sayısı (mor yıldızın açık orkide tonu)
 const DEAD_MOD := Color(0.58, 0.56, 0.54) ## portreler solgun (herkes öldü)
 
 const HOURGLASS := [
@@ -199,6 +200,12 @@ func _reward_lines() -> Array:
 		var d: Dictionary = Achievements.def_of(str(id))
 		var desc: String = str(d.get("desc", "")).trim_suffix(".")
 		out.append(["check", Loc.t("Başarım · %s") % d.get("name", id) + (" (%s)" % desc if desc != "" else ""), HT.GOOD])
+	## Bu koşuda kazanılan harita anahtarları (madde 605): simge = anahtarın kendi çizimi, glif "key:<harita>"
+	for map_id: String in KeyIcon.IDS:
+		var n: int = int(GameManager.run_keys.get(map_id, 0))
+		if n > 0:
+			KeyIcon.texture(map_id) ## _draw'da ilk yükleme beyaz çıkar (madde 156)
+			out.append(["key:" + map_id, "+%d %s" % [n, KeyIcon.display_name(map_id)], HT.PRICE])
 	return out
 
 
@@ -292,44 +299,32 @@ func _sprite(rows: Array, pos: Vector2, s: float, cols: Dictionary) -> void:
 				_r(pos.x + i * s, pos.y + j * s, s, s, cols[ch])
 
 
-## fill: 2 dolu, 1 yarım (sol yarı), 0 boş - kademe göstergesinin kafa dili (tier_display.gd).
-static func draw_skull(ci: CanvasItem, pos: Vector2, s: float, fill: int = 2) -> void:
-	var dim_w := Color(HT.RIM_HI, 0.55)
-	var rows: Array = BossArt.SKULL_ROWS
-	for j in rows.size():
-		var row: String = rows[j]
-		for i in row.length():
-			var c: Color
-			var on: bool = fill == 2 or (fill == 1 and i <= TierDisplay.HALF_COL)
-			match row[i]:
-				"X":
-					c = HT.OUTLINE
-				"W":
-					c = BONE if on else dim_w
-				"K":
-					c = Color("#2a1a10") if on else Color(HT.OUTLINE, 0.7)
-				_:
-					continue
-			ci.draw_rect(Rect2(roundf(pos.x + i * s), roundf(pos.y + j * s), s, s), c)
+## fill: 2 dolu, 1 yarım (sol yarı), 0 boş - kademe göstergesinin kafa dili (tier_display.gd). pos = 9s x 9s yuvanın sol-üstü
+## (eski 9x9 kafanın yuvası); kullanıcının kafatası çizimi (skull_icon.gd) yuvaya en uygun TAM KATLI boyda ortalanır.
+static func draw_skull(ci: CanvasItem, pos: Vector2, s: float, fill: int = 2, red: bool = false) -> void:
+	SkullIcon.draw_fit(ci, pos + Vector2(4.5, 4.5) * s, 9.0 * s, fill, red)
 
 
-func _skull(pos: Vector2, s: float, fill: int = 2) -> void:
-	draw_skull(self, pos, s, fill)
+func _skull(pos: Vector2, s: float, fill: int = 2, red: bool = false) -> void:
+	draw_skull(self, pos, s, fill, red)
 
 
 ## 3x2 kafa ızgarası (KADEME kutusunun simgesi).
 func _tier_grid(c: Vector2, s: float) -> void:
-	var fills: Array = Array(TierDisplay.skull_fills(int(_summary.get("tier", 1))))
+	var tier: int = int(_summary.get("tier", 1))
+	var fills: Array = Array(TierDisplay.skull_fills(tier))
 	var cw := 9.0 * s
 	var g := 3.0
 	var x0 := c.x - (3.0 * cw + 2.0 * g) * 0.5
 	var y0 := c.y - (2.0 * cw + g) * 0.5
 	for k in fills.size():
 		@warning_ignore("integer_division")
-		_skull(Vector2(x0 + (k % 3) * (cw + g), y0 + (k / 3) * (cw + g)), s, int(fills[k]))
+		_skull(Vector2(x0 + (k % 3) * (cw + g), y0 + (k / 3) * (cw + g)), s, int(fills[k]), tier >= TierDisplay.FINAL_TIER)
 
 
 func _glyph_size(key: String, s: float) -> Vector2:
+	if key.begins_with("key:"):
+		return Vector2(KeyIcon.ART, KeyIcon.ART) ## 32 px sanat, 1x (satır yüksekliği 32)
 	match key:
 		"hg":
 			return Vector2(13, 18) * s
@@ -338,7 +333,7 @@ func _glyph_size(key: String, s: float) -> Vector2:
 		"crown":
 			return Vector2(11, 8) * s
 		"soul":
-			return Vector2(7, 11) * s
+			return Vector2.ONE * DK.ShardIcon.side_for(11.0 * s) ## kare yıldız, 23 px'in tam katı (eski kristal 7x11 x s)
 		"dmg", "shield":
 			return Vector2(24, 24) * s
 	return Vector2.ZERO
@@ -348,6 +343,9 @@ func _glyph_size(key: String, s: float) -> Vector2:
 func _glyph(key: String, c: Vector2, s: float) -> void:
 	var sz := _glyph_size(key, s)
 	var p := Vector2(roundf(c.x - sz.x * 0.5), roundf(c.y - sz.y * 0.5))
+	if key.begins_with("key:"):
+		KeyIcon.paint(self, p, sz.y, key.substr(4))
+		return
 	match key:
 		"hg":
 			_sprite(HOURGLASS, p, s, {"O": HT.OUTLINE, "W": HT.RIM_HI, "H": Color(1, 1, 1, 0.5),

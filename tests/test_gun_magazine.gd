@@ -6,6 +6,9 @@ extends Node
 
 const GunMagMath := preload("res://scripts/gun_mag_math.gd")
 const GunReloadFx := preload("res://scripts/gun_reload_fx.gd")
+const GunReloadMath := preload("res://scripts/gun_reload_math.gd")
+const WeaponTierArt := preload("res://scripts/weapon_tier_art.gd")
+const AllyFxDensity := preload("res://scripts/ally_fx_density.gd")
 const ShellCasingFx := preload("res://scripts/shell_casing_fx.gd")
 const TabancaScene: PackedScene = preload("res://scenes/weapon_tabanca.tscn")
 const TufekScene: PackedScene = preload("res://scenes/weapon_tufek.tscn")
@@ -90,12 +93,50 @@ func test_cycle_matches_old_rate_at_every_attack_speed() -> void:
 
 
 func test_reload_pose_is_neutral_at_both_ends() -> void:
-	for t in [0.0, 1.0]:
-		var p: Dictionary = GunMagMath.pose(t)
-		assert(absf(float(p["tilt"])) < 0.001 and absf(float(p["lift"])) < 0.001 and absf(float(p["kick"])) < 0.001, "t=%f nötr: %s" % [t, str(p)])
-		assert(absf(float(p["sx"]) - 1.0) < 0.001 and absf(float(p["sy"]) - 1.0) < 0.001, "ölçek nötr")
-	assert(float(GunMagMath.pose(0.4)["tilt"]) > 0.5, "ortada namlu kalkık")
-	assert(float(GunMagMath.pose(GunMagMath.COCK_AT + 0.03)["kick"]) > 1.0, "horozda geri kayar")
+	for key in ["tabanca", "tufek", "pompali"]:
+		var L: float = GunReloadMath.length(key)
+		for u in [0.0, L]:
+			var p: Dictionary = GunReloadMath.pose(key, u)
+			assert(absf(float(p["tilt"])) < 0.001 and absf(float(p["lift"])) < 0.001 and absf(float(p["kick"])) < 0.001, "%s u=%f nötr: %s" % [key, u, str(p)])
+			assert(absf(float(p["sx"]) - 1.0) < 0.001 and absf(float(p["sy"]) - 1.0) < 0.001, "ölçek nötr")
+		assert(float(GunReloadMath.pose(key, L * 0.4)["tilt"]) > 0.3, "%s: ortada namlu kalkık" % key)
+	assert(float(GunReloadMath.pose("tabanca", 1.545 + 0.03)["kick"]) > 1.0, "Luger kolu çakılınca geri kayar")
+	assert(float(GunReloadMath.pose("tufek", 1.955 + 0.03)["kick"]) > 1.0, "sürgü ileri itilince geri kayar")
+
+
+## 2026-11-13 (kullanıcı: "şarjör doldururken mermi veya şarjör çıkarılıp eklenmiyor"): parçalar + ses anları.
+func test_reload_parts_and_sound_moments() -> void:
+	## Tabanca: şarjör kabzadan aşağı çıkar (arkada), yenisi aşağıdan gelip oturur, kol kalkar (gövde açık sürüm)
+	var out_p: Array = GunReloadMath.parts("tabanca", 0.30)["back"]
+	assert(out_p.size() == 1 and (out_p[0][1] as Vector2).y > GunReloadMath.TAB_MAG_AT.y + 5.0, "boş şarjör kabzadan çıkıyor")
+	var in_p: Array = GunReloadMath.parts("tabanca", 0.75)["back"]
+	assert(in_p.size() == 1 and (in_p[0][1] as Vector2).y > GunReloadMath.TAB_MAG_AT.y, "yeni şarjör aşağıdan geliyor")
+	assert((GunReloadMath.parts("tabanca", 0.87)["sparks"] as Array).size() == 3, "oturunca kıvılcım")
+	var tg: Dictionary = GunReloadMath.parts("tabanca", 1.35)
+	assert(tg["tex"] == &"tabanca_toggle_open" and (tg["front"] as Array).size() == 1, "Luger kolu kalkık")
+	assert(GunReloadMath.parts("tabanca", 1.7)["tex"] == &"" and (GunReloadMath.parts("tabanca", 1.7)["back"] as Array).is_empty(), "sonda gövde normal")
+	## Tüfek: şarjör çıkınca gövde şarjörsüz, sürgü açıkken pirinç mermi
+	assert(GunReloadMath.parts("tufek", 0.9)["tex"] == &"tufek_nomag", "şarjör yokken gövde şarjörsüz")
+	var bolt: Dictionary = GunReloadMath.parts("tufek", 1.8)
+	assert(bolt["tex"] == &"tufek_bolt_open" and (bolt["front"] as Array).size() == 1, "sürgü açık, mermi görünür")
+	## Pompalı: eksik fişek kadar fişek + ses, son fişekten sonra pompa
+	for n in [1, 3, 5, 7]:
+		var snd: Array = GunReloadMath.sounds("pompali", n)
+		assert(snd.filter(func(s: Array) -> bool: return s[0] == "pompali_shell").size() == n, "%d fişek sesi" % n)
+		assert(snd[-1][0] == "pompali_pump", "sonda pompa")
+	assert(GunReloadMath.length("pompali", 1) < GunReloadMath.length("pompali", 5), "az fişek kısa çizelge")
+	assert(is_equal_approx(GunReloadMath.length("pompali", 5), 2.34), "5 fişek = eski temel doldurma")
+	assert(GunReloadMath.parts("pompali", 2.0, 5)["tex"] == &"pompali_nofore", "pompa çekilince kundak ayrı")
+	## sesler sıralı, çizelge içinde; anahtar an olaya oturacak şekilde önce başlar, hızlanınca daha da önce
+	for key in ["tabanca", "tufek", "pompali"]:
+		var prev: float = -1.0
+		for s in GunReloadMath.sounds(key):
+			assert(float(s[1]) >= prev and float(s[1]) < GunReloadMath.length(key), "%s ses sırası/aralığı" % key)
+			prev = float(s[1])
+			assert(ResourceLoader.exists("res://assets/audio/gun/reload/%s.wav" % s[0]), "ses dosyası var: %s" % s[0])
+	assert(is_equal_approx(GunReloadMath.sound_start_u(0.86, 0.235, 1.0), 0.86 - 0.235), "temel hızda ofset aynen")
+	assert(GunReloadMath.sound_start_u(0.86, 0.235, 2.0) < 0.86 - 0.235, "hızlı doldurmada daha önce başlar (u biriminde)")
+	assert(GunReloadMath.drop_u("pompali") < 0.0 and GunReloadMath.drop_u("tabanca") > 0.0, "pompalıda şarjör düşmez")
 
 
 ## ---------- gerçek silah ----------
@@ -173,10 +214,18 @@ func test_reload_drives_icon_pose_and_restores_it() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 	assert(absf(wrapf(icon.rotation - start_rot, -PI, PI)) > 0.4, "doldururken namlu kalkık (%f)" % (icon.rotation - start_rot))
+	## 2026-11-13: şarjör çıkmışken gövde şarjörsüz dokuda, parça katmanları ikonda, boş şarjör yere düştü
+	var base_tex: Texture2D = WeaponTierArt.texture("tufek")
+	assert(icon.texture == GunReloadFx.PIECES[&"tufek_nomag"], "şarjör çıkınca gövde şarjörsüz")
+	assert(icon.get_node_or_null("ReloadBack") != null and icon.get_node_or_null("ReloadFront") != null, "parça katmanları ikonda")
+	assert((icon.get_node("ReloadBack") as CanvasItem).show_behind_parent, "şarjör gövdenin arkasında (içinde kalan kısım gizli)")
 	var wait: float = float(w.call("_effective_fire_wait"))
 	w.call("_mag_process", GunMagMath.reload_time("tufek", wait), wait)
 	assert(not icon.has_meta(GunReloadFx.META), "bitince sürücü bıraktı")
 	assert(icon.position.is_equal_approx(Vector2.ZERO), "ikon dinlenme konumunda")
+	assert(icon.texture == base_tex, "bitince asıl çizim geri geldi")
+	await get_tree().process_frame
+	assert(icon.get_node_or_null("ReloadBack") == null, "katmanlar silindi")
 	## sahip ölünce yarıdaki doldurma iptal, poz geri
 	w.set("current_ammo", 1)
 	w.call("_on_fire_timer_timeout")
@@ -201,6 +250,7 @@ func test_casing_ejects_falls_to_feet_and_lands_on_ground_layer() -> void:
 	var before: int = int(mgr0.call("alive_count")) if mgr0 != null else 0
 	var ground0: Node = get_tree().current_scene.get_node_or_null("ShellCasingGround")
 	var ground_before: Array = ground0.get_children() if ground0 != null else []
+	var snd_before: int = int(mgr0.call("casing_sound_count")) if mgr0 != null else 0
 	ShellCasingFx.eject(icon, "tabanca", Vector2.RIGHT, o)
 	var mgr: Node = get_tree().current_scene.get_node_or_null(ShellCasingFx.NODE_NAME)
 	assert(mgr != null and int(mgr.call("alive_count")) == before + 1, "kovan doğdu")
@@ -213,6 +263,54 @@ func test_casing_ejects_falls_to_feet_and_lands_on_ground_layer() -> void:
 	var gy: float = ShellCasingFx.ground_y(o)
 	assert(absf(c.global_position.y - gy) < 16.0, "ayak hizasına düştü (%f / %f)" % [c.global_position.y, gy])
 	assert(c.global_position.x < icon.global_position.x + 4.0, "sağa ateşte kovan geriye (sola) fırlar")
+	## Yere değişte silahın kendi kovan sesi BİR kez (sekmelerde ayrı ses yok) - 2026-11-13 kullanıcı kaydı
+	assert(int(mgr.call("casing_sound_count")) == snd_before + 1, "kovan düşme sesi bir kez çaldı")
+	var tab_snds: Array = ShellCasingFx.CASING_SNDS["tabanca"]
+	var played: bool = false
+	for asp in mgr.get_children():
+		if asp is AudioStreamPlayer2D and tab_snds.has((asp as AudioStreamPlayer2D).stream):
+			played = true
+	assert(played, "tabanca kovanı kendi listesinden çaldı")
+	assert(ShellCasingFx.CASING_SNDS["tabanca"] == ShellCasingFx.CASING_SNDS["tufek"], "tabanca + tüfek kovan sesi aynı (kullanıcı 2026-11-13)")
+	for k in GunMagMath.MAGS.keys():
+		assert(ShellCasingFx.CASING_SNDS.has(k) and (ShellCasingFx.CASING_SNDS[k] as Array).size() > 0, "%s kovan sesi var" % k)
+	_cleanup()
+
+
+## Kovan yöneticisindeki pompalı (kırmızı, satır 4) kovan sayısı - diğer testlerin kovanları sönse de etkilenmez.
+func _red_hulls() -> int:
+	var mgr: Node = get_tree().current_scene.get_node_or_null(ShellCasingFx.NODE_NAME)
+	if mgr == null:
+		return 0
+	return (mgr.get("_pieces") as Array).filter(func(p: Dictionary) -> bool: return int(p["row"]) == 4 and not bool(p["mag"])).size()
+
+
+## Pompalı atış sonrası pompa (2026-11-13): kovan hemen değil pompanın geri vuruşunda çıkar, kundak o sırada ayrı parça.
+func test_shotgun_pump_after_shot_ejects_on_back_stroke() -> void:
+	## Gerçek silah hedef menzil dışındayken kendini söndürür (modulate 0 -> kovan çıkmaz): yalın ikon, oyundaki ölçekle.
+	var o: FakeOwner = _make_owner(Vector2(7400.0, 7800.0))
+	var w := Node2D.new()
+	o.add_child(w)
+	var icon := Sprite2D.new()
+	var base_tex: Texture2D = WeaponTierArt.texture("pompali")
+	icon.texture = base_tex
+	icon.scale = Vector2.ONE * WeaponTierArt.WORLD_PX * WeaponTierArt.size_mult("pompali") / WeaponTierArt.OWNER_ROOT_SCALE
+	icon.position = Vector2(0.0, -125.0)
+	w.add_child(icon)
+	await get_tree().process_frame
+	var before: int = _red_hulls()
+	GunReloadFx.on_shot(icon, "pompali", Vector2.RIGHT, o)
+	assert(_red_hulls() == before, "kovan atış anında çıkmaz")
+	await get_tree().create_timer(0.24).timeout
+	assert(icon.texture == GunReloadFx.PIECES[&"pompali_nofore"], "pompa çekilirken kundak ayrı parça")
+	await get_tree().create_timer(0.25).timeout
+	assert(_red_hulls() == before + 1, "kovan geri vuruşta çıktı")
+	assert(icon.texture == base_tex and not icon.has_meta(GunReloadFx.PUMP_META), "pompa bitti, gövde asıl çizimde")
+	## doldurmada pompalı: eksik fişek kadar, şarjör düşmez
+	var d: Node = GunReloadFx.begin(w, icon, "pompali", 1.0, o, {"shells": 2})
+	assert(d != null and is_equal_approx(float(d.get("_len")), GunReloadMath.length("pompali", 2)), "2 fişeklik çizelge")
+	d.call("abort")
+	assert(icon.texture == base_tex, "iptalde gövde asıl çizimde")
 	_cleanup()
 
 
@@ -242,7 +340,10 @@ func test_puppet_plays_the_same_reload_and_casings() -> void:
 	## ateş yayınında kovan
 	var mgr0: Node = get_tree().current_scene.get_node_or_null(ShellCasingFx.NODE_NAME)
 	var before: int = int(mgr0.call("alive_count")) if mgr0 != null else 0
+	var fx_mode: int = AllyFxDensity._env_mode
+	AllyFxDensity._env_mode = AllyFxDensity.MODE_FULL ## kullanıcının "dost efekt" ayarı azaltılmışsa başkasının kovanı hiç çıkmaz
 	puppet.call("_animate_weapon_fire_full", {"slot_index": 0, "direction_x": 1.0, "direction_y": 0.0})
+	AllyFxDensity._env_mode = fx_mode
 	var mgr: Node = get_tree().current_scene.get_node_or_null(ShellCasingFx.NODE_NAME)
 	assert(mgr != null and int(mgr.call("alive_count")) == before + 1, "kukla ateşinde kovan")
 	_cleanup()
@@ -253,4 +354,4 @@ func test_network_and_sources_wired() -> void:
 	assert(nm.find("\"weapon_reload\": true") != -1, "doldurma güvenilir kanalda")
 	assert(nm.find("rp._start_weapon_reload(") != -1, "kukla doldurma yayınını karşılar")
 	var ws: String = FileAccess.get_file_as_string("res://scripts/weapon.gd")
-	assert(ws.find("ShellCasingFx.eject(icon_sprite") != -1, "kasterde kovan")
+	assert(ws.find("GunReloadFx.on_shot(icon_sprite") != -1, "kasterde kovan (pompalıda pompa sonrası)")

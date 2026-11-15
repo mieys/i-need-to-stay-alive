@@ -27,7 +27,10 @@ const BY_ID := {
 	"rontgen1": Color(0.77, 0.64, 0.57), "rontgen2": Color(0.66, 0.31, 0.24), "rontgen3": Color(0.67, 0.27, 0.84),
 	"balkabagi1": Color(0.85, 0.42, 0.1), "kabak1": Color(0.95, 0.5, 0.1), "banshee1": Color(0.45, 0.78, 0.95), "ucansetan1": Color(0.4, 0.25, 0.7),
 	"sandworm1": GREEN, "underground1": GREEN, ## solucan (uzuv + ana gövde): yeşil kan
+	"gonca1": Color(0.62, 0.36, 0.66), "filiz1": Color(0.62, 0.36, 0.66), "medusa1": GREEN, ## madde 682: çiçek özü (mor), yılan kanı (yeşil)
 	"zombie1": GREEN, "zombie2": GREEN, "zombie3": GREEN, ## zombiler: yeşil kan (kullanıcı 2026-10-11)
+	## madde 575: pelteler (bomba is karası / ateş turuncusu / kristal moru); goblin/gnoll/kertenkele organik -> listede yok (kırmızı).
+	"pelte1": Color(0.27, 0.24, 0.29), "pelte2": Color(0.98, 0.55, 0.16), "pelte3": Color(0.62, 0.36, 0.86),
 }
 
 const SCENE_PREFIX := "res://scenes/creatures/enemy_"

@@ -16,6 +16,22 @@ const CYCLE_LENGTH := 600.0
 ## ilerler (atmosphere.gd _process). 600 birim / 900 gerçek sn = tam gün 15 dk (gündüz ~8.3, gün batımı 1.5, gece ~3.8,
 ## gün doğumu 1.5 dk). Host ve istemciler aynı sabitle ilerler.
 const CLOCK_SPEED := 600.0 / 900.0
+## Kullanıcı isteği (2026-11-14): "gece ve gündüz eşit uzunluklarda sürsün". Birim evreleri (330/60/150/60) AYNI kaldı (Babaanne
+## programı, testler, renk anahtarları, capture araçları bu saatlere bağlı); eşitlik saatin HIZINDAN gelir: gündüz ve gece
+## gerçek zamanda 360'ar sn, gün batımı/doğumu 90'ar sn (toplam yine 900 sn = 15 dk). Host ve istemciler aynı fonksiyonu kullanır.
+const PHASE_REAL_SECONDS_DAY_NIGHT := 360.0
+
+
+## Saatin o anki hızı (birim/sn): gündüz 330/360, gece 150/360, gün batımı + gün doğumu CLOCK_SPEED (60/90).
+static func clock_rate(t: float) -> float:
+	t = wrap_time(t)
+	if t < DAY_END:
+		return DAY_END / PHASE_REAL_SECONDS_DAY_NIGHT
+	if t < DUSK_END:
+		return CLOCK_SPEED
+	if t < NIGHT_END:
+		return (NIGHT_END - DUSK_END) / PHASE_REAL_SECONDS_DAY_NIGHT
+	return CLOCK_SPEED
 ## Evre sınırları (döngü saniyesi): gündüz 0-330 (5.5 dk), gün batımı 330-390 (1 dk), gece 390-540 (2.5 dk),
 ## gün doğumu 540-600 (1 dk). 600 = 0 (döngü kapanır).
 const DAY_END := 330.0

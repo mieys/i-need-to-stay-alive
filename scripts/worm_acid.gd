@@ -7,8 +7,10 @@ extends Node2D
 ## Sayılar worm_boss_math.gd'de.
 
 const PaladinDome := preload("res://scripts/paladin_dome.gd") ## Şovalye kubbesi alanı (elips)
+const KalkanGuard := preload("res://scripts/kalkan_guard.gd") ## Kalkan silahı siper duruşu (madde 685)
 const MathScript := preload("res://scripts/worm_boss_math.gd")
 const AbilitiesScript := preload("res://scripts/enemy_abilities.gd")
+const ShieldBubbleHit := preload("res://scripts/shield_bubble_hit.gd") ## mana kalkanı baloncuğu (madde 572)
 const LOOP_TEX := preload("res://assets/enemies/sandworm/acid_loop.png")
 const END_TEX := preload("res://assets/enemies/sandworm/acid_end.png")
 const FRAME_W := 20
@@ -31,6 +33,7 @@ var _life: float = 0.0
 
 
 func _ready() -> void:
+	add_to_group(KalkanGuard.GROUP)
 	z_index = 11
 	_dir = Vector2(data.get("dir", Vector2.RIGHT))
 	if _dir.length() < 0.01:
@@ -66,8 +69,11 @@ func _physics_process(delta: float) -> void:
 	for p in AbilitiesScript.damageable_players(get_tree()):
 		var pn := p as Node2D
 		if PaladinDome.node_contains(pn, global_position):
+			if authoritative:
+				PaladinDome.absorb_ranged_hit(pn, damage, source) ## kubbe atışı emer: kalkana hasar (madde 542)
 			_splash()
 			return
+		KalkanGuard.guard_shot(pn, self) ## Kalkan silahı siper duruşu: önden gelen atışın hasarı %30 azalır, atış durmaz (madde 705)
 		if pn.has_method("get_talon_ward_radius"):
 			var ward_r: float = float(pn.call("get_talon_ward_radius"))
 			if ward_r > 0.0 and global_position.distance_to(pn.global_position) <= ward_r:
@@ -75,6 +81,14 @@ func _physics_process(delta: float) -> void:
 				return
 		if pn.get("is_indoors") == true or pn.get("is_downed") == true:
 			continue
+		## Mana kalkanı baloncuğu (madde 572): kalkanı olan oyuncuya atış gövdeye değil baloncuğun DIŞ kenarına çarpar;
+		## efekt her makinede kendi kopyasıyla (shield_bubble_hit.gd), hasar yalnız yetkili kopyadan.
+		if ShieldBubbleHit.touches(pn, global_position, MathScript.ACID_HIT_RADIUS):
+			ShieldBubbleHit.impact(pn, global_position)
+			if authoritative:
+				AbilitiesScript.deal_special_damage(p, damage, source, "worm_acid")
+			_splash()
+			return
 		if global_position.distance_to(pn.global_position) <= MathScript.ACID_HIT_RADIUS + AbilitiesScript.TARGET_BODY_RADIUS:
 			if authoritative:
 				AbilitiesScript.deal_special_damage(p, damage, source, "worm_acid")

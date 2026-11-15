@@ -8,6 +8,7 @@ extends Node
 
 const SpawnerScript: GDScript = preload("res://scripts/enemy_spawner.gd")
 const TierDisplay: GDScript = preload("res://scripts/tier_display.gd")
+const SkullIcon: GDScript = preload("res://scripts/skull_icon.gd")
 const MainScript: GDScript = preload("res://scripts/main.gd")
 const TIER_SECONDS := 100.0
 
@@ -72,15 +73,12 @@ func _cleanup() -> void:
 		if is_instance_valid(n):
 			n.free()
 	_made.clear()
-	GameManager.bosses_enabled = false
 	GameManager.game_time = 0.0
 	NetworkManager.is_multiplayer_active = false
 
 
-## 2026-10-08: boss sistemi varsayılan KAPALI (GameManager.bosses_enabled, bkz. CLAUDE.md madde 39) - bu dosya boss/Final akışını sınar, bu yüzden geçici açar
 func _spawner() -> Node:
 	_cleanup()
-	GameManager.bosses_enabled = true
 	_heard.clear()
 	var sp: Node = SpawnerScript.new()
 	add_child(sp)
@@ -221,42 +219,26 @@ func test_stuck_tier_boss_out_of_sight_is_teleported_while_it_holds_the_clock() 
 func test_tier_boss_does_not_spawn_before_its_tier_has_started() -> void:
 	var sp: Node = _spawner()
 	var old: FakeEnemy = _survivor(1)
-	GameManager.game_time = 2.0 * TIER_SECONDS + 76.0 ## kademe 3'ün %75'i: boss zamanı
+	GameManager.game_time = 4.0 * TIER_SECONDS + 76.0 ## kademe 5'in %75'i: boss zamanı (madde 597: ilk boss Kademe 5'te)
 	sp._check_boss_tiers()
-	assert(not sp._tier_bosses.has(3) and not sp._boss_tiers_spawned.has(3), "Eski kademeden yaratık sağken 3. kademenin bossu doğmamalı")
+	assert(not sp._tier_bosses.has(5) and not sp._boss_tiers_spawned.has(5), "Eski kademeden yaratık sağken 5. kademenin bossu doğmamalı")
 	old.is_dead = true
 	sp._check_boss_tiers()
-	assert(sp._tier_bosses.has(3) and sp._boss_tiers_spawned.has(3), "Kademe başlayınca (eskiler ölünce) boss doğmalı")
+	assert(sp._tier_bosses.has(5) and sp._boss_tiers_spawned.has(5), "Kademe başlayınca (eskiler ölünce) boss doğmalı")
 	_cleanup()
 
 
-# ---------------------------------------------------------------- kapı: Final
-func test_final_waits_for_every_older_creature_and_stops_new_spawns() -> void:
+# ---------------------------------------------------------------- kapı: SON boss (madde 597: ayrı Final kademesi yok)
+func test_the_last_boss_also_waits_for_every_older_creature() -> void:
 	var sp: Node = _spawner()
-	var last: FakeEnemy = _survivor(15)
-	GameManager.game_time = TIER_SECONDS * 15.0 + 1.0 ## Final zamanı
-	sp._check_tier_announcement()
-	sp._check_final_tier()
-	assert(not sp._final_spawned, "15. kademenin yaratığı sağken Final başlamamalı")
-	assert(not _heard.has(16), "Final bildirilmemeli: %s" % str(_heard))
-	assert(sp._resolve_spawn_tier() == 0, "Final beklerken yeni yaratık doğmamalı (yoksa sayım hiç bitmezdi)")
-	last.is_dead = true
-	sp._announce_poll_msec = 0
-	sp._check_tier_announcement()
-	sp._check_final_tier()
-	assert(_heard.has(16) and _heard.count(16) == 1, "Son yaratık ölünce Final TEK bildirimle başlamalı: %s" % str(_heard))
-	assert(sp._final_spawned, "Final bosslar doğmalı")
-	_cleanup()
-
-
-func test_final_gate_has_the_same_wait_limit() -> void:
-	var sp: Node = _spawner()
-	_survivor(15)
-	GameManager.game_time = TIER_SECONDS * 15.0 + 1.0
-	assert(not sp._final_gate_open(), "yaratık sağken kapı kapalı")
-	sp._final_gate_wait_started_msec = Time.get_ticks_msec() - sp.GATE_MAX_WAIT_MSEC - 10
-	assert(sp._final_gate_open(), "bekleme sınırı dolunca Final kapısı açılmalı")
-	assert(sp._final_gate_open(), "bir kez açılınca kapalı kalmamalı")
+	var old: FakeEnemy = _survivor(9)
+	sp._boss_tiers_spawned[5] = true ## zaman atlandığı için K5 bossu da tetik zamanını geçmiş sayılır: onu doğurma
+	GameManager.game_time = 9.0 * TIER_SECONDS + 76.0 ## kademe 10'un %75'i: son boss zamanı
+	sp._check_boss_tiers()
+	assert(not sp._final_spawned and not sp._boss_tiers_spawned.has(10), "9. kademenin yaratığı sağken son boss doğmamalı")
+	old.is_dead = true
+	sp._check_boss_tiers()
+	assert(sp._final_spawned and sp._final_bosses.size() == 1, "eskiler ölünce son boss doğmalı ve zafer için kaydedilmeli")
 	_cleanup()
 
 
@@ -287,33 +269,33 @@ func test_roman_numerals() -> void:
 func test_titles_and_ordinals() -> void:
 	assert(TierDisplay.title(4) == "KADEME IV", "başlık sadece KADEME + Romen rakamı: %s" % TierDisplay.title(4))
 	assert(TierDisplay.title(1) == "KADEME I")
-	assert(TierDisplay.title(15) == "KADEME XV")
-	assert(TierDisplay.title(16) == "FİNAL KADEMESİ", "Final kendi adıyla")
+	assert(TierDisplay.title(9) == "KADEME IX")
+	assert(TierDisplay.title(10) == "FİNAL KADEMESİ", "son kademe (madde 597) kendi adıyla")
 	assert(TierDisplay.ordinal(5) == "V. Kademe" and TierDisplay.ordinal(10) == "X. Kademe")
 
 
 func test_skull_steps_grow_with_the_tier_from_half_a_skull_to_six() -> void:
 	assert(TierDisplay.skull_steps(1) == 1, "Kademe I: yarım kafa")
-	assert(TierDisplay.skull_steps(8) == 6, "Kademe VIII: tam 3 kafa")
-	assert(TierDisplay.skull_steps(15) == 11, "Kademe XV: 5.5 kafa")
-	assert(TierDisplay.skull_steps(16) == 12, "Final: 6 kafa")
+	assert(TierDisplay.skull_steps(5) == 6, "Kademe V: tam 3 kafa")
+	assert(TierDisplay.skull_steps(9) == 11, "Kademe IX: 5.5 kafa")
+	assert(TierDisplay.skull_steps(10) == 12, "son kademe: 6 kafa")
 	assert(TierDisplay.skull_steps(40) == 12 and TierDisplay.skull_steps(0) == 0, "sınırlar")
 	var prev: int = 0
-	for t in range(1, 17):
+	for t in range(1, 11):
 		var s: int = TierDisplay.skull_steps(t)
 		assert(s >= prev, "kafa sayısı azalmamalı (kademe %d: %d < %d)" % [t, s, prev])
 		prev = s
-	assert(TierDisplay.skull_steps(15) < TierDisplay.skull_steps(16), "Final, XV'ten belirgin biçimde ayrı olmalı")
-	assert(TierDisplay.skull_steps(16) > TierDisplay.skull_steps(1), "ilk ve son aynı olmamalı")
+	assert(TierDisplay.skull_steps(9) < TierDisplay.skull_steps(10), "son kademe, IX'ten belirgin biçimde ayrı olmalı")
+	assert(TierDisplay.skull_steps(10) > TierDisplay.skull_steps(1), "ilk ve son aynı olmamalı")
 
 
 func test_skull_fills_are_full_half_empty_per_skull() -> void:
 	assert(TierDisplay.skull_fills(1) == [1, 0, 0, 0, 0, 0], "I: ilk kafa yarım: %s" % str(TierDisplay.skull_fills(1)))
-	assert(TierDisplay.skull_fills(8) == [2, 2, 2, 0, 0, 0], "VIII: 3 tam: %s" % str(TierDisplay.skull_fills(8)))
-	assert(TierDisplay.skull_fills(6) == [2, 2, 1, 0, 0, 0], "VI: 2.5 kafa: %s" % str(TierDisplay.skull_fills(6)))
-	assert(TierDisplay.skull_fills(16) == [2, 2, 2, 2, 2, 2], "Final: 6 tam kafa")
-	assert(TierDisplay.skull_fills(15) == [2, 2, 2, 2, 2, 1], "XV: son kafa yarım: %s" % str(TierDisplay.skull_fills(15)))
-	for t in range(1, 17):
+	assert(TierDisplay.skull_fills(5) == [2, 2, 2, 0, 0, 0], "V: 3 tam: %s" % str(TierDisplay.skull_fills(5)))
+	assert(TierDisplay.skull_fills(4) == [2, 2, 1, 0, 0, 0], "IV: 2.5 kafa: %s" % str(TierDisplay.skull_fills(4)))
+	assert(TierDisplay.skull_fills(10) == [2, 2, 2, 2, 2, 2], "son kademe: 6 tam kafa")
+	assert(TierDisplay.skull_fills(9) == [2, 2, 2, 2, 2, 1], "IX: son kafa yarım: %s" % str(TierDisplay.skull_fills(9)))
+	for t in range(1, 11):
 		var total: int = 0
 		for f: int in TierDisplay.skull_fills(t):
 			total += f
@@ -326,19 +308,35 @@ func test_skull_row_control_sizes_and_draws_every_tier_without_errors() -> void:
 	row.set_script(TierDisplay)
 	add_child(row)
 	_made.append(row)
-	for t in range(1, 17):
+	for t in range(1, 11):
 		row.call("set_tier", t, 3)
 		await get_tree().process_frame ## _draw bu karede çalışır (hata varsa test çıktısında görünür)
-		assert(row.custom_minimum_size == Vector2(TierDisplay.ROW_ART_W, TierDisplay.SKULL_H) * 3.0, "satır boyutu 69x9 sanat pikseli x3")
+		assert(row.custom_minimum_size == Vector2(TierDisplay.ROW_W, TierDisplay.SKULL_H) and row.custom_minimum_size == TierDisplay.row_size(3),
+				"satır boyutu 157x30 (arayüz birimi 3 = doku 1 kat): %s" % str(row.custom_minimum_size))
 		assert(int(row.call("get_tier")) == t)
 	_cleanup()
 
 
-func test_left_half_keeps_only_the_left_columns_of_the_skull() -> void:
-	var full: Array[String] = ["XWWWWWWWX", "..XXXXX.."]
-	var half: Array[String] = TierDisplay._left_half(full)
-	assert(half[0] == "XWWWW....", "orta sütun dahil sol 5 sütun kalmalı: %s" % half[0])
-	assert(half[1] == "..XXX....", "sağ yarı saydam: %s" % half[1])
+func test_skull_icon_textures_and_whole_multiple_sizes() -> void:
+	## Kullanıcının kafatası çizimi (skull_icon.gd): normal 22x30, küçük 11x15 (2x2 ortalama), kırmızılar aynı boyda.
+	assert(SkullIcon.tex().get_size() == SkullIcon.BIG_SIZE and SkullIcon.tex(true).get_size() == SkullIcon.BIG_SIZE, "büyük doku 22x30")
+	assert(SkullIcon.tex(false, true).get_size() == SkullIcon.SMALL_SIZE and SkullIcon.tex(true, true).get_size() == SkullIcon.SMALL_SIZE, "küçük doku 11x15")
+	## Her yuvaya TAM KATLI boy: 18 px -> küçük 11x15, 27 / 36 -> 22x30 (1 kat), 54 -> 2 kat (44x60), çok küçükte yine küçük.
+	assert(SkullIcon.pick(18.0) == [true, 1], "18 px: küçük: %s" % str(SkullIcon.pick(18.0)))
+	assert(SkullIcon.pick(27.0) == [false, 1] and SkullIcon.pick(36.0) == [false, 1], "27/36 px: 1 kat")
+	assert(SkullIcon.pick(54.0) == [false, 2] and SkullIcon.pick(64.8) == [false, 2], "54/65 px: 2 kat")
+	assert(SkullIcon.pick(10.0) == [true, 1], "çok küçük yuva yine küçük doku")
+	## Yarım / boş / dolu çizimi hatasız (her doku ve her doluluk): geçici Control'ün çizim sinyalinde çizdirilir.
+	var c := Control.new()
+	add_child(c)
+	_made.append(c)
+	c.draw.connect(func() -> void:
+		for red in [false, true]:
+			for fill in [0, 1, 2]:
+				SkullIcon.draw_fit(c, Vector2(40, 40), 30.0, fill, red)
+				SkullIcon.draw_fit(c, Vector2(40, 40), 15.0, fill, red))
+	c.queue_redraw()
+	await get_tree().process_frame
 
 
 func test_tier_banner_has_the_roman_title_and_the_skull_row() -> void:

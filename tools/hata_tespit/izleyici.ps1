@@ -106,10 +106,10 @@ function Apply-Result([string]$resultText, $pd) {
   $rapor = [string]$res.rapor_ek_md
   if ($rapor.Length -lt 10 -or $rapor.Length -gt 20000) { throw "rapor_ek_md gecersiz" }
   $replies = @(@($res.yanitlar) | Where-Object { $_ })
-  if ($replies.Count -gt 3) { throw "3'ten fazla yanit istendi" }
+  if ($replies.Count -gt 8) { throw "8'den fazla yanit istendi" }
   foreach ($r in $replies) {
     if ($pd.Ids -notcontains [string]$r.reply_to) { throw ("yanit hedefi bekleyen mesaj degil: " + $r.reply_to) }
-    if (@("dogrulandi", "bilgi_gerekli", "durum") -notcontains [string]$r.sablon) { throw "bilinmeyen sablon" }
+    if (@("dogrulandi", "bilgi_gerekli", "durum", "oneri", "denge", "genel") -notcontains [string]$r.sablon) { throw "bilinmeyen sablon" }
   }
 
   # Dosyalar

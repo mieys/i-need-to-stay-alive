@@ -41,3 +41,13 @@ func test_spacing_uniform_for_odd_health_values() -> void:
 		var offs: Array[float] = OverheadBar._segment_line_offsets(OverheadBar.WIDTH, lines)
 		for i in range(2, offs.size()):
 			assert(offs[i] - offs[i - 1] == offs[1] - offs[0], "hp=%s" % hp)
+
+
+## 2026-11-13 "can barı siyah siyah görünüyor": 20 çizgide dolu derz oyuk (DEEP) kalınca çubuğun yarısı siyahtı -> dolu derz dolgunun koyu tonu.
+func test_filled_seam_keeps_fill_hue() -> void:
+	var HudTheme: GDScript = load("res://scripts/hud_theme.gd")
+	var green: Color = HudTheme.HP_GREEN
+	var seam: Color = OverheadBar.filled_seam_color(green)
+	assert(not seam.is_equal_approx(HudTheme.DEEP), "dolu derz oyuk rengi olmamali")
+	assert(seam.g > seam.r and seam.g > seam.b, "dolu derz yesil tonda kalmali")
+	assert(seam.get_luminance() < green.get_luminance(), "derz dolgudan koyu (bolme secilsin)")

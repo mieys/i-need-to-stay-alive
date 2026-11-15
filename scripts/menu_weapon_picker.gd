@@ -102,7 +102,7 @@ func select(key: String, emit: bool = true) -> void:
 		key = WeaponCatalog.DEFAULT_KEY ## geçersiz ya da Ruh Mağazası'nda kilitli (bkz. meta_progress.gd)
 	GameManager.selected_start_weapon = key
 	if _icon:
-		_icon.texture = WeaponCatalog.icon(key)
+		_icon.texture = WeaponCatalog.menu_icon(key)
 	if _name_label:
 		_name_label.text = WeaponCatalog.display_name(key)
 	if _cat_label:
@@ -186,7 +186,7 @@ func _open_grid() -> void:
 			select(key)
 			_close_grid())
 		var ic := TextureRect.new()
-		ic.texture = WeaponCatalog.icon(key)
+		ic.texture = WeaponCatalog.menu_icon(key)
 		ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		ic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		ic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST

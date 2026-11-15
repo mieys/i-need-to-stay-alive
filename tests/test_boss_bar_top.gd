@@ -88,8 +88,10 @@ func test_every_boss_family_has_a_display_name() -> void:
 	assert(ArtScript.display_name("agac3") == "AĞAÇ" and ArtScript.display_name("golem3") == "GOLEM")
 	assert(ArtScript.display_name("bilinmeyen9") == "BİLİNMEYEN" or ArtScript.display_name("bilinmeyen9") == "BILINMEYEN",
 			"tabloda olmayan aile kendi adıyla (büyük harf) gösterilmeli")
-	for id in SpawnerScript.FINAL_CREATURES:
-		assert(ArtScript.display_name(id) != "", "Final bossu adsız: %s" % id)
+	for id in SpawnerScript.ELITE_BY_TIER.values():
+		assert(ArtScript.display_name(id) != "", "elit adsız: %s" % id)
+	for id in SpawnerScript.FIXED_BOSS_STATS.keys():
+		assert(ArtScript.display_name(id) != "", "boss adsız: %s" % id)
 
 
 # ---------------------------------------------------------------- kafa konumu

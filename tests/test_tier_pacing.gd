@@ -152,8 +152,9 @@ func test_tier_three_and_later_durability_is_ten_percent_lower_and_rewards_uncha
 		sp._apply_global_buff(rat)
 		by_tier[tier] = [float(rat.max_health), float(rat.item_shield_max)]
 	## Kademe 2 -> 6: 0.8 (erken kesinti) kalkar, yerine 0.9 gelir; oran = 0.9 / 0.8.
-	assert(absf(float(by_tier[6][0]) / float(by_tier[2][0]) - 0.9 / 0.8) < 0.001, "can oranı K6/K2 = 0.9/0.8: %s" % by_tier)
-	assert(absf(float(by_tier[6][1]) / float(by_tier[2][1]) - 0.9 / 0.8) < 0.001, "kalkan oranı K6/K2 = 0.9/0.8: %s" % by_tier)
+	var tough62: float = SpawnerScript.tier_toughness_mult(6) / SpawnerScript.tier_toughness_mult(2) ## 2026-11-15: kademeyle artan dayanıklılık
+	assert(absf(float(by_tier[6][0]) / float(by_tier[2][0]) - 0.9 / 0.8 * tough62) < 0.001, "can oranı K6/K2 = 0.9/0.8 x dayanıklılık: %s" % by_tier)
+	assert(absf(float(by_tier[6][1]) / float(by_tier[2][1]) - 0.9 / 0.8 * tough62) < 0.001, "kalkan oranı K6/K2 = 0.9/0.8 x dayanıklılık: %s" % by_tier)
 	## Boss ödülünün (XP) değişmediği test_first_bosses_are_proportionate_and_formula_is_single_sourced'ta (pacing'siz + Kademe 3+ düşüşsüz taban can).
 	_cleanup()
 
@@ -199,7 +200,8 @@ func test_no_cliff_between_tiers_measured_with_the_real_spawn_path() -> void:
 	for tier in range(4, 9):
 		var step: float = float(r[tier]) / float(r[tier - 1])
 		assert(step < 2.6, "K%d -> K%d R artışı x2.6'yı aşmamalı: x%.2f" % [tier - 1, tier, step])
-	assert(float(r[8]) < 3300.0 * boost, "Kademe 8 R'si eskiden 5745'ti (2026-10-13 %%60 soğurmayla ~2850 x1,5): %.0f" % r[8])
+	## 2026-11-15: sınır kademeyle artan dayanıklılığı içerir (K8 x1,31; kullanıcı: "oyun kolay olmasın") - kademeler arası adım sınırları yukarıda aynen duruyor.
+	assert(float(r[8]) < 3300.0 * boost * SpawnerScript.tier_toughness_mult(8), "Kademe 8 R'si eskiden 5745'ti (2026-10-13 %%60 soğurmayla ~2850 x1,5 x dayanıklılık): %.0f" % r[8])
 	_cleanup()
 
 
@@ -258,3 +260,42 @@ func test_tier_duration_curves_player_cap_and_stat_boost_stay_in_sync() -> void:
 	assert(int(sp.player_enemy_cap(1)) == 120 and int(sp.player_enemy_cap(2)) == 165 and int(sp.player_enemy_cap(4)) == 255 and int(sp.player_enemy_cap(5)) == 300, "1/2/4/5 oyuncu: 120/165/255/300 (2026-11-09: ek oyuncu +45)")
 	assert(is_equal_approx(SpawnerScript.CREATURE_STAT_BOOST, 1.5), "sıradan yaratık can/kalkan/hasar x1,5")
 	_cleanup()
+
+
+## 2026-11-15: yaratık tavanı eğrisi BİLEREK eski hâlinde (15 kademeye göre: Kademe 10'un başında %73) - 10 kademeye göre düzeltme aynı gün
+## geri alındı (kullanıcı: "yaratık sayısını çok arttırmak istemiyorum, onun yerine dayanıklılıklarını arttırsak").
+func test_crowd_cap_curve_stays_on_the_old_fifteen_tier_ramp() -> void:
+	var td: float = 150.0
+	assert(is_equal_approx(SpawnerScript.crowding_scale_at(0.0, td), SpawnerScript.TIER_1_CAP_SCALE), "oyun başı: Kademe 1 oranı")
+	assert(absf(SpawnerScript.crowding_scale_at(float(SpawnerScript.LAST_TIER - 1) * td, td) - 0.7321) < 0.001, "Kademe 10 başı %%73 (sayı artmadı): %s" % SpawnerScript.crowding_scale_at(9.0 * td, td))
+	assert(absf(SpawnerScript.crowding_scale_at(4.0 * td, td) - 0.4643) < 0.001, "Kademe 5 başı %46")
+	assert(is_equal_approx(SpawnerScript.crowding_scale_at(99999.0, td), 1.0), "çok sonra tavan")
+
+
+## 2026-11-15: sayı yerine dayanıklılık - boss olmayan yaratığın can/kalkanı Kademe 1 x1,0 -> Kademe 10 x1,40 doğrusal; boss aynı.
+func test_creatures_get_tougher_with_the_tier() -> void:
+	assert(is_equal_approx(SpawnerScript.tier_toughness_mult(0), 1.0) and is_equal_approx(SpawnerScript.tier_toughness_mult(1), 1.0), "Kademe 1: x1,0")
+	assert(absf(SpawnerScript.tier_toughness_mult(5) - 1.1778) < 0.001, "Kademe 5 x1,18: %s" % SpawnerScript.tier_toughness_mult(5))
+	assert(is_equal_approx(SpawnerScript.tier_toughness_mult(SpawnerScript.LAST_TIER), 1.4), "son kademe x1,40")
+	assert(is_equal_approx(SpawnerScript.tier_toughness_mult(25), 1.4), "sonsuz mod kademeleri x1,40'ta kalır")
+	var prev: float = 1.0
+	for t in range(2, SpawnerScript.LAST_TIER + 1):
+		assert(SpawnerScript.tier_toughness_mult(t) > prev, "kademeyle artar (K%d)" % t)
+		prev = SpawnerScript.tier_toughness_mult(t)
+	## Gerçek yaratık: aynı sıradan yaratık Kademe 10'da Kademe 1'e göre tam bu oranda fazla can taşır (diğer kademe çarpanları ayıklanınca); boss etkilenmez.
+	var sp: Node = _spawner()
+	var hp: Dictionary = {}
+	for t in [1, 10]:
+		for boss in [false, true]:
+			var e: Node = RatScene.instantiate()
+			add_child(e)
+			e.set("_current_tier", t)
+			e.set("is_boss", boss)
+			var base: float = float(e.max_health)
+			sp.call("_apply_global_buff", e, 1)
+			var other: float = SpawnerScript.late_durability_mult(t) * (1.0 if boss else SpawnerScript.early_durability_cut(t))
+			hp["%d_%s" % [t, boss]] = float(e.max_health) / base / other
+			e.free()
+	_cleanup()
+	assert(absf(float(hp["10_false"]) / float(hp["1_false"]) - 1.4) < 0.001, "sıradan yaratık K10 / K1 can oranı 1,40: %s" % (float(hp["10_false"]) / float(hp["1_false"])))
+	assert(absf(float(hp["10_true"]) / float(hp["1_true"]) - 1.0) < 0.001, "boss dayanıklılık artışı almaz: %s" % (float(hp["10_true"]) / float(hp["1_true"])))

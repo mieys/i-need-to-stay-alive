@@ -12,8 +12,11 @@ const KIND_ORMAN := "orman"
 const KIND_ZINDAN := "zindan"
 const MAP_NODE_NAME := "Harita"
 const DungeonDataScript := preload("res://scripts/dungeon/dungeon_data.gd")
+const GameModeScript := preload("res://scripts/pvp/game_mode.gd")
 const BataklikMeta := preload("res://scripts/bataklik_meta.gd")
+const GuardScript := preload("res://scripts/security/security_guard.gd") ## HARITA ortam değişkeni yalnız editörde (hile koruması, 2026-11-12)
 const ColMeta := preload("res://scripts/col_meta.gd")
+const KisMeta := preload("res://scripts/kis_meta.gd")
 ## Zindan haritasında oyun sistemlerinin "orman katmanı" (GameManager.get_forest_layer: çarpışma, mermi, görüş sisi, yaratık yol ızgarası,
 ## yaratık doğuş denetimi) - görünmez, haritanın DUVAR hücreleriyle dolu (2. adım, madde 444). Yol GameManager._find_terrain_layers ile aynı.
 const WALL_LAYER_PARENT := "Orman parçaları"
@@ -70,6 +73,8 @@ const PROFILES := {
 		"su_yurunur": true,
 		"su_maskesi": "res://assets/map/bataklik_su_derinlik.png",
 		"ozellik": {"orman_gorselleri": true, "hava": true, "calilik": true, "gorevler": true, "bataklik_fx": true},
+		## Kademe bossları (madde 682, kullanıcı 2026-11-14: "bu yaratık bataklığın 1. bossu olsun"): K5 Zehirli Gonca (yeni), K10 Banshee.
+		"bosslar": {5: ["gonca1"], 10: ["banshee1"]},
 	},
 	## ALTIN KUMLAR (2026-11-09, çöl, açık hava; tools/col/gen_col.py + bake_col.gd, oyun alanı 243x243 = ana haritanın yüzde 90'ı): Kara
 	## Bataklık gibi Harita.tmx katman adlarında (collision / derinlik / sallanma / saklanma / gün-gece sistemleri değişmeden çalışır) + üst üste
@@ -87,7 +92,35 @@ const PROFILES := {
 		"dogus": ColMeta.SPAWN,
 		"minimap": "res://assets/ui/minimap_col.png",
 		"hava_donusum": {2: 1, 3: 0},
-		"ozellik": {"orman_gorselleri": true, "hava": true, "calilik": true, "gorevler": true, "col_fx": true},
+		"cukur_zemin": "kum", ## Hadime Lanet Çukuru toprak tonları (madde 556; yoksa zindan = "tas", diğerleri çimen)
+		## Vaha suyu ana haritanın su shader'ını kullanır (madde 631): kıyı uzaklığı + akış dokuları `-- col` ile pişirilir.
+		"su_doku": {"mesafe": "res://assets/map/col_su_mesafe.png", "akis": "res://assets/map/col_su_akis.png", "origin": Vector2(784, 560), "size": Vector2(3456, 3136)},
+		"ozellik": {"orman_gorselleri": true, "hava": true, "calilik": true, "gorevler": true, "col_fx": true, "su_efekti": true},
+		## Kademe bossları (madde 682, kullanıcı 2026-11-14: "Medusa da çölde final boss olsun"): K5 Yeraltı Canavarı, K10 Medusa (yeni).
+		"bosslar": {5: ["underground1"], 10: ["medusa1"]},
+	},
+	## AYAZ DAĞI (2026-11-12, kış / dağ, açık hava; tools/kis/gen_kis.py + bake_kis.gd, oyun alanı 256x256 = ana haritanın alanı): Altın Kumlar
+	## gibi Harita.tmx katman adlarında + "Kayalar 1..3" + yeni zemin katmanları "Yer/Buz" (donmuş göl: YÜRÜNÜR, collision yalnız "Su/Su"yu su
+	## sayar) ve "Yer/Patika" (toprak yol). Sıcak kaynağın suyu yürünmez. "kar_yagisi": yağmur yerine kar yağar (atmosphere.gd ->
+	## weather_snow.gd, yağmur sesi yok); "hava_donusum": kışta sağanak / şimşek yok (Sağanak -> Yağmurlu = kar). "kis_fx": ateş ışıkları,
+	## duman, kaynak buharı ve ileride üşüme / ısınma mekaniğinin okuyacağı ısınma noktaları (kis_fx.gd, "isi_kaynagi" grubu; kis_meta.gd).
+	"kis": {
+		"ad": "Ayaz Dağı",
+		"aciklama": "Karlı çam ormanları, donmuş Ayna Göl ve meşaleli patikalar: Ocak Başı Kampı, Kadim Buz Ağacı, Kristal Vadisi, Ayı Totemi Tapınağı, Yılbaşı Meydanı, Sıcak Kaynak.",
+		"tur": KIND_ORMAN,
+		"sahne": "res://scenes/kis_baked.tscn",
+		"veri": "",
+		"secilebilir": true,
+		"oyun_alani": KisMeta.PLAY_CELLS,
+		"dogus": KisMeta.SPAWN,
+		"minimap": "res://assets/ui/minimap_kis.png",
+		"hava_donusum": {3: 2},
+		"kar_yagisi": true,
+		"cukur_zemin": "kar",
+		"ozellik": {"orman_gorselleri": true, "hava": true, "calilik": true, "gorevler": true, "kis_fx": true},
+		## Kademe bossları (madde 682): ana haritanın K10'undan Üç Kardeş'e yer veren Wendigo buraya geldi (kar / buz efsanesi; kullanıcı: "yeri değiştiren
+		## bossları boşta kalan haritalardan birine gönderirsin"). K5 için boşta boss yok: şimdilik ana haritayla ortak Minotaur.
+		"bosslar": {5: ["minotaur1"], 10: ["wendigo1"]},
 	},
 	"kadim_derinlikler": {
 		"ad": "Kadim Derinlikler",
@@ -118,6 +151,9 @@ const PROFILES := {
 		"veri": "res://scenes/zindan/batik_nekropol_data.tres",
 		"secilebilir": true,
 		"ozellik": {"zindan_etkilesim": true, "gorevler": true, "zemin_tasi": true}, ## zemin_tasi: dungeon_floor.gd zemin shader'ı (madde 449)
+		## Kademe bossları (madde 682): Bataklık / Çöl'den yeri değişen iki boss buraya geldi (kullanıcı: "yeri değiştiren bossları boşta kalan
+		## haritalardan birine gönderirsin") - mezarlık + kabak + şeytan; K5 Balkabağı Kafa, K10 Uçan Şeytan.
+		"bosslar": {5: ["balkabagi1"], 10: ["ucansetan1"]},
 		## ince ayar (kullanıcı: "ışık / karanlık"): ortam Kemik Mahzeni'nden ~%25 açık
 		"zindan_tanimi": {"ambient_day": Color(0.46, 0.50, 0.56), "ambient_night": Color(0.40, 0.44, 0.50), "player_light": Color(0.78, 0.92, 1.0)},
 	},
@@ -131,7 +167,7 @@ const PROFILES := {
 		"tur": KIND_ZINDAN,
 		"sahne": "res://scenes/zindan/taskin_hisar_baked.tscn",
 		"veri": "res://scenes/zindan/taskin_hisar_data.tres",
-		"secilebilir": true,
+		"secilebilir": false, ## madde 554: kullanıcı isteğiyle oyundan kaldırıldı (dosyalar + mekanik testleri duruyor, true geri açar)
 		"ozellik": {"zindan_etkilesim": true, "gorevler": true, "zemin_tasi": true},
 		"zemin_rengi": Color8(128, 138, 163),
 		"zindan_tanimi": {"ambient_day": Color(0.44, 0.47, 0.56), "ambient_night": Color(0.38, 0.41, 0.50), "player_light": Color(1.0, 0.90, 0.76)},
@@ -145,7 +181,7 @@ const PROFILES := {
 		"tur": KIND_ZINDAN,
 		"sahne": "res://scenes/zindan/lagim_agi_baked.tscn",
 		"veri": "res://scenes/zindan/lagim_agi_data.tres",
-		"secilebilir": true,
+		"secilebilir": false, ## madde 626: kullanıcı isteğiyle GEÇİCİ kapatıldı (dosyalar + mekanik testleri duruyor, true geri açar)
 		"ozellik": {"zindan_etkilesim": true, "gorevler": true, "zemin_tasi": true},
 		"zemin_rengi": Color8(147, 124, 98),
 		"zindan_tanimi": {"ambient_day": Color(0.42, 0.47, 0.40), "ambient_night": Color(0.36, 0.41, 0.35), "player_light": Color(1.0, 0.88, 0.72)},
@@ -202,6 +238,11 @@ static func map_weather(w: int) -> int:
 	return int(conv.get(w, w))
 
 
+## Seçili haritada yağış kar mı (Ayaz Dağı): atmosphere.gd yağmur yerine weather_snow.gd çizer, yağmur sesi çalmaz.
+static func snowfall() -> bool:
+	return bool(current().get("kar_yagisi", false))
+
+
 ## Oda kur / tek oyunculu ekranında gösterilen haritalar (profil sırasıyla).
 static func selectable_ids() -> Array:
 	var out: Array = []
@@ -221,7 +262,7 @@ static func get_profile(id: String) -> Dictionary:
 
 ## Seçili harita: HARITA ortam değişkeni (geçerliyse) > GameManager.selected_map (geçerliyse) > ana harita.
 static func current_id() -> String:
-	var env: String = OS.get_environment("HARITA")
+	var env: String = GuardScript.dev_env("HARITA")
 	if env != "" and PROFILES.has(env):
 		return env
 	var gm: Node = _game_manager()
@@ -243,6 +284,10 @@ static func is_main_map() -> bool:
 ## Haritaya özgü sistem bu haritada açık mı (tanımsız bayrak: ana haritada açık, diğerlerinde kapalı). Kara Bataklık da açık hava
 ## ("orman" türü) ama ana haritanın ev / satıcı / maden / bekçi sistemleri orada yok: varsayılan TÜRE değil ana harita kimliğine bakar.
 static func feature(name: String) -> bool:
+	## Oyun modu ezmesi (PvPvE, madde 607: PvP'de açılış evi kapalı) - mod bayrağı haritanınkinden önce.
+	var mode_override: Variant = GameModeScript.feature_override(name)
+	if mode_override != null:
+		return bool(mode_override)
 	var id: String = current_id()
 	var f: Dictionary = (PROFILES.get(id, PROFILES[DEFAULT_ID]) as Dictionary).get("ozellik", {})
 	if f.has(name):
@@ -267,6 +312,9 @@ static func install(main: Node) -> bool:
 	var p: Dictionary = current()
 	var path: String = str(p.get("sahne", ""))
 	if path == "":
+		## Ana harita sahnesi aynı kalır; yalnız oyun modunun kapattığı sistemler (PvP: açılış evi, madde 607) çıkarılır. Co-op'ta ana haritada
+		## bütün bayraklar açık -> hiçbir şey silinmez (eski davranış).
+		_remove_disabled_feature_nodes(main)
 		return false
 	var old: Node = main.get_node_or_null(MAP_NODE_NAME)
 	var packed: PackedScene = load(path) as PackedScene
@@ -285,13 +333,17 @@ static func install(main: Node) -> bool:
 	main.add_child(map_node)
 	if idx >= 0:
 		main.move_child(map_node, idx)
+	_remove_disabled_feature_nodes(main)
+	return true
+
+
+static func _remove_disabled_feature_nodes(main: Node) -> void:
 	for f: String in FEATURE_NODES:
 		if not feature(f):
 			var n: Node = main.get_node_or_null(str(FEATURE_NODES[f]))
 			if n != null:
 				main.remove_child(n)
 				n.free()
-	return true
 
 
 ## Seçili zindan haritasının verisi (DungeonData: hücre kodları + nesneler), yoksa null. Önbellekli.

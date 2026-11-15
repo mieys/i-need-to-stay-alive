@@ -44,6 +44,7 @@ const MASK_DOWNSCALE := 4
 const MAX_STEP := 0.1
 const MAX_SOURCES := 8
 
+const TeamsScript := preload("res://scripts/pvp/teams.gd") ## takım görüşü (PvPvE, madde 615)
 const FOG_GROUP := "vision_fog"
 const SOURCE_GROUPS: Array[String] = ["player", "remote_players"]
 ## DÜZELTME (kullanıcı isteği 2026-09-23: "oyuncunun ve dostlarının görüş alanı dışındaki hiçbir şeyin
@@ -377,6 +378,9 @@ func _collect_source_positions() -> PackedVector2Array:
 		for node: Node in get_tree().get_nodes_in_group(group_name):
 			var body: Node2D = node as Node2D
 			if body == null or not _gives_vision(body):
+				continue
+			## PvPvE (madde 615, plan K7): görüş TAKIM görüşü - rakip takımın oyuncusu benim sisimi açmaz. Co-op'ta herkes aynı takım (hep false).
+			if group_name == "remote_players" and body.get("peer_id") != null and TeamsScript.is_enemy(TeamsScript.local_peer(), int(body.get("peer_id"))):
 				continue
 			result.append(body.global_position)
 			if result.size() >= MAX_SOURCES:

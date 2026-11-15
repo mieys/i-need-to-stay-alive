@@ -7,7 +7,7 @@ class_name FxFrostNovaBurst
 ## oranda yavaşlar (_k). Uzak oyuncuların kopyası sahneyi düz kurar - varsayılan süre zaten bu.
 
 const BASE_DURATION := 0.75 ## eski (tasarlandığı) süre: zerre hızları/ömürleri buna göre
-const DEFAULT_DURATION := 2.3
+const DEFAULT_DURATION := 1.3 ## 2026-11-09: 2,3 -> 1,3 sn (kullanıcı: "çok yavaş, laglı görünüyor")
 
 var elapsed: float = 0.0
 var max_radius: float = 320.0

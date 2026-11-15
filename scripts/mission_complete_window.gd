@@ -42,8 +42,12 @@ static func open(parent: Node, label: String) -> void:
 	parent.add_child(w)
 
 
+const UiHideScript := preload("res://scripts/ui_hide.gd") ## F3 arayüzü gizle (madde 612): Görev Tamamlandı levhası da gizlenir
+
+
 func _ready() -> void:
 	layer = LAYER
+	UiHideScript.mark_layer(self)
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_open.append(self)
 	_gold = GoldRewardFx.held_amount(&"mission")

@@ -6,6 +6,10 @@ const SpiritualSkillsScript: GDScript = preload("res://scripts/spiritual_skills.
 const MetaUpgradesScript: GDScript = preload("res://scripts/meta_upgrades.gd")
 const BalanceLogScript: GDScript = preload("res://scripts/balance_log.gd") ## spend_shop_gold: Para indirimi sayacı
 const MetaProgressScript: GDScript = preload("res://scripts/meta_progress.gd")
+const MapProfilesScript := preload("res://scripts/map_profiles.gd") ## anahtar türü = harita kimliği (madde 605)
+## Hile koruması (2026-11-12): debug modu yalnız editörde, altın/parçacık korumalı sayı (bellek taraması), bütünlük bayrağı.
+const SecurityGuardScript: GDScript = preload("res://scripts/security/security_guard.gd")
+const ProtectedIntScript: GDScript = preload("res://scripts/security/protected_int.gd")
 
 ## "Body block" sınırının (bkz. enemy.gd PLAYER_BODY_RADIUS/_body_radius ve
 ## player.gd'nin karşılık gelen engelleme kodu) her iki tarafta da AYNI
@@ -63,7 +67,7 @@ var victory_reached: bool = false
 var run_surrendered: bool = false
 ## BOSS SİSTEMİ ANAHTARI (kullanıcı 2026-10-08: "tüm bosslar elit yaratıkların yerine geçsin... yeni bossları sana sonradan atacağım"):
 ## false = Kademe bossları, Final (13'lü dalga), zafer penceresi ve sonsuzdaki boss dalgaları KAPALI; eski bosslar elit olarak çıkar
-## (enemy_spawner.gd ELITE_POOL) ve Kademe XV bitince oyun doğrudan sonsuz modda devam eder. Yeni bosslar TEK TEK gelir: her biri
+## (enemy_spawner.gd ELITE_BY_TIER). NOT (madde 597): bu bayrak artık enemy_spawner.gd tarafından OKUNMUYOR (eski 13 bosslu Final kalktı), yalnız endless_has_boss_waves() bakar. Yeni bosslar TEK TEK gelir: her biri
 ## enemy_spawner.gd NEW_BOSS_TIERS'a eklenir ve bu anahtar KAPALIYKEN de çalışır (2026-10-08: ilki Kademe 3 Minotaur'u, CLAUDE.md madde 40).
 ## Anahtar sadece TÜM yeni bosslar + Final hazır olunca true yapılıp BOSS_TIERS/FINAL_CREATURES onlarla doldurulur. Sabit ayar (ağdan
 ## gitmez, her peer'de aynı); testler eski boss akışını sınarken geçici true yapar.
@@ -88,6 +92,38 @@ var run_record_suppressed: bool = false
 var run_shards_banked: int = 0
 var run_victory_shards_given: bool = false
 
+## HARİTA ANAHTARLARI (madde 605, plan docs/harita_icerik/PLAN.md Aşama 4): K5 / K10 bossu ölünce o haritanın anahtarı (anahtar türü =
+## MapProfiles.current_id()) HERKESE, anında KENDİ kaydına (meta_progress.gd keys) yazılır. Sonsuz mod boss dalgaları (kademe > LAST_TIER) ve
+## debug modu açılmış koşu vermez. BAŞLANGIÇ DEĞERİ (tahmin): K5 = 1, K10 = 2 - kullanıcı oynayıp ayarlar.
+const KEYS_PER_BOSS := {5: 1, 10: 2}
+var run_keys: Dictionary = {} ## bu koşuda kazanılan: harita kimliği -> adet (zafer/oyun sonu satırı, balans kaydı; reset() sıfırlar)
+var run_debug_used: bool = false ## koşuda debug modu BİR KEZ açıldı (kendi ya da başkasının, bkz. NetworkManager.broadcast_debug_action)
+var _key_tiers_given: Dictionary = {} ## host: anahtarı verilmiş kademeler (aynı kademede çift ölüm / ikinci boss tekrar vermesin)
+signal keys_granted(map_id: String, count: int) ## bu makinenin kaydına anahtar yazıldı (Main bildirim levhası gösterir)
+
+
+## Bir boss öldü (enemy.gd die(), SADECE host / tek oyunculu): kademesi K5 / K10 ise o haritanın anahtarını herkese verir
+## (çok oyunculuda güvenilir RPC, her eş kendi kaydına yazar; kademe başına BİR kez).
+func award_boss_keys(boss_tier: int) -> void:
+	var n: int = int(KEYS_PER_BOSS.get(boss_tier, 0))
+	if n <= 0 or _key_tiers_given.has(boss_tier) or debug_mode_unlocked or run_debug_used:
+		return
+	_key_tiers_given[boss_tier] = true
+	var map_id: String = MapProfilesScript.current_id()
+	if NetworkManager.is_multiplayer_active:
+		NetworkManager.broadcast_boss_keys.rpc(map_id, n)
+	else:
+		grant_boss_keys(map_id, n)
+
+
+## Her peer'de (tek oyunculuda doğrudan): kendi kaydına yaz + koşu sayacı + bildirim. Debug açıksa (bu makinede) vermez.
+func grant_boss_keys(map_id: String, n: int) -> void:
+	if n <= 0 or not MetaProgressScript.KEY_MAPS.has(map_id) or debug_mode_unlocked or run_debug_used:
+		return
+	MetaProgressScript.grant_keys(map_id, n)
+	run_keys[map_id] = int(run_keys.get(map_id, 0)) + n
+	keys_granted.emit(map_id, n)
+
 
 ## Koşunun oyun saati (saniye): seyyar satıcı bölgesindeyken akmayan game_time'a göre.
 func run_elapsed() -> float:
@@ -104,9 +140,29 @@ func run_elapsed() -> float:
 ## (bkz. meta_progress.gd debug_open - kayda yazılmaz). Çok oyunculuda açan oyuncu herkese bildirilir (bkz. NetworkManager.announce_debug_action).
 var debug_mode_unlocked: bool = false:
 	set(v):
+		if v and not SecurityGuardScript.dev_allowed():
+			return ## dışarı verilen exe'de debug modu YOK (chat kodu / menü düğmesi / koddan çağrı hiçbiri açamaz; hile koruması 2026-11-12)
 		debug_mode_unlocked = v
 		MetaProgressScript.set_debug_open(v)
+		if v:
+			run_debug_used = true ## bu koşuda bir kez açıldıysa kapansa da anahtar yok (madde 605); reset() sıfırlar
 var debug_immortal: bool = false
+
+## "Debug Modu" ana menü düğmesi (madde 614, kullanıcı: "debug modu geri aç ama multiplayer olarak çalışsın, sadece karakterleri silahları
+## petleri ruhani büyüleri açsın"): exportta DA çalışır (dev_allowed kapısı yok - hile koruması yalnız tam debug'ı kapatır). Açık olan YALNIZ menü
+## kilitleridir (MetaProgress.content_open); Q/E/R baştan açılmaz, debug menüsü/ölümsüzlük/spawn yok. Düğme çok oyunculu oda listesini açar.
+## Kalıcı ilerleme yazılmaz (kayıt/kıymık/balans kaydı/anahtar: debug modu ile aynı kapılar). Ana menü açılınca kapanır (main_menu.gd _ready).
+var content_unlock_mode: bool = false:
+	set(v):
+		content_unlock_mode = v
+		MetaProgressScript.set_content_open(v)
+		if v:
+			run_debug_used = true ## koşu ilerleme / anahtar vermesin (debug ile aynı); reset() bayrağa bakarak yeniden kurar
+
+
+## Debug modu bu derlemede açılabilir mi? (Godot editörü ikilisi: true; exe: false) - hud.gd chat kodu + main_menu.gd düğmesi buna bakar.
+func debug_allowed() -> bool:
+	return SecurityGuardScript.dev_allowed()
 var debug_enemy_spawns_enabled: bool = true
 
 ## DÜZELTME (kullanıcı isteği: "3 dakikada bir açılan dükkan sadece level
@@ -135,7 +191,7 @@ var debug_enemy_spawns_enabled: bool = true
 ## case'ine denk gelmediği için _activate_skill()'in en alttaki varsayılanına
 ## (_skill_heal, Oakley/Melek'in Can Basma'sı) düşüyordu.
 var selected_char_id: int = 1
-var selected_character: int = 38
+var selected_character: int = 36 ## Talon'un Q id'si: 2026-11-12'de dash'ler E'ye taşınınca 38 (Hamle Vuruşu) -> 36 (Silah Salvosu)
 
 ## Ruhani Yetenek (F tuşu, bkz. spiritual_skills.gd) - karakter seçim ekranında/lobide seçilir, oyun boyunca sabit.
 ## reset() bunu BİLEREK sıfırlamaz: seçim oyun başlamadan ÖNCE yapılır. Karakter seçim ekranı/lobi (spiritual_picker.gd)
@@ -153,14 +209,26 @@ var selected_map: String = "ana"
 ## player.gd _setup_pet() kurar. Boş/geçersizse PetCatalog.DEFAULT_KEY (köpek). Silah gibi yerel tercih - ağdan gitmez.
 var selected_pet: String = ""
 
-var gold: int = 0
+## Altın / silah parçacığı KORUMALI sayı (protected_int.gd): bellekte gerçek değer yok, Cheat Engine taraması bulamaz; bozulursa değer 0 + oturum
+## "tampered" (kayıt yazmaz). Dışarıdan kullanım aynı: `GameManager.gold += 5`.
+var _gold_p = ProtectedIntScript.new("gold")
+var gold: int:
+	get:
+		return _gold_p.get_value()
+	set(v):
+		_gold_p.set_value(v)
 
 ## SİLAH PARÇACIĞI (kullanıcı isteği 2026-10-08): demirci dükkanında silah almak için gereken nadir kaynak (bkz. weapon_shop_logic.gd
 ## SHARD_COST_*). Yaratıklardan %0.5, elitlerden 1, bosslardan 5 düşer ve biri aldığında HERKESE aynı miktar gider (bölünmez, bkz.
 ## NetworkManager.host_award_weapon_shards / weapon_shard_drop.gd). Altın gibi KİŞİSEL: her oyuncunun kendi sayacı, sadece yerel
 ## GameManager'da (dükkan harcaması ağa gitmez). Değişiklik sinyali HUD sayacını (bkz. hud.gd) ve dükkan ekranını günceller.
 signal weapon_shards_changed(total: int)
-var weapon_shards: int = 0
+var _wshards_p = ProtectedIntScript.new("weapon_shards")
+var weapon_shards: int:
+	get:
+		return _wshards_p.get_value()
+	set(v):
+		_wshards_p.set_value(v)
 
 
 func add_weapon_shards(amount: int) -> void:
@@ -371,6 +439,7 @@ const REBINDABLE_ACTIONS := [
 	{"action": "skill4", "label": "Ruhani Yetenek"},
 	{"action": "interact", "label": "Etkileşim / Eve Gir"},
 	{"action": "inventory", "label": "Envanter"},
+	{"action": "hide_ui", "label": "Arayüzü Gizle"},
 ]
 
 ## action_name -> Key (int) - diskten okunan yerel tuş override'ları,
@@ -390,6 +459,7 @@ enum JoypadKind { BUTTON, AXIS }
 
 
 func _ready() -> void:
+	SecurityGuardScript.scan_install() ## yalnız exportta: ek paket / --main-pack gibi değiştirme belirtileri (bkz. security_guard.gd)
 	## Fizik interpolasyonu: kökte KAPALI, sadece opt_in'li varlıklar açık (bkz. physics_interp.gd).
 	PhysicsInterp.setup_root(get_tree())
 	## Telefon: arayüz ölçeği + en-boy (bkz. mobile_ui.gd). Masaüstünde no-op.
@@ -565,6 +635,9 @@ func _setup_input_actions() -> void:
 	## içinden ayarlamak için (bkz. debug_tuning_panel.gd). Dev-only - gamepad
 	## varsayılanı bilerek yok.
 	_bind("debug_tuning", KEY_F9)
+	## Arayüzü gizle/göster (madde 612, bkz. ui_hide.gd): HUD + bildirimler + karakter üstü çubuklar tek tuşla kapanır. F1/F2 teslim oylamasında
+	## kullanıldığı için F3. Yalnız klavye (kumandada boş düğme yok, telefonda anahtar yok); Ayarlar > TUŞLAR'dan değiştirilebilir.
+	_bind("hide_ui", KEY_F3)
 	## Chat (kullanıcı isteği: "enter tuşuna basarak mesaj yazabiliriz") -
 	## bkz. hud.gd _unhandled_input - kutu kapalıyken Enter'a basınca açılır,
 	## açıkken (LineEdit odaktayken) Enter'a basmak LineEdit'in KENDİ
@@ -596,6 +669,11 @@ func _setup_input_actions() -> void:
 	pause_key.physical_keycode = KEY_ESCAPE
 	InputMap.action_add_event("pause_game", pause_key)
 	_bind_joypad("pause_game", [{"kind": JoypadKind.BUTTON, "button": JOY_BUTTON_START}])
+	## Takım paneli kumandayla (kumanda denetimi 547): L3 = Hasar sıralaması aç/kapa, LT = arkadaşa altın gönder penceresi (açıkken LB/RB
+	## arkadaş değiştirir). Klavyede karşılığı yok (fare: satırdaki $ düğmesi / Hasar sekmesi). Tetik yalnız yarıdan fazla çekilince sayılır.
+	_bind_joypad("party_stats", [{"kind": JoypadKind.BUTTON, "button": JOY_BUTTON_LEFT_STICK}])
+	_bind_joypad("party_gift", [{"kind": JoypadKind.AXIS, "axis": JOY_AXIS_TRIGGER_LEFT, "sign": 1.0}])
+	InputMap.action_set_deadzone("party_gift", 0.6)
 
 
 func _bind(action_name: String, keycode: Key) -> void:
@@ -654,11 +732,58 @@ func get_action_key_label(action_name: String) -> String:
 	return OS.get_keycode_string(code as Key).to_upper()
 
 
+## Kumandayla oynanıyor mu (son girdi kumandadan geldi; bkz. gamepad_ui.gd joypad_active).
+func pad_hints_active() -> bool:
+	var g: Node = get_node_or_null("GamepadUi")
+	return g != null and bool(g.get("joypad_active"))
+
+
+## OYUN İÇİ ipucu / HUD tuş kapağı için tuş adı: kumandayla oynanıyorsa o eylemin kumanda düğmesi (A/B/X/Y/LB/RB/R3...), yoksa klavye adı
+## (kullanıcı atamasına göre). Kumanda denetimi 547: "BOŞLUK tuşuna bas" iken kumandada LB'ydi, yetenek kapakları Q/E/R'ydi. Menü ekranları
+## (karakter seçimi vb.) klavye adı veren `get_action_key_label`'ı kullanmaya devam eder.
+func get_action_hint_label(action_name: String) -> String:
+	if pad_hints_active():
+		var d: Dictionary = get_keybind_joypad_descriptor(action_name)
+		if not d.is_empty():
+			return joypad_short_label(d)
+	return get_action_key_label(action_name)
+
+
+## Tuş kapağına sığan kısa kumanda adı (settings_screen.gd joypad_label uzun Türkçe adlar verir).
+static func joypad_short_label(d: Dictionary) -> String:
+	if int(d.get("kind", -1)) == JoypadKind.BUTTON:
+		match int(d.get("button", -1)):
+			JOY_BUTTON_A: return "A"
+			JOY_BUTTON_B: return "B"
+			JOY_BUTTON_X: return "X"
+			JOY_BUTTON_Y: return "Y"
+			JOY_BUTTON_LEFT_SHOULDER: return "LB"
+			JOY_BUTTON_RIGHT_SHOULDER: return "RB"
+			JOY_BUTTON_LEFT_STICK: return "L3"
+			JOY_BUTTON_RIGHT_STICK: return "R3"
+			JOY_BUTTON_BACK: return "SELECT"
+			JOY_BUTTON_START: return "START"
+			JOY_BUTTON_DPAD_UP: return "D-YUK"
+			JOY_BUTTON_DPAD_DOWN: return "D-AŞA"
+			JOY_BUTTON_DPAD_LEFT: return "D-SOL"
+			JOY_BUTTON_DPAD_RIGHT: return "D-SAĞ"
+		return "B%d" % int(d.get("button", -1))
+	var axis: int = int(d.get("axis", -1))
+	if axis == JOY_AXIS_TRIGGER_LEFT:
+		return "LT"
+	if axis == JOY_AXIS_TRIGGER_RIGHT:
+		return "RT"
+	var side: String = "L" if axis == JOY_AXIS_LEFT_X or axis == JOY_AXIS_LEFT_Y else "R"
+	var neg: bool = float(d.get("sign", 1.0)) < 0.0
+	var horizontal: bool = axis == JOY_AXIS_LEFT_X or axis == JOY_AXIS_RIGHT_X
+	return "%s-%s" % [side, ("SOL" if neg else "SAĞ") if horizontal else ("YUK" if neg else "AŞA")]
+
+
 ## Ruhani Yetenek "Para" pasifi: dükkandaki altın bedelleri %10 azalır (kullanıcı isteği). Tüm dükkan fiyatları
 ## (shop_panel.gd _upgrade_cost/_copy_cost/_item_cost, merchant_shop_screen.gd _entry_cost) son adımda buradan geçer.
 ## Kalıcı "Fiyat İndirimi" geliştirmesi (Ruh Mağazası, meta_upgrades.gd) ile TOPLANIR (en fazla MetaUpgradesScript.DISCOUNT_CAP).
 func shop_discount_fraction() -> float:
-	var d: float = MetaUpgradesScript.bonus("discount")
+	var d: float = MetaUpgradesScript.bonus("discount") + Characters.signature_value(selected_char_id, "discount") ## + karaktere özel stat (Korsan, madde 677)
 	if selected_spiritual == SpiritualSkillsScript.PARA:
 		d += SpiritualSkillsScript.PARA_SHOP_DISCOUNT
 	return minf(d, MetaUpgradesScript.DISCOUNT_CAP)
@@ -687,7 +812,7 @@ func spend_shop_gold(cost: int) -> void:
 func para_discount_saved(paid: int) -> float:
 	if selected_spiritual != SpiritualSkillsScript.PARA or paid <= 1:
 		return 0.0
-	var raw_sum: float = MetaUpgradesScript.bonus("discount") + SpiritualSkillsScript.PARA_SHOP_DISCOUNT
+	var raw_sum: float = MetaUpgradesScript.bonus("discount") + Characters.signature_value(selected_char_id, "discount") + SpiritualSkillsScript.PARA_SHOP_DISCOUNT
 	var d: float = minf(raw_sum, MetaUpgradesScript.DISCOUNT_CAP)
 	if d <= 0.0 or d >= 1.0:
 		return 0.0
@@ -753,8 +878,35 @@ func all_living_players_in_merchant_zone() -> bool:
 ## Toplayıcı yatırımlarının pasif üretimi vardı - ikisi de kullanıcı
 ## istekleriyle KALDIRILDI (bkz. yukarıdaki "altın toplayıcı ve madeni
 ## oyundan tamamen kaldır" notu). Artık altın SADECE savaşarak (düşman
-## düşürmesi, bkz. gold_drop.gd) ve seviye atlama ödülüyle kazanılıyor -
-## pasif, bedava bir gelir YOK.
+## düşürmesi, bkz. gold_drop.gd) ve seviye atlama ödülüyle kazanılıyor.
+## 2026-11-14 (kullanıcı: "oyun aktif olduğu sürece 2 saniyede 1 altın kazansın, +1 +1 diye gösterilmicek"): SESSİZ pasif gelir geri
+## geldi - bkz. _process_passive_gold.
+const PASSIVE_GOLD_INTERVAL := 5.0 ## sn; 2026-11-15 (kullanıcı: "önerdiğin her şeyi yap, oyun kolay olmasın"): 2 -> 5 (oyuncu başı 30 -> 12 altın/dk; yaratık altını artık takımca bölündüğü için zayıf oyuncunun geliri buna bağlı değil, madde 700)
+const PASSIVE_GOLD_AMOUNT := 1
+## Bu makinede SESSİZ kazanılan toplam altın (hiç azalmaz, reset() sıfırlamaz): gold_gain_popup.gd sayaç artışından bunun artışını düşer,
+## böylece pasif gelir "+1" yazısı çıkarmaz (sayaç yine artar).
+var passive_gold_total: int = 0
+var _passive_gold_left: float = PASSIVE_GOLD_INTERVAL
+## Birim test çalıştırıcısı (tools/enemy_rewrite/run_tests.gd) kapatır: altını TAM sayan testler gerçek kare beklerken +1 görmesin.
+var passive_gold_enabled: bool = true
+
+
+## Pasif altın: oyun saati aktığı sürece (oyun bitmedi, açılış geri sayımı / satıcı bölgesi değil, ağaç duraklatılmadı) her makine KENDİ
+## oyuncusuna PASSIVE_GOLD_INTERVAL sn'de 1 altın verir - altın kişisel, ağa gitmez (her eş kendi saatini sayar). Menüde de game_time aktığı için oyuncu
+## sahnede yoksa ("player" grubu boş) altın verilmez. Ölü / yerde yatan oyuncu da kazanır ("oyun aktif olduğu sürece").
+func _process_passive_gold(delta: float) -> void:
+	if not passive_gold_enabled:
+		return
+	_passive_gold_left -= delta
+	if _passive_gold_left > 0.0:
+		return
+	_passive_gold_left = maxf(0.0, _passive_gold_left + PASSIVE_GOLD_INTERVAL)
+	if get_tree().get_first_node_in_group("player") == null:
+		return
+	passive_gold_total += PASSIVE_GOLD_AMOUNT
+	gold += PASSIVE_GOLD_AMOUNT
+
+
 func _process(delta: float) -> void:
 	## Kullanıcı isteği: "yaratıklar ... geçirilen zamanla güçlenmez" - zorluk
 	## SADECE game_time'a bağlı olduğu için (bkz. enemy_spawner.gd
@@ -766,6 +918,7 @@ func _process(delta: float) -> void:
 		## Açılış (madde 313): yaratıklar daha adaya varmadı - saat geri sayım bitince başlar.
 		if not all_living_players_in_merchant_zone() and not invasion_pending:
 			game_time += delta
+			_process_passive_gold(delta)
 		if _mini_shop_cooldown_remaining > 0.0:
 			_mini_shop_cooldown_remaining -= delta
 	## Dirilme hakkı yenilenmesi - bkz. _process_revive_regen üstündeki not.
@@ -777,6 +930,10 @@ var max_revives: int = 3 ## bu makinenin oyuncusunun başlangıç hakkı: 3 + ka
 ## Kalıcı "Ücretsiz Karıştırma" geliştirmesi: HER level atlama kartında (her level_up_screen açılışında) bedava karıştırma hakkı.
 ## Hak koşu başına değil kart başına: kullanılan sayısı ekranın kendisinde tutulur (level_up_screen.gd _free_rerolls_used).
 var free_rerolls_per_card: int = 0
+## EVRİM kartı (5 levelde bir) karıştırması için KOŞU BAŞINA ücretsiz hak (2026-11-13, kullanıcı: "oyun başına en fazla 2"). reset() doldurur:
+## MetaUpgrades.BASE_FREE_EVO_REROLLS (1) + kalıcı "Evrim Karıştırma" geliştirmesi (+1) = en fazla 2. Altınla karıştırma yok.
+## Çok oyunculuda her oyuncu kendi makinesindeki hakkı harcar.
+var free_evo_rerolls_left: int = 0
 ## Tek oyunculu (ve multiplayer'da eski/yedek yol) için - tek oyuncu olduğu
 ## için zaten "kişisel" sayılır, dokunulmadı.
 var revives_remaining: int = 3
@@ -1193,6 +1350,8 @@ const TerrainCollisionScript := preload("res://scripts/terrain_collision.gd")
 const VisionOccludersScript := preload("res://scripts/vision_occluders.gd")
 const DungeonWorldScript := preload("res://scripts/dungeon/dungeon_world.gd") ## ZİNDANLAR (madde 373): duvar/engel hücreleri orman ızgarasında
 var _terrain_su_layer: TileMapLayer = null
+var _terrain_ice_layer: TileMapLayer = null ## Ayaz Dağı "Yer/Buz" (donmuş göl / dere, yürünür); ana haritada yok -> null
+var _terrain_ice_edge_layer: TileMapLayer = null ## "Yer/Zemin Çimen": buz kıyısındaki kar kenarı hücreleri (kayma saymaz)
 var _terrain_ev_layer: TileMapLayer = null
 var _terrain_forest_layer: TileMapLayer = null
 var _terrain_tree_layers: Array[TileMapLayer] = []
@@ -1213,6 +1372,8 @@ func _find_terrain_layers() -> void:
 	if harita == null:
 		return
 	_terrain_su_layer = harita.get_node_or_null("Su/Su") as TileMapLayer
+	_terrain_ice_layer = harita.get_node_or_null("Yer/Buz") as TileMapLayer
+	_terrain_ice_edge_layer = harita.get_node_or_null("Yer/Zemin Çimen") as TileMapLayer
 	_terrain_ev_layer = harita.get_node_or_null("ev/Ev") as TileMapLayer
 	_terrain_forest_layer = harita.get_node_or_null("Orman parçaları/Orman parçaları") as TileMapLayer
 	## Ağaç katmanları ("Shader Eklenecek/Ağaç 0/1/2" - terrain_collision.gd TREE_PARENT/TREE_PREFIX ile aynı kural): görüşü keser (vision_occluders.gd).
@@ -1335,6 +1496,20 @@ func get_forest_layer() -> TileMapLayer:
 func get_water_layer() -> TileMapLayer:
 	_find_terrain_layers()
 	return _terrain_su_layer if is_instance_valid(_terrain_su_layer) else null
+
+
+## BUZ ZEMİNİ (madde 680): world_pos (ayak noktası) Ayaz Dağı'nda donmuş göl / dere buzunun ÜSTÜNDEYSE true - "Yer/Buz" hücresi dolu VE aynı hücrede
+## "Yer/Zemin Çimen" kar kenarı yok (kıyıdaki yarı kar hücreleri kaydırmaz). Buz katmanı olmayan haritada (ana, çöl, zindan) hep false, ucuz bir hücre sorgusu.
+func is_position_on_ice(world_pos: Vector2) -> bool:
+	_find_terrain_layers()
+	if not is_instance_valid(_terrain_ice_layer):
+		return false
+	var cell: Vector2i = _terrain_ice_layer.local_to_map(_terrain_ice_layer.to_local(world_pos))
+	if _terrain_ice_layer.get_cell_source_id(cell) == -1:
+		return false
+	if is_instance_valid(_terrain_ice_edge_layer) and _terrain_ice_edge_layer.get_cell_source_id(cell) != -1:
+		return false
+	return true
 
 
 ## Görüşü kesen ağaç katmanları (Harita/Shader Eklenecek/Ağaç *); harita yoksa ya da VisionOccluders.TREES_BLOCK_VISION kapalıysa boş.
@@ -1493,16 +1668,19 @@ func reset() -> void:
 	run_about_to_reset.emit()
 	_blocking_panels.clear()
 	_terrain_su_layer = null
+	_terrain_ice_layer = null
+	_terrain_ice_edge_layer = null
 	_terrain_ev_layer = null
 	_terrain_forest_layer = null
 	_terrain_tree_layers.clear()
 	_terrain_layers_searched = false
 	TerrainCollisionScript.reset()
 	DungeonWorldScript.reset() ## zindan kapıları yeni koşuda açık (madde 373)
-	preload("res://scripts/assist.gd").reset() ## önceki koşudan kalan destek kayıtları (8 sn'lik asist penceresi) yeni koşuya taşınmasın
+	preload("res://scripts/kill_gold.gd").reset_pool() ## yarım kalan yaratık altını havuzu yeni koşuya taşınmasın (madde: altın havuzu)
 	_map_world_rect = Rect2()
 	_map_world_rect_searched = false
 	game_time = 0.0
+	_passive_gold_left = PASSIVE_GOLD_INTERVAL
 	invasion_pending = false
 	babaanne_target = null
 	babaanne_dead = false
@@ -1515,6 +1693,9 @@ func reset() -> void:
 	run_kills = 0
 	run_shards_banked = 0
 	run_victory_shards_given = false
+	run_keys.clear()
+	_key_tiers_given.clear()
+	run_debug_used = debug_mode_unlocked or content_unlock_mode ## koşu başında debug zaten açıksa (menüden "Debug Modu") koşu işaretli kalır
 	run_clock_origin = 0.0
 	## Önceki oyundan kalma bir seyyar satıcı bölgesi yeni oyuna sızmasın.
 	merchant_zone_active = false
@@ -1524,8 +1705,10 @@ func reset() -> void:
 	team_xp = 0.0
 	team_xp_needed = _xp_needed_for_level(1)
 	team_xp_changed.emit(team_xp, team_xp_needed)
-	max_revives = MetaUpgradesScript.BASE_REVIVES + int(MetaUpgradesScript.bonus("revive"))
-	free_rerolls_per_card = int(MetaUpgradesScript.bonus("free_reroll"))
+	## + karaktere özel başlangıç statı (Characters.SIGNATURE_STATS, madde 677): Hadime dirilme, Talon ücretsiz karıştırma, Shaman evrim karıştırma.
+	max_revives = MetaUpgradesScript.BASE_REVIVES + int(MetaUpgradesScript.bonus("revive")) + int(Characters.signature_value(selected_char_id, "revive"))
+	free_rerolls_per_card = int(MetaUpgradesScript.bonus("free_reroll")) + int(Characters.signature_value(selected_char_id, "free_reroll"))
+	free_evo_rerolls_left = MetaUpgradesScript.BASE_FREE_EVO_REROLLS + int(MetaUpgradesScript.bonus("evo_reroll")) + int(Characters.signature_value(selected_char_id, "evo_reroll"))
 	revives_remaining = max_revives
 	peer_revives.clear()
 	_revive_regen_left.clear()

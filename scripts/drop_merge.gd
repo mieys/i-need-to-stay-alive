@@ -114,10 +114,13 @@ static func find_target(kind: String, pos: Vector2, tier: int, radius: float, ma
 
 
 ## XP: yeni küre YERİNE mevcut bir küreye ekle. true = emildi (çağıran yeni düğüm açmaz).
-static func absorb_xp(pos: Vector2, tier: int, value: float) -> bool:
+## kill_team (2v2, madde 625): küre öldürenin takımını taşır - başka takımın küresine karışmaz (yeni küre düşer). -1 = etiket yok.
+static func absorb_xp(pos: Vector2, tier: int, value: float, kill_team: int = -1) -> bool:
 	var over: bool = xp_over_cap()
 	var target: Node2D = find_target(KIND_XP, pos, tier, OVERFLOW_RADIUS if over else MERGE_RADIUS, OVERFLOW_MERGE_MAX if over else XP_MERGE_MAX)
 	if target == null:
+		return false
+	if int(target.get_meta(&"kill_team", -1)) != kill_team:
 		return false
 	target.call("merge_in", value)
 	return true
@@ -139,7 +142,7 @@ static func credit_xp(tree: SceneTree, pos: Vector2, value: float) -> bool:
 		return false
 	var v: float = value * (load("res://scripts/xp_orb.gd") as GDScript).call("xp_gain_mult_for", p) ## load: xp_orb.gd bu dosyayı preload eder (döngüsel preload olmasın)
 	if NetworkManager.is_multiplayer_active:
-		NetworkManager.host_collect_xp(v)
+		NetworkManager.host_collect_xp(v, int(p.get("peer_id")) if "peer_id" in p else 0)
 	else:
 		GameManager.add_team_xp(v)
 	if p.is_in_group("player") and p.has_method("on_xp_collected_extra"):
@@ -151,10 +154,13 @@ static func credit_gold(tree: SceneTree, pos: Vector2, amount: int) -> bool:
 	var p: Node2D = DropAttraction.nearest_collector(tree, pos)
 	if p == null:
 		return false
+	if not p.is_in_group("player") and not p.has_method("collect_gold"):
+		return false
+	## 2026-11-15: çok oyunculuda bu altın da takımca bölünür (toplayan = en yakın oyuncu; bkz. NetworkManager.host_split_creature_gold)
+	if NetworkManager.is_multiplayer_active:
+		amount = NetworkManager.host_split_creature_gold(amount, pos, p)
 	if p.is_in_group("player"):
 		GameManager.gold += amount ## 2026-11-06: karakterin üstünde "+N altın" yazısı çıkmaz (kullanıcı isteği, bkz. KillGold.SHOW_PICKUP_TEXT)
-	elif p.has_method("collect_gold"):
+	elif amount > 0:
 		p.collect_gold(amount)
-	else:
-		return false
 	return true

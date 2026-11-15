@@ -114,7 +114,7 @@ func test_table_keeps_team_summon_form_scenes_full() -> void:
 		"fx_revive_heart", "fx_revive_rewind", "fx_shield_active", "fx_kalkan_yenileme",
 		"fx_shaman_cast_shield", "fx_shaman_cast_attack", "fx_necro_summon", ## ÇAĞRILAN: Shaman / Necro
 		"fx_talon_form", "fx_matthew_ball", "fx_matthew_form_burst", "fx_evo_vanish", "fx_assasin_stealth", ## FORM
-		"fx_korsan_zone", "fx_buyucu_tornado", "fx_spirit_adc", "fx_spirit_tank", "fx_spirit_taktik", "fx_spirit_dukkan",
+		"fx_korsan_zone", "fx_buyucu_tornado", "fx_spirit_adc", "fx_spirit_tank", "fx_spirit_taktik",
 		"fx_hadime_nightmare_burst", "fx_evo_loop", "fx_enemy_burn_status",
 	]
 	for name in must_stay_full:

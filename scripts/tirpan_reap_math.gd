@@ -19,16 +19,20 @@ extends RefCounted
 
 const TrailFxScene: PackedScene = preload("res://scenes/fx_tirpan_trail.tscn") ## koyu hilal + hayalet bıçak + kızıl iz, z 0 (tırpanın altı)
 const TopFxScene: PackedScene = preload("res://scenes/fx_tirpan_top.tscn") ## kesik + kızıl kor, z 60
-const GroundFxScene: PackedScene = preload("res://scenes/fx_tirpan_ground.tscn") ## saydam mor duman, z -1 (yaratıkların altı)
+const GroundFxScene: PackedScene = preload("res://scenes/fx_tirpan_ground.tscn") ## saydam mor duman, zemin yuvasında (yaratıkların altı)
+const GroundSlotScript := preload("res://scripts/ground_slot.gd") ## z 0 + "Harita"nın hemen arkası (z -1 haritanın altında kalıyordu, madde 573)
 const MeleeChainMath := preload("res://scripts/melee_chain_math.gd") ## vuruş sonrası bekleme (madde 347 zincir)
 
 const REF_OWNER_SCALE := 0.5
 const FX_WORLD_PX := 0.575 ## pişmiş efektin 1 sanat pikseli (dünya px, k = 1)
 const ANCHOR := Vector2(0.0, -3.5)
 
-## Tırpan çizimi (assets/weapons/yeni/tirpan.png, 40x40): el = dönme merkezi (sanat px). Farklı boyutlu dokuda oranla ölçeklenir.
-const ART_SIZE := 40.0
-const GRIP_PX := Vector2(5.0, 33.0)
+## Tırpan çizimi (assets/weapons/yeni/tirpan.png, 32x32): el = dönme merkezi (sanat px). Farklı boyutlu dokuda oranla ölçeklenir.
+## 2026-11-11 (madde 589) yeni çizim: el sapın alt ucundan 7 px yukarıda (6,8, 23,3) - böylece bıçak ucu (30, 15) elden sap
+## boyunca 18,2 / yana 16,6 dünya px'te, eski tırpanınkiyle (18,2 / 15,0) aynı yerde; STEPS ve temas anları değişmedi.
+## Eski 40x40 çizim: ART_SIZE 40, GRIP_PX (5, 33), sap -45.
+const ART_SIZE := 32.0
+const GRIP_PX := Vector2(6.8, 23.3)
 
 ## [süre (sn), tutma noktası (çerçeve) ya da null = önceki, sap açısı (derece, çerçeve), geçiş]
 const STEPS := [
@@ -189,6 +193,8 @@ static func spawn_fx(scene: PackedScene, parent: Node, plan: Dictionary, speed: 
 	fx.global_scale = Vector2.ONE * FX_WORLD_PX * float(plan["k"])
 	fx.flip_v = float(plan["side"]) < 0.0
 	fx.speed_scale = maxf(0.01, speed)
+	if scene == GroundFxScene:
+		GroundSlotScript.place(fx) ## haritanın üstü, yaratıkların altı (kaster + kukla aynı yol)
 	return fx
 
 

@@ -90,7 +90,7 @@ func test_sheets_scene_and_tables() -> void:
 	assert(vine != null and vine.get_width() == 16 * 19 and vine.get_height() == 32, "sarmaşık şeridi 19 kare 16x32")
 	assert(SpawnerScript.SCENES.has("wendigo1") and SpawnerScript.ID_FAMILY["wendigo1"] == "wendigo", "doğuş tabloları")
 	assert(AbilitiesScript.family_has_ability("wendigo"), "yeteneği var")
-	assert(SpawnerScript.NEW_BOSS_TIERS.get(12) == ["wendigo1"], "Kademe 12 bossu")
+	assert(not (SpawnerScript.NEW_BOSS_TIERS.get(10) as Array).has("wendigo1"), "2026-11-14: ana harita K10'u Üç Kardeş aldı (Wendigo kodu/sahnesi duruyor, başka haritaya konabilir)")
 	assert(BossBarArtScript.display_name("wendigo1") == "WENDİGO", "boss barı adı")
 	var b: Node = (SpawnerScript.SCENES["wendigo1"] as PackedScene).instantiate()
 	add_child(b)

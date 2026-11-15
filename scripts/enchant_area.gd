@@ -815,9 +815,23 @@ func _draw() -> void:
 	var fade: float = clampf(minf(_t / 0.25, (dur - _t) / 0.4), 0.0, 1.0)
 	var col: Color = Color(p.get("color", get_night_glow_color()))
 	match kind:
-		"poison_cloud", "steam_fog":
+		"poison_cloud":
+			## 2026-11-15 (kullanıcı: zehirli şeylerde duman değil minik baloncuk): disk/duman topları yerine alanın içinde
+			## yükselip patlayan küçük halkalar (yaratıktaki zehir göstergesi + Cadı Q bulutuyla aynı dil).
+			var rp: float = float(p.get("radius", 80.0))
+			for i in range(12):
+				var ph: float = fmod(_t * 0.8 + PixelDraw.hash01(_seed + i * 13), 1.0)
+				var ang_b: float = TAU * PixelDraw.hash01(_seed + i * 7)
+				var d_b: float = rp * 0.85 * sqrt(PixelDraw.hash01(_seed + i * 5))
+				var pos_b: Vector2 = Vector2(cos(ang_b), sin(ang_b) * 0.65) * d_b - Vector2(0.0, ph * 9.0)
+				var col_b: Color = Color(0.61, 0.85, 0.18) if i % 2 == 0 else Color(0.33, 0.85, 0.5)
+				if ph < 0.88:
+					PixelDraw.ring(self, pos_b, 1.6 + 2.4 * ph, Color(col_b, 0.95 * fade), 1)
+				else:
+					PixelDraw.px(self, pos_b + Vector2(0.0, -2.0), 1, Color(0.91, 0.98, 0.58, 0.9 * fade))
+		"steam_fog":
 			var r: float = float(p.get("radius", 80.0))
-			var base: Color = Color(0.45, 0.78, 0.25) if kind == "poison_cloud" else Color(0.85, 0.9, 0.95)
+			var base: Color = Color(0.85, 0.9, 0.95)
 			PixelDraw.disc(self, Vector2.ZERO, r, Color(base, 0.16 * fade))
 			for i in range(7):
 				var ang: float = TAU * PixelDraw.hash01(_seed + i) + _t * 0.4

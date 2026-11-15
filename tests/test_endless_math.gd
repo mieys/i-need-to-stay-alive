@@ -17,11 +17,11 @@ func test_layer_follows_elapsed_time() -> void:
 	assert(EndlessMathScript.layer_for_elapsed(500.0, 0.0) == 1, "geçersiz kat süresi (0) çökmemeli")
 
 
-func test_scale_tier_starts_at_final_and_climbs() -> void:
-	assert(EndlessMathScript.scale_tier(1) == 16, "Kat 1 = Final'in kademesi (sert sıçrama yok)")
-	assert(EndlessMathScript.scale_tier(2) == 17)
-	assert(EndlessMathScript.scale_tier(10) == 25)
-	assert(EndlessMathScript.scale_tier(0) == 16, "0/negatif kat Kat 1 gibi davranmalı")
+func test_scale_tier_starts_after_the_last_tier_and_climbs() -> void:
+	assert(EndlessMathScript.scale_tier(1) == 11, "Kat 1 = son kademenin ardındaki ölçek 11 (sert sıçrama yok; madde 597: oyun 10 kademe)")
+	assert(EndlessMathScript.scale_tier(2) == 12)
+	assert(EndlessMathScript.scale_tier(10) == 20)
+	assert(EndlessMathScript.scale_tier(0) == 11, "0/negatif kat Kat 1 gibi davranmalı")
 
 
 func test_boss_wave_layers() -> void:
@@ -74,8 +74,8 @@ func test_pick_wave_ids_is_deterministic_for_a_seed() -> void:
 ## ---- Sonsuz mod baskısı (2026-10-18, madde 269) ----
 
 func test_creature_compound_starts_at_layer_two_and_leaves_normal_game_alone() -> void:
-	for tier in [0, 1, 5, 15, 16]:
-		assert(is_equal_approx(EndlessMathScript.creature_health_mult(tier), 1.0), "kademe %d (normal oyun/Final/kat 1) can çarpanı 1 olmalı" % tier)
+	for tier in [0, 1, 5, 10, 11]:
+		assert(is_equal_approx(EndlessMathScript.creature_health_mult(tier), 1.0), "kademe %d (normal oyun/kat 1) can çarpanı 1 olmalı" % tier)
 		assert(is_equal_approx(EndlessMathScript.creature_damage_mult(tier), 1.0), "kademe %d hasar çarpanı 1 olmalı" % tier)
 	assert(is_equal_approx(EndlessMathScript.creature_health_mult(EndlessMathScript.scale_tier(2)), 1.0 + EndlessMathScript.HEALTH_COMPOUND_PER_LAYER), "kat 2 = bir adım")
 	var h21: float = EndlessMathScript.creature_health_mult(EndlessMathScript.scale_tier(21))
@@ -106,8 +106,8 @@ func test_pool_wave_size_starts_small_and_caps_at_pool() -> void:
 
 
 func test_wave_boss_mult_only_for_wave_layers_on() -> void:
-	for tier in [3, 5, 8, 12, 15, 16, 17]:
-		assert(is_equal_approx(EndlessMathScript.boss_health_mult(tier), 1.0) and is_equal_approx(EndlessMathScript.boss_damage_mult(tier), 1.0), "kademe bossu/Final/kat 1-2 (ölçek %d) çarpansız" % tier)
+	for tier in [3, 5, 8, 10, 11, 12]:
+		assert(is_equal_approx(EndlessMathScript.boss_health_mult(tier), 1.0) and is_equal_approx(EndlessMathScript.boss_damage_mult(tier), 1.0), "kademe bossu/kat 1-2 (ölçek %d) çarpansız" % tier)
 	assert(is_equal_approx(EndlessMathScript.boss_health_mult(EndlessMathScript.scale_tier(3)), 1.0), "ilk dalga (kat 3) x1")
 	assert(is_equal_approx(EndlessMathScript.boss_health_mult(EndlessMathScript.scale_tier(6)), 1.5), "2. dalga x1,5")
 	assert(is_equal_approx(EndlessMathScript.boss_health_mult(EndlessMathScript.scale_tier(21)), 4.0), "7. dalga x4")

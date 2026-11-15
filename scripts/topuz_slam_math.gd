@@ -15,7 +15,8 @@ extends RefCounted
 ## Yeni bir ayar değiştirirsen SADECE burayı (ve efekti yeniden pişir) değiştir; iki çağıran dosya aynı fonksiyonları
 ## kullanır (CLAUDE.md "iki ayrı yer" hata sınıfı).
 
-const GroundFxScene: PackedScene = preload("res://scenes/fx_topuz_slam_ground.tscn") ## çukur + çatlak + toz dalgası, z -1 (yaratıkların altı) + darbe sesi
+const GroundFxScene: PackedScene = preload("res://scenes/fx_topuz_slam_ground.tscn") ## çukur + çatlak + toz dalgası, zemin yuvasında (yaratıkların altı) + darbe sesi
+const GroundSlotScript := preload("res://scripts/ground_slot.gd") ## z 0 + "Harita"nın hemen arkası (z -1 haritanın altında kalıyordu, madde 573)
 const TopFxScene: PackedScene = preload("res://scenes/fx_topuz_slam_top.tscn") ## yıldız + toz bulutu + taş kırıntısı, z 60
 const SmearFxScene: PackedScene = preload("res://scenes/fx_topuz_slam_smear.tscn") ## iniş izi, z 0 (topuzun altı)
 const MeleeChainMath := preload("res://scripts/melee_chain_math.gd") ## vuruş sonrası bekleme (madde 347 zincir)
@@ -35,6 +36,7 @@ const HEAD_REACH_PX := 31.851
 ## x 18-150, baş merkezi ~(192, 126)). Burada olmayan doku ART_SIZE oranıyla ölçeklenir (Zanaatkâr düzeni).
 const TEX_GRIPS := {
 	"res://assets/weapons/topuz/icon.png": {"grip": Vector2(45.0, 128.0), "reach": 147.0},
+	"res://assets/weapons/yeni/topuz.png": {"grip": Vector2(4.0, 28.0), "reach": 29.0}, ## 2026-11-10 kullanıcı çizimi 32x32: sap ucu (4,28), baş merkezi ~(24,9)
 }
 
 ## [süre (sn), baş noktası (çerçeve) ya da null = önceki tutma noktası, baş açısı (derece), boy ölçeği, en ölçeği, geçiş]
@@ -192,4 +194,6 @@ static func spawn_fx(scene: PackedScene, parent: Node, plan: Dictionary, speed: 
 	fx.global_scale = Vector2.ONE * FX_WORLD_PX * float(plan["k"])
 	fx.flip_h = float(plan["side"]) < 0.0
 	fx.speed_scale = maxf(0.01, speed)
+	if scene == GroundFxScene:
+		GroundSlotScript.place(fx) ## haritanın üstü, yaratıkların altı (kaster + kukla aynı yol)
 	return fx

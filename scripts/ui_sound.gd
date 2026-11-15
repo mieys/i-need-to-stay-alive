@@ -85,6 +85,8 @@ func set_touch_vibration(on: bool) -> void:
 	touch_settings_changed.emit()
 ## OYUN İMLECİ (2026-10-17, madde 206, bkz. game_cursor.gd): krem piksel ok + düğmede kehribar el + basılı hâli.
 const GameCursorScript := preload("res://scripts/game_cursor.gd")
+## ARAYÜZÜ GİZLE (F3, madde 612, bkz. ui_hide.gd): oyundaki ekran + dünya içi arayüzü tek tuşla kapatır/açar.
+const UiHideScript := preload("res://scripts/ui_hide.gd")
 
 ## GRAFİK AYARLARI - kullanıcı isteği (2026-10-03): "bunu mobil için optimize etmenin en iyi yolu oyuna grafik ayarı
 ## eklemek" -> "Düşük / Orta / Yüksek" hazır seviye + altında tek tek seçenekler (biri elle değişince seviye "Özel" olur);
@@ -128,8 +130,10 @@ func _ready() -> void:
 	_player.stream = CLICK_SOUND
 	_player.volume_db = -6.0
 	add_child(_player)
+	add_child(preload("res://scripts/menu_music.gd").new()) ## menü müziği (bkz. menu_music.gd)
 	add_child(UiAnimScript.new()) ## bkz. ui_anim_enabled notu - tüm düğmelere/sahne geçişlerine bağlanır
 	add_child(GameCursorScript.new()) ## bkz. GameCursorScript notu - imleç + düğmelere el şekli
+	add_child(UiHideScript.new()) ## bkz. UiHideScript notu - F3 arayüzü gizle
 
 
 func play_click() -> void:

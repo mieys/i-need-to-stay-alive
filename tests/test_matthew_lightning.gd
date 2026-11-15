@@ -414,10 +414,11 @@ func test_shield_needs_no_pet_and_glows_as_it_wears() -> void:
 	_cleanup()
 
 
-## Madde 356: patlama SG x %400 + emilen hasarın %50'si (emilen en çok kapasite), süre dolunca da patlar, yakındakilere şimşek
-## çakar, Matthew tam parlar (ağ basamağı 10).
+## Madde 356 (+ madde 356 ek dengesi): patlama SG x %400 (x kritik) + emilen hasarın %25'i (emilen en çok kapasite; kritik emilene ikinci
+## kez binmez), süre dolunca da patlar, yakındakilere şimşek çakar, Matthew tam parlar (ağ basamağı 10).
 func test_shield_burst_scales_and_also_fires_when_time_runs_out() -> void:
-	assert(is_equal_approx(ML.burst_damage(100.0, 600.0), 700.0) and is_equal_approx(ML.burst_damage(50.0, 0.0), 200.0), "formül")
+	assert(is_equal_approx(ML.burst_damage(100.0, 600.0), 550.0) and is_equal_approx(ML.burst_damage(50.0, 0.0), 200.0), "formül")
+	assert(is_equal_approx(ML.burst_damage(100.0, 600.0, 2.0), 950.0), "kritik yalnız SG x %400 kısmına biner (emilen pay çarpılmaz)")
 	var player: Node = _make_player()
 	await _phys(2)
 	var near: Node2D = _enemy(player.global_position + Vector2(100.0, 0.0))
@@ -426,7 +427,7 @@ func test_shield_burst_scales_and_also_fires_when_time_runs_out() -> void:
 	player._skill_shield_dome()
 	player.take_damage(1500.0)
 	assert(not bool(player.matthew_dome_active), "kapasiteyi aşan hasar kalkanı kırar")
-	assert(is_equal_approx(_lost(near), 400.0 + 500.0), "kırılma patlaması %%400 SG + emilenin yarısı: %s" % _lost(near))
+	assert(is_equal_approx(_lost(near), 400.0 + 250.0), "kırılma patlaması %%400 SG + emilenin %%25'i: %s" % _lost(near))
 	assert(is_zero_approx(_lost(far)), "yarıçap dışı vurulmaz: %s" % _lost(far))
 	var bolts: int = 0
 	var novas: int = 0
@@ -449,6 +450,19 @@ func test_shield_burst_scales_and_also_fires_when_time_runs_out() -> void:
 	player._process_skill3(15.1)
 	assert(not bool(player.matthew_dome_active) and player.skill3_state == "cooldown", "süre dolunca kapanır, bekleme başlar")
 	assert(is_equal_approx(_lost(near) - before, 400.0), "süre dolunca da patlar: %s" % (_lost(near) - before))
+	## 3) Garantili kritik (çarpan 1,5 + 0,5 = 2): kapasite 100 x 10 x 2 = 2000 (kritik burada), patlama = 100 x 4 x 2 + 2000 x 0,25 = 1300.
+	## Eski formül (kritik patlamada ikinci kez) 2 x (400 + 1000) = 2800 verirdi.
+	player.crit_chance_bonus = 10.0
+	player.crit_damage_bonus = 0.5
+	player.skill3_state = "ready"
+	near.global_position = player.global_position + Vector2(100.0, 0.0)
+	before = _lost(near)
+	player._activate_skill3()
+	assert(is_equal_approx(float(player.matthew_dome_hp), 2000.0), "kapasite açılışta kritik atar: %s" % player.matthew_dome_hp)
+	player._last_damage_taken_at_msec = -100000 ## birinci kırılmanın temas dokunulmazlığı (CONTACT_DAMAGE_IFRAME_MS) bu vuruşu yutmasın
+	player.take_damage(5000.0)
+	assert(not bool(player.matthew_dome_active), "kapasiteyi aşan hasar kalkanı kırar (kritikli)")
+	assert(is_equal_approx(_lost(near) - before, 1300.0), "çift kritik yok: %s" % (_lost(near) - before))
 	await get_tree().create_timer(0.3).timeout
 	_cleanup()
 

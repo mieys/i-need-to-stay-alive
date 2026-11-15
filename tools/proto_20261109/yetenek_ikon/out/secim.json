@@ -1,0 +1,562 @@
+[
+ {
+  "no": 1,
+  "karakter": "Talon",
+  "yuva": "P",
+  "yetenek": "Güç Yükü (pasif)",
+  "mevcut": "talon_passive_icon",
+  "oneri": "BUF-D8",
+  "b": "BUF-E7",
+  "c": "BAR-A1"
+ },
+ {
+  "no": 2,
+  "karakter": "Talon",
+  "yuva": "Q",
+  "yetenek": "Hamle Vuruşu",
+  "mevcut": "talon_devlesme_icon",
+  "oneri": "SWO-D7",
+  "b": "SWO-C3",
+  "c": "SWO-F7"
+ },
+ {
+  "no": 3,
+  "karakter": "Talon",
+  "yuva": "E",
+  "yetenek": "Silah Salvosu",
+  "mevcut": "talon_yer_sarsintisi_icon",
+  "oneri": "SWO-C4",
+  "b": "SWO-B6",
+  "c": "UND-B7"
+ },
+ {
+  "no": 4,
+  "karakter": "Talon",
+  "yuva": "R",
+  "yetenek": "Ayna Formu",
+  "mevcut": "talon_ayna_formu_icon",
+  "oneri": "PAL-C6",
+  "b": "SWO-F3",
+  "c": "PAL-C7"
+ },
+ {
+  "no": 5,
+  "karakter": "Oakley",
+  "yuva": "P",
+  "yetenek": "Çiçek (pasif)",
+  "mevcut": "oakley_cicek_icon",
+  "oneri": "DRU-C1",
+  "b": "FAI-C7",
+  "c": "FAI-E7"
+ },
+ {
+  "no": 6,
+  "karakter": "Oakley",
+  "yuva": "Q",
+  "yetenek": "Arı Sürüsü",
+  "mevcut": "oakley_ari_suru_icon",
+  "oneri": "FAI-B7",
+  "b": "SUM-E3",
+  "c": "ARC-D5"
+ },
+ {
+  "no": 7,
+  "karakter": "Oakley",
+  "yuva": "E",
+  "yetenek": "Sarmaşıklar",
+  "mevcut": "oakley_sarmasik_icon",
+  "oneri": "DRU-F4",
+  "b": "FAI-C2",
+  "c": "CUR-B5"
+ },
+ {
+  "no": 8,
+  "karakter": "Oakley",
+  "yuva": "R",
+  "yetenek": "Hayat Ağacı",
+  "mevcut": "oakley_passive_icon",
+  "oneri": "DRU-A8",
+  "b": "DRU-F3",
+  "c": "FAI-E6"
+ },
+ {
+  "no": 9,
+  "karakter": "Matthew",
+  "yuva": "P",
+  "yetenek": "Yıldırım Hızı",
+  "mevcut": "matthew_yildirim_hizi_icon",
+  "oneri": "LIG-D7",
+  "b": "AER-E2",
+  "c": "LIG-D2"
+ },
+ {
+  "no": 10,
+  "karakter": "Matthew",
+  "yuva": "Q",
+  "yetenek": "Şimşek Hücumu",
+  "mevcut": "matthew_simsek_hucumu_icon",
+  "oneri": "LIG-F2",
+  "b": "LIG-A1",
+  "c": "DM1-F8"
+ },
+ {
+  "no": 11,
+  "karakter": "Matthew",
+  "yuva": "E",
+  "yetenek": "Elektrik Topu",
+  "mevcut": "matthew_elektrik_topu_icon",
+  "oneri": "LIG-C1",
+  "b": "PAL-C3",
+  "c": "LIG-B1"
+ },
+ {
+  "no": 12,
+  "karakter": "Matthew",
+  "yuva": "R",
+  "yetenek": "Yıldırım Kalkanı",
+  "mevcut": "matthew_yildirim_kalkani_icon",
+  "oneri": "LIG-E2",
+  "b": "BUF-A4",
+  "c": "LIG-F1"
+ },
+ {
+  "no": 13,
+  "karakter": "Büyücü Kız",
+  "yuva": "P",
+  "yetenek": "Büyü Dalgası",
+  "mevcut": "buyucu_passive_icon",
+  "oneri": "AER-F6",
+  "b": "PAL-B3",
+  "c": "BUF-C7"
+ },
+ {
+  "no": 14,
+  "karakter": "Büyücü Kız",
+  "yuva": "Q",
+  "yetenek": "Büyü Değişimi",
+  "mevcut": "buyucu_ulti_buyu_degisimi_icon",
+  "oneri": "PAL-F4",
+  "b": "MON-E2",
+  "c": "NEC-F7"
+ },
+ {
+  "no": 15,
+  "karakter": "Büyücü Kız",
+  "yuva": "E",
+  "yetenek": "Arcane Lanet",
+  "mevcut": "buyucu_skill_arcane_lanet_icon",
+  "oneri": "WAR-C7",
+  "b": "AER-D3",
+  "c": "CUR-E6"
+ },
+ {
+  "no": 16,
+  "karakter": "Büyücü Kız",
+  "yuva": "R",
+  "yetenek": "Don Nova",
+  "mevcut": "buyucu_skill_don_nova_icon",
+  "oneri": "CRY-F2",
+  "b": "CRY-B1",
+  "c": "CRY-F7"
+ },
+ {
+  "no": 17,
+  "karakter": "Assasin Çocuk",
+  "yuva": "P",
+  "yetenek": "Bıçak Uzmanlığı",
+  "mevcut": "assasin_passive_icon",
+  "oneri": "THI-D6",
+  "b": "THI-A3",
+  "c": "BLD-A8"
+ },
+ {
+  "no": 18,
+  "karakter": "Assasin Çocuk",
+  "yuva": "Q",
+  "yetenek": "Şahin Hamlesi",
+  "mevcut": "assasin_sahin_hamlesi_icon",
+  "oneri": "SWO-C3",
+  "b": "DM2-D7",
+  "c": "THI-C3"
+ },
+ {
+  "no": 19,
+  "karakter": "Assasin Çocuk",
+  "yuva": "E",
+  "yetenek": "Gölge Adımı",
+  "mevcut": "assasin_golge_adimi_icon",
+  "oneri": "THI-C8",
+  "b": "AER-E6",
+  "c": "DM1-F4"
+ },
+ {
+  "no": 20,
+  "karakter": "Assasin Çocuk",
+  "yuva": "R",
+  "yetenek": "Gölge Hücumu",
+  "mevcut": "assasin_golge_hucumu_icon",
+  "oneri": "THI-F3",
+  "b": "SWO-F7",
+  "c": "THI-F7"
+ },
+ {
+  "no": 21,
+  "karakter": "Şovalye Adam",
+  "yuva": "P",
+  "yetenek": "Dirençli Duruş",
+  "mevcut": "sovalye_passive_icon",
+  "oneri": "BUF-E5",
+  "b": "PAL-B7",
+  "c": "PRI-E1"
+ },
+ {
+  "no": 22,
+  "karakter": "Şovalye Adam",
+  "yuva": "Q",
+  "yetenek": "Kışkırtma (kalkan yeniler)",
+  "mevcut": "sovalye_kiskirtma_icon",
+  "oneri": "PAL-D8",
+  "b": "BUF-E2",
+  "c": "PAL-C8"
+ },
+ {
+  "no": 23,
+  "karakter": "Şovalye Adam",
+  "yuva": "E",
+  "yetenek": "Koruma Bariyeri",
+  "mevcut": "sovalye_koruma_bariyeri_icon",
+  "oneri": "PAL-E7",
+  "b": "PAL-F1",
+  "c": "PAL-E6"
+ },
+ {
+  "no": 24,
+  "karakter": "Şovalye Adam",
+  "yuva": "R",
+  "yetenek": "Koruma Baloncuğu",
+  "mevcut": "sovalye_ulti_koruma_baloncugu_icon",
+  "oneri": "PAL-A8",
+  "b": "PAL-D5",
+  "c": "BUF-A6"
+ },
+ {
+  "no": 25,
+  "karakter": "Elara",
+  "yuva": "P",
+  "yetenek": "Seviye başı saldırı hızı",
+  "mevcut": "elara_passive_icon",
+  "oneri": "BUF-D1",
+  "b": "BUF-D3",
+  "c": "ARC-C6"
+ },
+ {
+  "no": 26,
+  "karakter": "Elara",
+  "yuva": "Q",
+  "yetenek": "Sıvışma",
+  "mevcut": "elara_sivisma_icon",
+  "oneri": "ARC-C1",
+  "b": "ARC-C2",
+  "c": "CRS-D3"
+ },
+ {
+  "no": 27,
+  "karakter": "Elara",
+  "yuva": "E",
+  "yetenek": "Gerçek Hasar",
+  "mevcut": "elara_gercek_hasar_icon",
+  "oneri": "ARC-B6",
+  "b": "CRS-F8",
+  "c": "ARC-F7"
+ },
+ {
+  "no": 28,
+  "karakter": "Elara",
+  "yuva": "R",
+  "yetenek": "Çift Tetik",
+  "mevcut": "elara_cift_tetik_icon",
+  "oneri": "CRS-D1",
+  "b": "ARC-F3",
+  "c": "CRS-B8"
+ },
+ {
+  "no": 29,
+  "karakter": "Korsan",
+  "yuva": "P",
+  "yetenek": "Altın Avcısı",
+  "mevcut": "korsan_papagan_icon",
+  "oneri": "THI-B8",
+  "b": "THI-E4",
+  "c": "PIR-E8"
+ },
+ {
+  "no": 30,
+  "karakter": "Korsan",
+  "yuva": "Q",
+  "yetenek": "Patlat",
+  "mevcut": "korsan_patlat_icon",
+  "oneri": "DM1-E8",
+  "b": "ORC-D3",
+  "c": "PIR-E3"
+ },
+ {
+  "no": 31,
+  "karakter": "Korsan",
+  "yuva": "E",
+  "yetenek": "Saatli Bomba",
+  "mevcut": "korsan_saatli_bomba_icon",
+  "oneri": "PIR-C7",
+  "b": "PIR-E1",
+  "c": "ORC-E1"
+ },
+ {
+  "no": 32,
+  "karakter": "Korsan",
+  "yuva": "R",
+  "yetenek": "Bombardıman",
+  "mevcut": "korsan_bombardiman_icon",
+  "oneri": "PIR-C6",
+  "b": "PIR-D5",
+  "c": "PIR-D6"
+ },
+ {
+  "no": 33,
+  "karakter": "Melek",
+  "yuva": "P",
+  "yetenek": "Kalkan aurası (pasif)",
+  "mevcut": "melek_passive_icon",
+  "oneri": "BUF-C8",
+  "b": "PRI-F7",
+  "c": "PRI-A2"
+ },
+ {
+  "no": 34,
+  "karakter": "Melek",
+  "yuva": "Q",
+  "yetenek": "Can Basma",
+  "mevcut": "melek_can_basma_icon",
+  "oneri": "BUF-D7",
+  "b": "PRI-A6",
+  "c": "FAI-D7"
+ },
+ {
+  "no": 35,
+  "karakter": "Melek",
+  "yuva": "E",
+  "yetenek": "Kalkan Yenileme",
+  "mevcut": "melek_kalkan_yenileme_icon",
+  "oneri": "PRI-F2",
+  "b": "BUF-E2",
+  "c": "PAL-F1"
+ },
+ {
+  "no": 36,
+  "karakter": "Melek",
+  "yuva": "R",
+  "yetenek": "Kutsal Korku",
+  "mevcut": "melek_kutsal_korku_icon",
+  "oneri": "PRI-F1",
+  "b": "PAL-E3",
+  "c": "PRI-C1"
+ },
+ {
+  "no": 37,
+  "karakter": "Necromancer",
+  "yuva": "P",
+  "yetenek": "Ruh biriktirme",
+  "mevcut": "necromancer_passive_icon",
+  "oneri": "NEC-B4",
+  "b": "NEC-B3",
+  "c": "NEC-E6"
+ },
+ {
+  "no": 38,
+  "karakter": "Necromancer",
+  "yuva": "Q",
+  "yetenek": "İskelet Çağır",
+  "mevcut": "necromancer_iskelet_cagir_icon",
+  "oneri": "NEC-A5",
+  "b": "NEC-A2",
+  "c": "NEC-A4"
+ },
+ {
+  "no": 39,
+  "karakter": "Necromancer",
+  "yuva": "E",
+  "yetenek": "Golem Çağır",
+  "mevcut": "necromancer_hortlak_cagir_icon",
+  "oneri": "EAR-B3",
+  "b": "NEC-C3",
+  "c": "NEC-B8"
+ },
+ {
+  "no": 40,
+  "karakter": "Necromancer",
+  "yuva": "R",
+  "yetenek": "Lanetli Kafatası",
+  "mevcut": "necromancer_lanetli_kafatasi_icon",
+  "oneri": "NEC-F2",
+  "b": "DM1-D3",
+  "c": "UND-B2"
+ },
+ {
+  "no": 41,
+  "karakter": "Shaman",
+  "yuva": "P",
+  "yetenek": "Totem Auraları",
+  "mevcut": "shaman_passive_icon",
+  "oneri": "DRU-E1",
+  "b": "BUF-C5",
+  "c": "PYR-D6"
+ },
+ {
+  "no": 42,
+  "karakter": "Shaman",
+  "yuva": "Q",
+  "yetenek": "Saldırı Totemi",
+  "mevcut": "shaman_saldiri_totemi_icon",
+  "oneri": "DRU-F1",
+  "b": "EAR-E8",
+  "c": "DRU-C6"
+ },
+ {
+  "no": 43,
+  "karakter": "Shaman",
+  "yuva": "E",
+  "yetenek": "Kalkan Totemi",
+  "mevcut": "shaman_kalkan_totemi_icon",
+  "oneri": "EAR-D5",
+  "b": "BUF-C4",
+  "c": "EAR-D6"
+ },
+ {
+  "no": 44,
+  "karakter": "Shaman",
+  "yuva": "R",
+  "yetenek": "Elemental Golem",
+  "mevcut": "shaman_elemental_golem_icon",
+  "oneri": "EAR-C5",
+  "b": "EAR-E3",
+  "c": "EAR-B5"
+ },
+ {
+  "no": 45,
+  "karakter": "Vampir Çocuk",
+  "yuva": "P",
+  "yetenek": "Kan Emme (pasif)",
+  "mevcut": "vampir_passive_icon",
+  "oneri": "BLD-A4",
+  "b": "BLD-F8",
+  "c": "BUF-C1"
+ },
+ {
+  "no": 46,
+  "karakter": "Vampir Çocuk",
+  "yuva": "Q",
+  "yetenek": "Kan Emme",
+  "mevcut": "vampir_kan_emme_icon",
+  "oneri": "BLD-D6",
+  "b": "BLD-C6",
+  "c": "BLD-A1"
+ },
+ {
+  "no": 47,
+  "karakter": "Vampir Çocuk",
+  "yuva": "E",
+  "yetenek": "Yarasa Formu",
+  "mevcut": "vampir_yarasa_formu_icon",
+  "oneri": "BLD-E3",
+  "b": "UND-E5",
+  "c": "DM2-A8"
+ },
+ {
+  "no": 48,
+  "karakter": "Vampir Çocuk",
+  "yuva": "R",
+  "yetenek": "Kan Yarasaları",
+  "mevcut": "vampir_kan_yarasalari_icon",
+  "oneri": "DM1-F5",
+  "b": "DM1-B3",
+  "c": "BLD-F3"
+ },
+ {
+  "no": 49,
+  "karakter": "Hadime",
+  "yuva": "P",
+  "yetenek": "Ruh Göçü",
+  "mevcut": "hadime_passive_icon",
+  "oneri": "NEC-E5",
+  "b": "CUR-C8",
+  "c": "CUR-C3"
+ },
+ {
+  "no": 50,
+  "karakter": "Hadime",
+  "yuva": "Q",
+  "yetenek": "Lanet Kitabı",
+  "mevcut": "hadime_lanet_kitabi_icon",
+  "oneri": "UND-F8",
+  "b": "NEC-D8",
+  "c": "UND-B8"
+ },
+ {
+  "no": 51,
+  "karakter": "Hadime",
+  "yuva": "E",
+  "yetenek": "Kara Delik",
+  "mevcut": "hadime_kara_delik_icon",
+  "oneri": "UND-A2",
+  "b": "CUR-D2",
+  "c": "NEC-E4"
+ },
+ {
+  "no": 52,
+  "karakter": "Hadime",
+  "yuva": "R",
+  "yetenek": "Karabasan",
+  "mevcut": "hadime_karabasan_icon",
+  "oneri": "CUR-E8",
+  "b": "BLD-F4",
+  "c": "UND-E1"
+ },
+ {
+  "no": 53,
+  "karakter": "Cadı",
+  "yuva": "P",
+  "yetenek": "Şans Tılsımı",
+  "mevcut": "cadi_passive_icon",
+  "oneri": "FAI-F6",
+  "b": "MON-F6",
+  "c": "DEB-F7"
+ },
+ {
+  "no": 54,
+  "karakter": "Cadı",
+  "yuva": "Q",
+  "yetenek": "Zehirli Duman",
+  "mevcut": "cadi_zehirli_duman_icon",
+  "oneri": "NEC-A7",
+  "b": "DEB-E8",
+  "c": "UND-A5"
+ },
+ {
+  "no": 55,
+  "karakter": "Cadı",
+  "yuva": "E",
+  "yetenek": "Uçan Süpürge",
+  "mevcut": "cadi_supurge_icon",
+  "oneri": "PAL-E2",
+  "b": "AER-E7",
+  "c": "AER-E8"
+ },
+ {
+  "no": 56,
+  "karakter": "Cadı",
+  "yuva": "R",
+  "yetenek": "İksir Çantası",
+  "mevcut": "cadi_iksir_icon",
+  "oneri": "WAR-E5",
+  "b": "DM1-C5",
+  "c": "DEB-F8"
+ }
+]

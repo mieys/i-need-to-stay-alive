@@ -24,12 +24,14 @@ const ShowcaseScript: GDScript = preload("res://scripts/menu_character_showcase.
 const WeaponPickerScript: GDScript = preload("res://scripts/menu_weapon_picker.gd")
 const PetPickerScript: GDScript = preload("res://scripts/menu_pet_picker.gd")
 const MobileUIScript := preload("res://scripts/mobile_ui.gd")
+const TeamsScript := preload("res://scripts/pvp/teams.gd") ## 2v2 başlatma kuralı (madde 608)
 const LobbyUI := preload("res://scripts/menu_lobby_ui.gd")
 const ChatScript: GDScript = preload("res://scripts/menu_lobby_chat.gd")
 const CharSelectScript: GDScript = preload("res://scripts/character_select.gd")
 const MetaProgressScript: GDScript = preload("res://scripts/meta_progress.gd")
 const DesktopScript: GDScript = preload("res://scripts/lobby_select_desktop.gd")
 const HearthBg := preload("res://scripts/menu_hearth_bg.gd")
+const WorldMapScript: GDScript = preload("res://scripts/world_map_screen.gd") ## dünya haritası seçim ekranı (madde 606)
 
 ## Telefon kart ızgarası: yan yana 3 (kullanıcı isteği 2026-10-03 "karakterler 3 sıralı olsun").
 const M_COLUMNS := 3
@@ -84,6 +86,12 @@ func _ready() -> void:
 	NetworkManager.lobby_updated.connect(_update_lobby_ui)
 	NetworkManager.lobby_phase_changed.connect(_on_phase_changed)
 	NetworkManager.connection_status_changed.connect(_on_status_changed)
+	NetworkManager.world_map_changed.connect(_on_world_map_changed)
+	NetworkManager.world_map_votes_changed.connect(_on_world_map_votes_changed)
+	NetworkManager.world_map_vote_resolved.connect(_on_world_map_vote_resolved)
+	NetworkManager.world_map_vote_finished.connect(_on_world_map_vote_finished)
+	if NetworkManager.world_map_open and not NetworkManager.is_host: ## host haritayı açıkken odaya girildi
+		_open_world_map.call_deferred(true, NetworkManager.world_map_pick)
 
 	selected_char_id = NetworkManager.local_char_id if Characters.DEFS.has(NetworkManager.local_char_id) \
 			and MetaProgressScript.is_unlocked(MetaProgressScript.CHAR, NetworkManager.local_char_id) else 1
@@ -289,8 +297,99 @@ func _local_ready() -> bool:
 	return bool(NetworkManager.lobby_players.get(my_id, {}).get("is_ready", false))
 
 
+## DÜNYA HARİTASI (madde 606 + OYLAMA madde 620): host OYUNU BAŞLAT'a basınca dünya haritası ekranı herkeste açılır. Odada 2+ oyuncu varsa
+## harita OYLA seçilir (NetworkManager.host_begin_world_map_vote; oy = haritaya tıklamak, süre dolunca / herkes oy verince kazanan belli olur,
+## birkaç sn gösterilir, host oyunu başlatır: world_map_vote_finished -> _on_world_map_chosen). Tek kişilik odada eski akış: host seçer + YOLA ÇIK.
+var _world_map: Control = null
+
+
 func _on_start_game_pressed() -> void:
+	if not NetworkManager.is_host or not NetworkManager.all_players_ready() or _world_map != null:
+		return
+	var team_block: String = TeamsScript.lobby_start_block() ## 2v2: iki takımda da oyuncu olmalı (madde 608)
+	if team_block != "":
+		_set_status(team_block)
+		return
+	var vote: bool = NetworkManager.world_map_vote_needed()
+	_open_world_map(vote, GameManager.selected_map)
+	if vote:
+		NetworkManager.host_begin_world_map_vote(GameManager.selected_map)
+
+
+func _open_world_map(vote: bool, map_id: String) -> void:
+	if _world_map != null:
+		return
+	_world_map = WorldMapScript.new()
+	_world_map.set("voting", vote)
+	_world_map.set("initial_map", map_id)
+	if vote:
+		_world_map.set("can_cancel", NetworkManager.is_host) ## oylamayı yalnız host iptal eder
+		_world_map.connect("voted", NetworkManager.cast_world_map_vote)
+	else:
+		_world_map.connect("chosen", _on_world_map_chosen)
+	_world_map.connect("cancelled", _close_world_map.bind(true))
+	add_child(_world_map)
+	UISound.connect_all_buttons(_world_map)
+	if vote:
+		_on_world_map_votes_changed() ## sonradan açılan ekran (geç giren / yeniden lobiye dönen) mevcut oyları + sonucu hemen göstersin
+		if NetworkManager.world_map_vote_winner != "":
+			_world_map.call("show_winner", NetworkManager.world_map_vote_winner, NetworkManager.world_map_vote_tie)
+
+
+## oylama ekranına güncel oy listesini ver (NetworkManager.world_map_votes_changed).
+func _on_world_map_votes_changed() -> void:
+	if _world_map == null or not bool(_world_map.get("voting")):
+		return
+	var me: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0
+	_world_map.call("set_votes", NetworkManager.world_map_votes, me, NetworkManager.lobby_players.size())
+
+
+## kazanan belli oldu (herkeste): son döküm + kazanan satırı; ekran birkaç sn açık kalır, sonra host oyunu başlatır.
+func _on_world_map_vote_resolved(map_id: String, tie: bool) -> void:
+	if _world_map == null or not bool(_world_map.get("voting")):
+		return
+	_on_world_map_votes_changed()
+	_world_map.call("show_winner", map_id, tie)
+
+
+## yalnız host: kazananın gösterim süresi doldu.
+func _on_world_map_vote_finished(map_id: String) -> void:
+	if _world_map == null:
+		return
+	_on_world_map_chosen(map_id)
+
+
+func _close_world_map(broadcast: bool = false) -> void:
+	if _world_map == null:
+		return
+	_world_map.queue_free()
+	_world_map = null
+	if broadcast:
+		NetworkManager.broadcast_world_map(false)
+
+
+func _on_world_map_chosen(map_id: String) -> void:
+	if not NetworkManager.all_players_ready():
+		_close_world_map(true)
+		_set_status("Herkes hazır değil: harita seçimi kapandı.")
+		return
+	var team_block: String = TeamsScript.lobby_start_block() ## harita seçilirken biri takım değiştirmiş olabilir
+	if team_block != "":
+		_close_world_map(true)
+		_set_status(team_block)
+		return
+	GameManager.selected_map = map_id
 	NetworkManager.start_multiplayer_game()
+
+
+## istemci: host dünya haritasını açtı / kapattı. Odada istemci varsa en az iki oyuncu vardır -> ekran hep OYLAMA kipinde açılır.
+func _on_world_map_changed(open: bool, map_id: String) -> void:
+	if NetworkManager.is_host:
+		return
+	if not open:
+		_close_world_map()
+	elif _world_map == null:
+		_open_world_map(true, map_id)
 
 
 func _on_ready_pressed() -> void:

@@ -7,6 +7,13 @@ extends AudioStreamPlayer
 const MUSIC_PATH := "res://assets/audio/boss_music_haunted_woods.wav"
 ## 2026-10-19 (kullanıcı: "boss müziğinin sesini %20 azalt"): eski -8,0 dB x 0,8 genlik (-1,94 dB). Ayarlar'daki Müzik Sesi ayrıca bus'ta uygulanır.
 const PLAY_DB := -9.94
+## Boss başına özel parça (2026-11-15, kullanıcı: Zehirli Gonca için Kevin MacLeod "Tikopia"): boss kimliği ("boss_id" meta, enemy_spawner
+## _setup_boss_enemy) -> MP3 (döngülü). Listede olmayan boss varsayılan parçayı çalar; özel bossla başkası aynı anda yaşıyorsa özel parça kazanır.
+const KARDES_TRACK := "res://assets/audio/boss_music_in_a_heartbeat.mp3" ## Üç Kardeş (Kevin MacLeod "In a Heartbeat"), üçü de aynı parça
+const BOSS_TRACKS := {
+	"gonca1": "res://assets/audio/boss_music_tikopia.mp3",
+	"kardes_kilic1": KARDES_TRACK, "kardes_ok1": KARDES_TRACK, "kardes_buyu1": KARDES_TRACK,
+}
 const SILENT_DB := -60.0
 const FADE_IN_SEC := 1.5
 const FADE_OUT_SEC := 3.0
@@ -14,6 +21,9 @@ const CHECK_INTERVAL := 0.25
 
 var _check_left: float = 0.0
 var _boss_alive: bool = false
+var _default_stream: AudioStream = null
+var _track_streams: Dictionary = {}
+var _current_track: String = ""
 
 
 func _ready() -> void:
@@ -21,6 +31,7 @@ func _ready() -> void:
 	var stream_res: AudioStreamWAV = load(MUSIC_PATH) as AudioStreamWAV
 	if stream_res:
 		stream = stream_res
+		_default_stream = stream_res
 	volume_db = SILENT_DB
 	bus = preload("res://scripts/audio_buses.gd").music_bus() ## Ayarlar > Müzik Sesi bu yoldan
 
@@ -30,6 +41,8 @@ func _process(delta: float) -> void:
 	if _check_left <= 0.0:
 		_check_left = CHECK_INTERVAL
 		_boss_alive = _any_boss_alive()
+		if _boss_alive:
+			_select_track()
 	if _boss_alive:
 		if not playing and stream:
 			play(0.0)
@@ -45,3 +58,31 @@ func _any_boss_alive() -> bool:
 		if is_instance_valid(b) and not b.is_queued_for_deletion() and b.get("is_dead") != true:
 			return true
 	return false
+
+
+## Yaşayan bosslardan özel parçası olan varsa onu seçer (yoksa varsayılan); parça değişirse baştan çalar.
+func _select_track() -> void:
+	var want: String = ""
+	for b in get_tree().get_nodes_in_group("boss"):
+		if is_instance_valid(b) and not b.is_queued_for_deletion() and b.get("is_dead") != true:
+			var path: String = str(BOSS_TRACKS.get(str(b.get_meta(&"boss_id", "")), ""))
+			if path != "":
+				want = path
+				break
+	if want == _current_track:
+		return
+	_current_track = want
+	var s: AudioStream = _default_stream
+	if want != "":
+		if not _track_streams.has(want):
+			var mp3: AudioStreamMP3 = load(want) as AudioStreamMP3
+			if mp3:
+				mp3.loop = true
+			_track_streams[want] = mp3
+		if _track_streams[want] != null:
+			s = _track_streams[want]
+	if s != null and s != stream:
+		var was_playing: bool = playing
+		stream = s
+		if was_playing:
+			play(0.0)

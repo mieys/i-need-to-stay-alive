@@ -43,6 +43,7 @@ const KIND_COLOR := {
 	"left": Color("#b8ac96"),
 	"info": Color("#ecd9b0"),
 	"tier": Color("#e0604c"),
+	"key": HT.PRICE, ## harita anahtarı kazanıldı (madde 605): simge = anahtarın kendi çizimi (icon_tex), yazı altın
 }
 const RIB_GOLD := {"fill": Color("#d9a54a"), "hi": Color("#f2cd7c"), "dk": Color("#8a5a20"), "text": Color("#2a1a0c"), "shadow": false}
 const RIB_RED := {"fill": Color("#a8403a"), "hi": Color("#cf6a58"), "dk": Color("#5e1c16"), "text": Color("#f6e6cc"), "shadow": true}
@@ -165,6 +166,7 @@ var body: String = "":
 var hold: float = 2.4
 var countdown: float = -1.0
 var portrait: Texture2D = null
+var icon_tex: Texture2D = null ## "key" türünde: anahtar dokusu (32x32, 1x) - atanınca çizilir (düzen kind'a bakar, doku sonradan gelebilir)
 var fs: int = 24
 var tier: int = 0
 var gold: int = 0
@@ -280,7 +282,7 @@ func _layout() -> void:
 				text_w = maxf(text_w, _tw(l, fs))
 			var content_h: float = 0.0
 			if tier > 0:
-				content_h += TierDisplayScript.SKULL_H * 4.0
+				content_h += TierDisplayScript.row_size(4).y
 			if _lines.size() > 0:
 				content_h += (8.0 if tier > 0 else 0.0) + _lines.size() * fs
 			var pw: float = maxf(maxf(420.0, text_w + 64.0), rw + 96.0)
@@ -369,7 +371,7 @@ func _draw_banner() -> void:
 	_txt_c(title, cx, 12.0, 32, pal["text"], pal["shadow"])
 	var y: float = PLAQUE_TOP + 40.0
 	if tier > 0:
-		y += TierDisplayScript.SKULL_H * 4.0 + 8.0
+		y += TierDisplayScript.row_size(4).y + 8.0
 	for i in _lines.size():
 		_txt_c(_lines[i], cx, y + i * fs, fs, HT.TEXT)
 	_draw_fuse(16.0, size.y - 14.0, w - 32.0, KIND_COLOR["tier"] if red else KIND_COLOR["ok"])
@@ -513,6 +515,8 @@ func _compact_icon_w(u: float) -> float:
 			return 32.0 ## madalyon 32 px sanat, 1x
 		"merchant":
 			return 48.0 ## satıcı yüzü 2x
+		"key":
+			return 32.0 ## anahtar 32 px sanat, 1x
 	var spec: Array = _grid_spec(kind)
 	var gw: int = 0
 	for row: String in spec[0]:
@@ -524,6 +528,8 @@ func _compact_icon(c: Vector2) -> void:
 	match kind:
 		"ach":
 			_tex_c(MEDAL_TEX, c, 32.0)
+		"key":
+			_tex_c(icon_tex, c, 32.0)
 		"merchant":
 			if _merchant_tex == null:
 				_merchant_tex = AtlasTexture.new()
@@ -579,6 +585,8 @@ func _icon(k: String, c: Vector2, big: bool) -> void:
 			_tex_c(_merchant_tex, c, 96.0 if big else 48.0)
 		"ach":
 			_tex_c(MEDAL_TEX, c, 64.0 if big else 32.0)
+		"key":
+			_tex_c(icon_tex, c, 64.0 if big else 32.0)
 		"left":
 			if portrait != null:
 				_tex_c(portrait, c, 96.0 if big else 48.0, Color(0.62, 0.6, 0.58, 0.85))

@@ -22,11 +22,15 @@ const EXPLOSION_FX_SCENE := preload("res://scenes/fx_korsan_explosion.tscn")
 ## düşürüyor") - bomba eskiden HER KAREDE pixel_draw.gd ile ~160 draw_rect (gövde ASCII sanatı + fitil + gölge) çiziyordu.
 ## Artık tools/gen_korsan_fx_sprites.py'nin AYNI tasarımı (kuru kafalı barut bombası, düşüp sekme, titreşen fitil
 ## kıvılcımı, saniyede bir kırmızı yanıp sönen gözler, sert kenarlı mini gölge) pişirdiği "drop" + "idle" animasyonları.
+## 2026-11-13 (kullanıcı isteği): kuru kafalı ASCII bomba yerine kullanıcının 32x32 lacivert bomba çizimi
+## (assets/fx/korsan/bomb_source.png) + fitil ucunda nefes alan hale, titreşen çekirdek ve uçuşan korlar. Sayfa artık
+## tools/gen_korsan_bomb_sprite.py ile pişer (gen_korsan_fx_sprites.py bomba sayfasına dokunmaz).
 const BOMB_FRAMES := preload("res://assets/fx/korsan/bomb_frames.tres")
-const TEXEL := 1.212 ## PixelDraw.TEXEL
-## Karede bomba merkezi karenin ortasının 10 sanat pikseli altında (bkz. gen_korsan_fx_sprites.py bomb_frame) - node
-## orijini bomba merkezine denk gelsin.
-const SHEET_OFFSET := Vector2(0, -10)
+## 1 kaynak pikseli = bu kadar dünya birimi (gen_korsan_bomb_sprite.py WORLD_TEXEL ile AYNI). Gövde 24 px -> ~16 birim,
+## eski bomba kadar; karakter pikseli (0.90) bombayı neredeyse Korsan boyunda yapıyordu.
+const WORLD_TEXEL := 0.65
+## Node orijini = bomba gövdesinin merkezi (lift 0) - gen_korsan_bomb_sprite.py çıktısındaki SHEET_OFFSET.
+const SHEET_OFFSET := Vector2(3.5, -35.5)
 
 ## #39 DÜZELTME: patlama yarıçapı 130 -> 150 (KorsanFxMath.BOMB_RADIUS). damage varsayılanı player.gd tarafından üzerine yazılır.
 var damage: float = 20.0
@@ -51,7 +55,7 @@ func _ready() -> void:
 	_anim = AnimatedSprite2D.new()
 	_anim.sprite_frames = BOMB_FRAMES
 	_anim.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_anim.scale = Vector2.ONE * TEXEL
+	_anim.scale = Vector2.ONE * WORLD_TEXEL
 	_anim.offset = SHEET_OFFSET
 	add_child(_anim)
 	_anim.play("drop")

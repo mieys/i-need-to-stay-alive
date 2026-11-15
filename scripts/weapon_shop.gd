@@ -426,10 +426,14 @@ func _on_exit_body_entered(body: Node) -> void:
 
 # ------------------------------------------------------------------ arayüz ipucu
 
+const UiHideScript := preload("res://scripts/ui_hide.gd") ## F3 arayüzü gizle (madde 612): etkileşim ipucu katmanı kayıtlı
+
+
 func _create_prompt_ui() -> void:
 	var layer := CanvasLayer.new()
 	layer.name = "WeaponShopPromptLayer"
 	layer.layer = 50
+	UiHideScript.mark_layer(layer)
 	add_child(layer)
 	_prompt_label = Label.new()
 	_prompt_label.name = "InteractPrompt"
@@ -471,7 +475,7 @@ func _process(delta: float) -> void:
 	if is_instance_valid(_shop_screen) and (_player.get("is_dead") == true or _player.get("is_downed") == true):
 		_shop_screen.call("_on_close_pressed")
 	var interact: bool = Input.is_action_just_pressed("interact") and not bool(_player.get("is_chat_typing"))
-	var key_label: String = GameManager.get_action_key_label("interact")
+	var key_label: String = GameManager.get_action_hint_label("interact")
 	if _inside:
 		if is_instance_valid(_shop_screen):
 			_hide_prompt()

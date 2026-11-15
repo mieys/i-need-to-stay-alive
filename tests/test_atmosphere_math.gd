@@ -166,3 +166,20 @@ func test_blood_and_dust_do_not_glow() -> void:
 	assert(not GlowCatalog.profile_for(unknown_fx).is_empty()) ## yeni efekt varsayılan hafif parıltı alır
 	blood.free()
 	unknown_fx.free()
+
+
+## 2026-11-14: "gece ve gündüz eşit uzunluklarda sürsün" - saat hızı evreye göre; gündüz = gece (gerçek sn), tam döngü 900 sn.
+func test_day_and_night_last_equally_long_in_real_time() -> void:
+	var real := {"day": 0.0, "dusk": 0.0, "night": 0.0, "dawn": 0.0}
+	var t: float = 0.0
+	var dt: float = 0.05
+	var elapsed: float = 0.0
+	while elapsed < 900.0 - 0.001:
+		var name: String = AtmosphereMath.phase_name(t)
+		var key: String = {"Gündüz": "day", "Gün batımı": "dusk", "Gece": "night", "Gün doğumu": "dawn"}[name]
+		real[key] += dt
+		t += AtmosphereMath.clock_rate(t) * dt
+		elapsed += dt
+	assert(absf(float(real["day"]) - float(real["night"])) < 1.0, "gündüz %.1f sn, gece %.1f sn" % [real["day"], real["night"]])
+	assert(absf(float(real["dusk"]) - float(real["dawn"])) < 1.0, "gün batımı/doğumu eşit")
+	assert(absf(t - 600.0) < 1.0, "900 sn = tam döngü: %.1f" % t)

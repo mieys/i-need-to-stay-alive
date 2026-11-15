@@ -112,6 +112,37 @@ var _grow_base_scale: Vector2 = Vector2.ZERO
 var is_crit: bool = false
 var shield_pen_percent: float = 0.0
 
+## SEKEN ÇELİK (madde 591, çakramın kalıcı özelliği - scripts/weapon_traits/seken_celik.gd): gidişte bir düşmana çarpınca sana dönmek
+## yerine bounce_range içindeki en yakın, bu atışta henüz vurulmamış başka düşmana seker (bounce_left kez), sonra döner. Sekerek
+## vurulan isabetin hasarı ilk isabetin bounce_dmg_mult katı. Sekme bacağı tam hızla düz gider; hedefe varamazsa bacak sonunda döner.
+## Ağ: kaster her sekmede EnchantFx "chakram_leg" (güvenilir) yollar; uzak kopya kendi başına sekme SEÇMEZ - çarpınca NET_LEG_WAIT kadar
+## yerinde bekler (mesaj gelince sekme noktasından yeni yöne, gelmezse kendisi döner). Kopya net_pid ile bulunur (_net_copies).
+var bounce_left: int = 0
+var bounce_range: float = 0.0
+var bounce_dmg_mult: float = 1.0
+var bounces_done: int = 0
+var net_pid: int = 0:
+	set(v):
+		net_pid = v
+		if v != 0 and get_meta("network_spawned", false):
+			_net_copies[v] = get_instance_id()
+## Bu atışta (gidiş + sekmeler) hasar verilen düşmanlar - sekme bunlara geri dönmez. Atışın vurduğu sayı: hit_count().
+var _throw_hits: Array = []
+var _first_damage: float = -1.0
+var _leg_left: float = 0.0
+var _await_leg: float = 0.0
+var _leg_grace: float = 0.0
+## Sekme bacağı en fazla hedefe uzaklığın bu katı + LEG_PAD kadar sürer (hedef kaçarsa boşa uçmasın).
+const LEG_REACH := 1.25
+const LEG_PAD := 24.0
+## Uzak kopya: çarptığı yerde kasterin sekme mesajını en fazla bu kadar bekler.
+const NET_LEG_WAIT := 0.35
+## Mesaj geldiğinde kopya sekme noktasından bu kadar uzaktaysa oraya ışınlanır (yakınsa olduğu yerden yön değiştirir).
+const NET_LEG_SNAP := 20.0
+## Yön değiştiren kopya bu süre çarpışma saymaz (sekme noktasındaki düşmanın içinden çıkarken yeniden "çarpmasın").
+const NET_LEG_GRACE := 0.12
+static var _net_copies: Dictionary = {}
+
 ## weapon.gd bu ikisini _fire_at()'te doldurur (bkz. single_active_projectile).
 var return_callback_target: Node = null
 var player_node: Node2D = null
@@ -151,21 +182,38 @@ const TRAIL_FOLLOW_SPEEDS := [22.0, 14.0, 9.0] ## büyük = az gecikme (ön), k�
 ## kendisi döndürülmez (piksel ızgarası bozulmasın). SpinFx artık bumerangın etrafında dönen hava çizgileri; Trail1/2/3
 ## (kuyruklu yıldız) artık beyaz girdap değil, AYNI bumerangın küçülerek solan "hayalet" kopyaları. Geri yakalanınca
 ## kısa bir parıltı. Eski Bullet (icon.png'nin kendisi, düz döndürülen) gizlenir.
-const RotFrames := preload("res://assets/weapons/boomerang/rot24_frames.tres")
+## ÇAKRAM (madde 589, 2026-11-11; kullanıcı: "boomerang da artık chakram oluyor onunla değiştir ve chakram için yeni özel efekt
+## hazırla"): mekanik AYNI (anahtar `boomerang`, sahne/betik adları aynı - kayıt/ağ uyumu), görünüş kullanıcının 32x32 çakram çizimi.
+## Hepsi tools/gen_chakram_fx.py ile, çizimin kendi ızgarasında (1 piksel = WeaponTierArt.WORLD_PX x SIZE_MULT["boomerang"] =
+## 0,7475 dünya px, kafadaki ikonla aynı):
+##  - gövde: 24 önceden döndürülmüş kare (RotSprite, 15 derece) - kare açıya göre SEÇİLİR, gövde düz tutulur (piksel ızgarası)
+##  - ÇELİK GİRDAP: gövdenin ARKASINDA dönen bıçak halkası izi (whirl, aynı kare indeksi) - bıçak çentiklerini ve kenarın dışını
+##    buz rengi basamaklı hilallerle doldurur; tek soluk hayalet (Trail1) artık bu halkanın yankısı (gövdesiz)
+##  - isabet "Çelik Kesik" (cut): ön kenarda dönme yönünde süpüren hilal + temas yıldızı + kıvılcımlar, uçuş yönüne döner
+##  - en uzak noktada dönüş parıltısı (ping, altın göbekte yıldız + ince halka; gövdeyle gider) / yakalamada daralan altın halka
+## Hepsi bu betikte: kaster ve diğer istemcilerdeki kozmetik kopya AYNI sahne (ek RPC yok, CLAUDE.md iki-yer kuralı).
+const WeaponTierArtScript := preload("res://scripts/weapon_tier_art.gd")
+const RotFrames := preload("res://assets/weapons/chakram/spin_frames.tres")
+const WhirlFrames := preload("res://assets/fx/chakram/whirl_frames.tres")
+const CutFrames := preload("res://assets/fx/chakram/cut_frames.tres")
+const PingFrames := preload("res://assets/fx/chakram/ping_frames.tres")
 const BalanceLogScript: GDScript = preload("res://scripts/balance_log.gd")
-const CatchFrames := preload("res://assets/fx/boomerang/catch_frames.tres")
+const CatchFrames := preload("res://assets/fx/chakram/catch_frames.tres")
 const ROT_STEPS := 24
-## Sanat pikseli başına ölçek - kafadaki ikonla AYNI: icon.png = art48 x4, weapon_boomerang.tscn Icon ölçeği (ICON_SCALE) x 0.9
-## (weapon.gd menzilli-olmayan silah küçültmesi) x ICON_SIZE_MULT; ikisi de karakterin kök ölçeğiyle çarpılır (weapon.gd
-## _fire_at proj.scale). 2026-09-26 (kullanıcı: "boyutunu da %20 küçült çok büyük görünüyor karakterin üstündeyken bile"):
-## ikon 0.4125 -> 0.33 - ICON_SCALE sahnedeki değerle AYNI kalmalı (test_boomerang_bounce.gd kontrol eder).
+## weapon_boomerang.tscn Icon ölçeği (sahnedeki eski ikon; test_boomerang_bounce.gd kontrol eder). Oyunda ikon artık sabit sanat
+## (weapon_tier_art.gd), ölçeği weapon.gd _apply_fixed_art verir.
 const ICON_SCALE := 0.33
-const BODY_SCALE := ICON_SCALE * 0.9 * WeaponOrbitMath.ICON_SIZE_MULT * 4.0
-## Tek soluk hayalet (Trail1) - Trail2/3 gizli.
+## Sanat pikseli başına yerel ölçek: kök karakterin ölçeğiyle (0,5) çarpılır (weapon.gd _fire_at proj.scale) -> dünya 0,7475 =
+## kafadaki ikonun pikseli (WORLD_PX x SIZE_MULT).
+const ART_WORLD_PX := WeaponTierArtScript.WORLD_PX * 1.3 ## = size_mult("boomerang"); test_boomerang_bounce.gd eşitliği denetler
+const BODY_SCALE := ART_WORLD_PX / WeaponTierArtScript.OWNER_ROOT_SCALE
+## Tek soluk hayalet (Trail1) - Trail2/3 sahneden kalktı. Artık gövde değil, Çelik Girdap halkasının yankısı.
 const GHOST_SCALE := 0.85
-const GHOST_ALPHA := 0.28
-const GHOST_TINT := Color(1.0, 0.9, 0.75)
+const GHOST_ALPHA := 0.34
+const GHOST_TINT := Color(1.0, 1.0, 1.0)
 var _body: AnimatedSprite2D = null
+var _whirl: AnimatedSprite2D = null
+var _ping: AnimatedSprite2D = null
 
 
 func _ready() -> void:
@@ -175,8 +223,16 @@ func _ready() -> void:
 	get_tree().create_timer(6.0).timeout.connect(_on_timeout)
 	if bullet:
 		bullet.visible = false ## bkz. "YENİ GÖRÜNÜM" notu
+	## Çelik Girdap önce eklenir = gövdenin ARKASINDA (yalnız çentiklerde ve kenarın dışında görünür).
+	_whirl = AnimatedSprite2D.new()
+	_whirl.name = "Whirl"
+	_whirl.sprite_frames = WhirlFrames
+	_whirl.animation = &"spin"
+	_whirl.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_whirl.scale = Vector2.ONE * BODY_SCALE
+	add_child(_whirl)
 	_body = AnimatedSprite2D.new()
-	## Madde 402 (2026-11-06): Zanaatkâr kademe sanatı kalktı - kafadaki ESKİ ikonun dönüş kareleri (rot24_frames), kademeyle değişmez.
+	_body.name = "Body"
 	_body.sprite_frames = RotFrames
 	_body.animation = &"spin"
 	_body.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -188,10 +244,11 @@ func _ready() -> void:
 	for i in range(_trail_nodes.size()):
 		var tn: AnimatedSprite2D = _trail_nodes[i]
 		if tn:
-			tn.sprite_frames = _body.sprite_frames
+			tn.sprite_frames = WhirlFrames
 			tn.animation = &"spin"
 			tn.stop()
-			tn.visible = false ## Trail1 ilk _update_trail'de (ölçeği doğru kurulunca) görünür olur; Trail2/3 hep gizli
+			tn.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+			tn.visible = false ## Trail1 ilk _update_trail'de (ölçeği doğru kurulunca) görünür olur
 			tn.modulate = Color(GHOST_TINT.r, GHOST_TINT.g, GHOST_TINT.b, GHOST_ALPHA)
 	## SpinFx artık DÖNGÜLÜ (bkz. spin_frames.tres "trail" loop=true) - mermi
 	## havada olduğu sürece sürekli oynar, _finish()'te projeyle birlikte
@@ -256,9 +313,22 @@ func _move_physics(delta: float) -> void:
 	if _body:
 		_body.rotation = -rotation
 		_body.frame = rot_frame
+	if _whirl:
+		_whirl.rotation = -rotation
+		_whirl.frame = rot_frame
+	if is_instance_valid(_ping):
+		_ping.rotation = -rotation
 	for i in range(_trail_nodes.size()):
 		if _trail_nodes[i]:
 			(_trail_nodes[i] as AnimatedSprite2D).frame = (rot_frame - i - 1 + ROT_STEPS) % ROT_STEPS
+	_leg_grace = maxf(0.0, _leg_grace - delta)
+	if _await_leg > 0.0:
+		## Uzak kopya: çarptığı yerde kasterin sekme mesajını bekliyor (bkz. SEKEN ÇELİK notu); gelmezse kendisi döner.
+		_await_leg -= delta
+		if _await_leg <= 0.0:
+			_begin_return()
+		_update_trail(delta)
+		return
 	if _pause_left > 0.0:
 		## Uç noktada duraklama: aynı düşmanları tekrar tekrar keser (1/3 sn'de bir).
 		_pause_left -= delta
@@ -268,12 +338,22 @@ func _move_physics(delta: float) -> void:
 			_hit_this_leg.clear()
 		_update_trail(delta)
 		return
+	if not _returning and bounces_done > 0:
+		## Sekme bacağı: tam hızla düz; hedefe varamazsa bacak sonunda döner.
+		var leg_step: float = speed * enchant_out_speed_mult * delta
+		position += direction * leg_step
+		_leg_left -= leg_step
+		if _leg_left <= 0.0:
+			_begin_return()
+		_update_trail(delta)
+		return
 	if not _returning:
 		var t: float = clampf(_traveled / maxf(1.0, throw_distance), 0.0, 1.0)
 		var step: float = speed * enchant_out_speed_mult * lerpf(1.0, APEX_SPEED_MIN, t * t) * delta
 		position += direction * step
 		_traveled += step
 		if _traveled >= throw_distance:
+			_spawn_ping() ## en uzak noktada dönüş parıltısı (çarparak dönüşte kesik efekti yeterli)
 			_begin_return()
 		_update_trail(delta)
 		return
@@ -354,15 +434,15 @@ func _finish() -> void:
 	queue_free()
 
 
-## Geri yakalanma parıltısı (pişirilmiş 6 kare, tek sefer) - yakalayan oyuncunun üstünde. Hem gerçek hem kozmetik
-## (diğer istemcilerdeki) mermide oynar, ikisi de _finish'ten geçer.
+## Geri yakalanma: daralan altın halka + parlama (pişirilmiş 7 kare, tek sefer) - yakalayan oyuncunun üstünde. Hem gerçek hem
+## kozmetik (diğer istemcilerdeki) mermide oynar, ikisi de _finish'ten geçer.
 func _spawn_catch_sparkle() -> void:
 	if not is_inside_tree() or get_tree().current_scene == null:
 		return
 	var fx := AnimatedSprite2D.new()
 	fx.sprite_frames = CatchFrames
 	fx.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	fx.scale = Vector2.ONE * 1.212
+	fx.scale = Vector2.ONE * ART_WORLD_PX
 	fx.z_index = 20
 	get_tree().current_scene.add_child(fx)
 	fx.global_position = (player_node.global_position if is_instance_valid(player_node) else global_position) + Vector2(0, -10)
@@ -382,14 +462,18 @@ func _on_body_entered(body: Node) -> void:
 	## Ağ üzerinden spawnlanan görsel kopyalar hasar vermez — sadece darbe efektini/sesini oynatır ve gerçek bumerang gibi
 	## çarptığı yerden döner (efsunla delip geçiyorsa geçer, büyüyorsa aynı oranla büyür).
 	if get_meta("network_spawned", false):
-		if _hit_this_leg.has(body):
+		if _hit_this_leg.has(body) or _await_leg > 0.0 or _leg_grace > 0.0:
 			return
 		_hit_this_leg.append(body)
 		_spawn_impact()
+		_spawn_cut()
 		_play_impact_sound()
 		_grow_on_hit()
 		if not _returning and not enchant_pierce_all:
-			_begin_return()
+			if bounce_left > 0:
+				_await_leg = NET_LEG_WAIT ## Seken Çelik: sekme yönünü kaster söyler (bkz. apply_net_leg)
+			else:
+				_begin_return()
 		return
 	if not body.has_method("take_damage"):
 		return
@@ -405,16 +489,98 @@ func _on_body_entered(body: Node) -> void:
 		hit_dmg *= float(source_weapon.get("crit_damage")) if is_instance_valid(source_weapon) and "crit_damage" in source_weapon else 2.0
 	BalanceLogScript.tag_weapon(source_weapon)
 	body.take_damage(hit_dmg, hit_crit, shield_pen_percent)
+	_throw_hits.append(body)
 	_grow_on_hit()
 	if is_instance_valid(source_weapon) and source_weapon.has_method("enchant_on_projectile_hit"):
 		source_weapon.enchant_on_projectile_hit(self, body, damage, not _returning)
 	if not _shaman_burn_used and body.has_method("try_shaman_weapon_burn"):
 		_shaman_burn_used = body.try_shaman_weapon_burn()
 	_spawn_impact()
+	_spawn_cut()
 	_play_impact_sound()
-	## Birimlerin içinden geçmez: gidişte çarptığı ilk düşmandan geri döner (BIGerang efsunu hariç - delip geçer).
+	## Birimlerin içinden geçmez: gidişte çarptığı ilk düşmandan geri döner (BIGerang efsunu hariç - delip geçer). Seken Çelik: önce
+	## yakındaki başka bir düşmana seker (sekme hakkı ve hedef varsa).
 	if not _returning and not enchant_pierce_all:
+		if bounce_left > 0 and _try_bounce(body):
+			return
 		_begin_return()
+
+
+## Bu atışın (gidiş + sekmeler) hasar verdiği düşman sayısı - Çelik Değirmen yalnız bir şeye vurmuş atışta kopya bırakır.
+func hit_count() -> int:
+	return _throw_hits.size()
+
+
+## Kaster: body'den en yakın uygun düşmana sek (bkz. SEKEN ÇELİK notu). Hedef yoksa false (çağıran sana döndürür).
+func _try_bounce(from_body: Node) -> bool:
+	var nxt: Node2D = _pick_bounce_target((from_body as Node2D).global_position if from_body is Node2D else global_position)
+	if nxt == null:
+		return false
+	if _first_damage < 0.0:
+		_first_damage = damage
+	bounce_left -= 1
+	bounces_done += 1
+	damage = _first_damage * bounce_dmg_mult
+	var to: Vector2 = nxt.global_position - global_position
+	if to.length() > 0.5:
+		direction = to.normalized()
+	_leg_left = to.length() * LEG_REACH + LEG_PAD
+	_hit_this_leg = [from_body]
+	if is_instance_valid(source_weapon) and source_weapon.has_method("enchant_on_boomerang_bounce"):
+		source_weapon.enchant_on_boomerang_bounce(self, from_body, nxt)
+	return true
+
+
+## Sekme hedefi: bounce_range içinde, bu atışta vurulmamış, sahibin hedef alabileceği (görüş sisi / çalılık kuralı - weapon.gd
+## _can_target) en yakın düşman. Yaratık sorgusu EnemyQuery kovası (Enemy.get_enemies_near), isabet başına bir kez.
+func _pick_bounce_target(from_pos: Vector2) -> Node2D:
+	if not is_inside_tree() or bounce_range <= 0.0:
+		return null
+	var best: Node2D = null
+	var best_d: float = INF
+	var can_check: bool = is_instance_valid(source_weapon) and source_weapon.has_method("_can_target")
+	for e in Enemy.get_enemies_near(get_tree(), from_pos, bounce_range):
+		if not is_instance_valid(e) or not (e is Node2D) or e.get("is_dead") == true or not e.has_method("take_damage"):
+			continue
+		if _throw_hits.has(e) or (can_check and not bool(source_weapon.call("_can_target", e))):
+			continue
+		var d: float = (e as Node2D).global_position.distance_squared_to(from_pos)
+		if d < best_d:
+			best_d = d
+			best = e
+	return best
+
+
+## Uzak kopya: kasterin sekme mesajı (EnchantFx "chakram_leg" -> apply_net_leg). Yön değiştirir; sekme noktasından uzaktaysa oraya ışınlanır.
+func _net_leg(at: Vector2, to: Vector2) -> void:
+	bounce_left = maxi(0, bounce_left - 1)
+	bounces_done += 1
+	if global_position.distance_to(at) > NET_LEG_SNAP:
+		global_position = at
+	var d: Vector2 = to - global_position
+	if d.length() > 0.5:
+		direction = d.normalized()
+	_leg_left = d.length() * LEG_REACH + LEG_PAD
+	_returning = false
+	_await_leg = 0.0
+	_leg_grace = NET_LEG_GRACE
+	_hit_this_leg.clear()
+
+
+static func apply_net_leg(pid: int, at: Vector2, to: Vector2) -> void:
+	var id: int = int(_net_copies.get(pid, 0))
+	if id == 0:
+		return
+	var c: Object = instance_from_id(id)
+	if c == null or not is_instance_valid(c) or not c.has_method("_net_leg"):
+		_net_copies.erase(pid)
+		return
+	c.call("_net_leg", at, to)
+
+
+func _exit_tree() -> void:
+	if net_pid != 0 and int(_net_copies.get(net_pid, 0)) == get_instance_id():
+		_net_copies.erase(net_pid)
 
 
 ## BIGerang: her isabette (gidiş ve dönüş) toplamalı büyür, tavana kadar. Kök düğüm ölçeklenir - çarpışma alanı da büyür.
@@ -441,6 +607,43 @@ func _spawn_impact() -> void:
 	var fx = impact_scene.instantiate()
 	get_tree().current_scene.add_child(fx)
 	fx.global_position = global_position + impact_offset
+
+
+## Ölçek çarpanı: çakramın şu anki dünya pikseli (BIGerang büyümesi dahil) / temel piksel.
+func _art_grow() -> float:
+	return maxf(0.01, absf(global_scale.x) / WeaponTierArtScript.OWNER_ROOT_SCALE)
+
+
+## İsabet "Çelik Kesik" (cut_sheet: kare merkezi = çakramın merkezi, +x = uçuş yönü). Dönme hep saat yönünde - yalnız döndürülür,
+## aynalanmaz (döndürme dönme yönünü korur). Kaster + kozmetik kopya aynı yoldan (ikisi de _on_body_entered).
+func _spawn_cut() -> void:
+	if not is_inside_tree() or get_tree().current_scene == null:
+		return
+	var fx := AnimatedSprite2D.new()
+	fx.sprite_frames = CutFrames
+	fx.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	fx.z_index = 20
+	get_tree().current_scene.add_child(fx)
+	fx.global_position = global_position
+	fx.global_rotation = (direction if not direction.is_zero_approx() else Vector2.RIGHT).angle()
+	fx.global_scale = Vector2.ONE * ART_WORLD_PX * _art_grow()
+	fx.play(&"play")
+	fx.animation_finished.connect(fx.queue_free)
+
+
+## En uzak noktada dönüş parıltısı: gövdeyle birlikte gider (çocuk; dönüşü _move_physics'te iptal edilir), bitince silinir.
+func _spawn_ping() -> void:
+	if is_instance_valid(_ping):
+		return
+	_ping = AnimatedSprite2D.new()
+	_ping.name = "Ping"
+	_ping.sprite_frames = PingFrames
+	_ping.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_ping.scale = Vector2.ONE * BODY_SCALE
+	_ping.rotation = -rotation
+	add_child(_ping)
+	_ping.play(&"play")
+	_ping.animation_finished.connect(_ping.queue_free)
 
 
 ## impact_sounds doluysa aralarından rastgele birini seçip çalar (şu an tek

@@ -12,30 +12,31 @@ const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / L
 const WEAPON_ICON_TEXTURES := {
 	"dagger": preload("res://assets/weapons/yeni/bicak.png"),
 	"fire_staff": preload("res://assets/weapons/yeni/fire_staff.png"),
-	"lightning_staff": preload("res://assets/weapons/lightning/icon_v2.png"),
-	"tabanca": preload("res://assets/weapons/tabanca/icon_v2.png"),
+	"lightning_staff": preload("res://assets/weapons/yeni/yildirim_asasi.png"),
+	"tabanca": preload("res://assets/weapons/yeni/tabanca.png"),
 	"tuftuf": preload("res://assets/weapons/yeni/zehir_asasi.png"),
-	"tufek": preload("res://assets/weapons/tufek/icon.png"),
+	"tufek": preload("res://assets/weapons/yeni/tufek.png"),
 	"arcane": preload("res://assets/weapons/yeni/arcane.png"),
 	"yay": preload("res://assets/weapons/yeni/yay.png"),
 	"crossbow": preload("res://assets/weapons/yeni/arbalet.png"),
-	"boomerang": preload("res://assets/weapons/boomerang/icon.png"),
+	"boomerang": preload("res://assets/weapons/yeni/chakram.png"),
 	"buz_asasi": preload("res://assets/weapons/yeni/buz_asasi.png"),
-	"fisek": preload("res://assets/weapons/fisek/icon.png"),
+	"fisek": preload("res://assets/weapons/yeni/dinamit.png"),
 	"pence": preload("res://assets/weapons/yeni/tirpan.png"),
-	"topuz": preload("res://assets/weapons/topuz/icon.png"),
+	"topuz": preload("res://assets/weapons/yeni/topuz.png"),
 	"uzunkilic": preload("res://assets/weapons/yeni/uzunkilic.png"),
 	"gokkusagi": preload("res://assets/weapons/yeni/gokkusagi.png"),
 	"mizrak": preload("res://assets/weapons/zanaat/mizrak_L1.png"),
 	"kalkan": preload("res://assets/weapons/zanaat/kalkan_L1.png"),
 	"yinyang": preload("res://assets/weapons/zanaat/yinyang_L1.png"),
 	"pompali": preload("res://assets/weapons/pompali/icon.png"),
+	"makineli": preload("res://assets/weapons/makineli/icon.png"), ## madde 652
 }
 const WEAPON_NAMES := {
 	"dagger": "Bıçak", "fire_staff": "Ateş Asası", "lightning_staff": "Yıldırım Asası", "tabanca": "Tabanca",
 	"tuftuf": "Zehir Asası", "tufek": "Tüfek", "arcane": "Arcane Asası", "yay": "Yay",
-	"crossbow": "Arbalet", "boomerang": "Bumerang", "buz_asasi": "Buz Asası", "fisek": "Fişek",
-	"pence": "Tırpan", "topuz": "Topuz", "uzunkilic": "Uzunkılıç", "gokkusagi": "Gökkuşağı Asası", "mizrak": "Mızrak", "kalkan": "Kalkan", "yinyang": "Yin Yang Kitabı", "pompali": "Pompalı Tüfek",
+	"crossbow": "Arbalet", "boomerang": "Çakram", "buz_asasi": "Buz Asası", "fisek": "Dinamit",
+	"pence": "Tırpan", "topuz": "Balyoz", "uzunkilic": "Uzunkılıç", "gokkusagi": "Gökkuşağı Asası", "mizrak": "Mızrak", "kalkan": "Kalkan", "yinyang": "Yin Yang Kitabı", "pompali": "Pompalı Tüfek", "makineli": "Hafif Makineli Tüfek", ## madde 652: kullanıcı "adını hafif makineli tüfek yap, thompson kafa karıştırıcı" (anahtar makineli aynı: kayıt/ağ uyumu)
 }
 
 ## Eşyalar (bkz. scripts/items.gd) - dükkandaki ItemsPage satırlarıyla BİREBİR
@@ -986,7 +987,7 @@ func _apply_night_style() -> void:
 
 ## ================================================================ MASAÜSTÜ: "KAHRAMAN ÇANTASI" (madde 341)
 ## Prototip: tools/proto_20261020/envanter_proto.gd _build_b (madde 336). Görünüş ShopDarkKit PAL_WOOD (demirci "Örs Vitrini") + HUD Kısık Ahşap
-## kenarı; simgeler: silah = oyundaki sabit görünüş (madde 402, WeaponTierArt) + efsun kontürü (DarkKit.wicon), stat = stat_mini_lol (HUD mini paneli),
+## kenarı; simgeler: silah = oyundaki sabit görünüş (madde 402, WeaponTierArt) + efsun kontürü (DarkKit.wicon), stat = assets/ui/stat_icons (HUD mini paneliyle aynı),
 ## eşya = kademe renkli yuva (satıcıdaki tile). Pencere dükkanlar gibi grup panelinin solundaki güvenli alanda ortalanır, sığmazsa küçülür.
 ## Oyunu durdurmaz; arkadaki karartmaya tıklamak kapatır. Kurallar (satış iadesi, son silah, kalkan satılmaz) bu dosyanın üst kısmıyla aynı.
 const MobileUIScript := preload("res://scripts/mobile_ui.gd")
@@ -1015,25 +1016,22 @@ const CH_ARC_RADIUS := Vector2(208, 312)
 const CH_CHEST := Vector2(260, 370) ## bağ çizgilerinin hedefi (karakterin göğsü)
 const CH_XP := Color("#c9a2f0")
 const CH_XP_TEXT := Color("#d0a8f6")
-const CH_HEART := Color("#e8735e")
 const CH_GROUPS := [
 	["SALDIRI", ["damage", "fire_rate", "crit_chance", "crit_damage", "shield_pen_percent", "range"]],
 	["SAVUNMA", ["shield_protection", "shield_amount", "shield_regen", "health_regen", "lifesteal", "dodge"]],
 	["DESTEK", ["cooldown_reduction", "heal_power", "speed", "luck"]],
 ]
-## Eşya stat anahtarı -> stat_mini_lol simgesi ("heart" / "xp" = kendi glifi/dokusu).
+## Eşya stat anahtarı -> stat ikonu (assets/ui/stat_icons/<id>.png, HudStatPanel.ICON_DIR).
 const CH_STAT_ICON := {
 	"damage_bonus": "damage", "item_flat_hit_damage": "damage", "item_damage_mult_bonus": "damage", "item_ap_percent": "damage",
 	"item_fire_rate_percent": "fire_rate", "crit_chance_bonus": "crit_chance", "item_crit_damage_bonus": "crit_damage",
 	"cooldown_reduction_percent": "cooldown_reduction", "lifesteal_percent": "lifesteal", "item_extra_lifesteal": "lifesteal",
 	"dodge_chance": "dodge", "item_speed_percent": "speed", "shield_pen_percent": "shield_pen_percent",
-	"item_pickup_range_percent": "range", "shield_protection_bonus": "shield_protection", "item_shield_power_flat": "shield_amount",
+	"item_pickup_range_percent": "pickup_range", "shield_protection_bonus": "shield_protection", "item_shield_power_flat": "shield_amount",
 	"item_shield_regen_flat": "shield_regen", "item_shield_regen_percent": "shield_regen", "item_shield_delay_reduction": "shield_regen",
 	"item_health_regen": "health_regen", "item_vitamin_regen_bonus": "health_regen", "heal_shield_power": "heal_power", "luck": "luck",
-	"max_health": "heart", "exp_gain_percent": "xp",
+	"max_health": "max_health", "exp_gain_percent": "exp_gain",
 }
-const CH_G_HEART := [".##.##.", "#######", "#######", ".#####.", "..###..", "...#..."]
-const CH_XP_GEM := "res://assets/ui/newui/icon_xp_gem.png"
 
 var _k = null ## DarkKit örneği (PAL_WOOD)
 var _chest: Control = null ## tam ekran kök: karartma + pencere
@@ -1178,6 +1176,24 @@ func _ch_on_open() -> void:
 	_ch_refresh()
 	_ch_update_rings()
 	_ch_build_detail()
+	_ch_mark_first_focus()
+
+
+## Kumandayla açılışta ilk odak KAPAT düğmesinde kalmasın (ilk A pencereyi kapatıyordu - denetim 547): seçili yuva (halkası görünen) ilk odak adayı.
+func _ch_mark_first_focus() -> void:
+	for n: Node in get_tree().get_nodes_in_group(&"gamepad_first_focus"):
+		if is_ancestor_of(n):
+			n.remove_from_group(&"gamepad_first_focus")
+	for r: Array in _ch_rings:
+		var ring: Node = r[2]
+		if not is_instance_valid(ring) or not (ring as CanvasItem).visible:
+			continue
+		var btn: Node = ring.get_parent() ## halka yuva düğmesinin çocuğu (ya da içeriğin çocuğu: bir üst)
+		while btn != null and not (btn is Button) and btn != self:
+			btn = btn.get_parent()
+		if btn is Button:
+			btn.add_to_group(&"gamepad_first_focus")
+			return
 
 
 func _ch_refresh() -> void:
@@ -1297,10 +1313,6 @@ func _ch_build_stage() -> Control:
 	_ch_stage.name = "Stage"
 	_ch_stage.custom_minimum_size = CH_STAGE
 	_ch_stage.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var spot = DarkKit.Spot.new(_k.c("spot"), 0.72)
-	spot.position = Vector2(0, 40)
-	spot.size = Vector2(CH_STAGE.x, 640)
-	_ch_stage.add_child(spot)
 	_ch_lines = DarkKit.Lines.new()
 	_ch_lines.size = CH_STAGE
 	_ch_stage.add_child(_ch_lines)
@@ -1747,12 +1759,7 @@ func _ch_item_lines(key: String) -> Array:
 
 func _ch_line(icon_id: String, text: String, col: Color) -> HBoxContainer:
 	var r: HBoxContainer = _k.h(10)
-	if icon_id == "heart":
-		r.add_child(_k.center(_k.glyph(CH_G_HEART, CH_HEART, 3)))
-	elif icon_id == "xp":
-		r.add_child(_k.icon(DarkKit.tex(CH_XP_GEM), 24))
-	else:
-		r.add_child(_k.icon(DarkKit.tex(HudStatPanel.ICON_DIR + icon_id + ".png"), 24))
+	r.add_child(_k.icon(DarkKit.tex(HudStatPanel.ICON_DIR + icon_id + ".png"), 24))
 	r.add_child(_k.expand(_k.wrap(text, 24, col, 520)))
 	return r
 

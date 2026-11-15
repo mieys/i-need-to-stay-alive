@@ -93,7 +93,7 @@ func _group_count(g: String) -> int:
 
 func test_definitions_and_evolution_cards() -> void:
 	var def: Dictionary = Characters.DEFS[CADI]
-	assert(str(def["name"]) == "Cadı" and int(def["skill"]) == CM.Q_SKILL_ID and int(def["skill2"]) == CM.E_SKILL_ID and int(def["skill3"]) == CM.R_SKILL_ID, "yetenek kimlikleri 51/52/53")
+	assert(str(def["name"]) == "Hazel" and int(def["skill"]) == CM.Q_SKILL_ID and int(def["skill2"]) == CM.E_SKILL_ID and int(def["skill3"]) == CM.R_SKILL_ID, "yetenek kimlikleri 51/52/53")
 	for key: String in ["skill_icon", "skill2_icon", "skill3_icon", "passive_icon", "frames", "portrait"]:
 		assert(ResourceLoader.exists(str(def[key])), "kaynak var: %s" % str(def[key]))
 	for path: String in CM.R_ICONS:

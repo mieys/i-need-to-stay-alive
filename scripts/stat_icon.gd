@@ -1,49 +1,44 @@
 extends Control
 
-## Level atlama kartlarındaki her stat için kullanıcının verdiği gerçek
-## piksel-art ikonlar (bkz. assets/ui/level_up_icons/) - eskiden burada
-## kodla çizilen geçici glyph'ler vardı (bkz. git geçmişi), artık gerçek
-## sanat eserleriyle değiştirildi.
-##
-## "shield_protection" (Kalkan Soğurma) ve "shield_amount" (Kalkan Miktarı)
-## için AYRI bir ikon verilmedi - ikisi de aynı "stat_shield.png" dosyasını
-## kullanıyor (tek bir "Kalkan" ikonu gönderildiği için). Aynı sebeple
-## "health_regen" (Can Yenilenmesi) de kendine özel bir ikon yerine
-## "max_health" ile aynı kalp ikonunu ("stat_max_health.png") paylaşıyor.
+## Oyundaki TÜM stat ikonlarının tek kaynağı (2026-11-13, kullanıcı seçimi):
+## assets/ui/stat_icons/<id>.png - "Free - Raven Fantasy Icons" paketinin 16x16
+## ikonları, en yakın komşu ile 3x (48x48, 1 sanat px = 3 ekran px). Seçim
+## listesi: madde 661 (docs/notlar/madde_161-170.md). HUD mini paneli, envanter,
+## satıcı, ruh dükkanı, karakter seçimi, yetenek ipucu ve oyun sonu da buraya bakar.
 
 var _stat_id: String = ""
 var _color: Color = Color(0.85, 0.85, 0.9, 1.0)
 
-const ICON_DIR := "res://assets/ui/level_up_icons/"
+const ICON_DIR := "res://assets/ui/stat_icons/"
 
-## DÜZELTME (kullanıcı isteği: "zırh statını ve zırhla ilgili herşeyi
-## oyundan kaldır, zırh delme yerini kalkan delme alacak") - "armor" anahtarı
-## kaldırıldı, "armor_pen_percent" -> "shield_pen_percent" olarak yeniden
-## adlandırıldı (aynı görsel dosya, stat_armor_pen_percent.png, korundu -
-## sadece hangi stat id'sine eşlendiği değişti).
+## stat id -> ICON_DIR içindeki dosya (her stat kendi ikonu; shield_max = shield_amount).
 const ICON_PATHS := {
-	"speed": "stat_speed.png",
-	"max_health": "stat_max_health.png",
-	"damage": "stat_damage.png",
-	"fire_rate": "stat_fire_rate.png",
-	"health_regen": "stat_max_health.png",
-	"heal_power": "stat_max_health.png", ## 2026-10-02 İyileştirme ve Kalkan Gücü (eşya statı) - ayrı ikon yok, kalp
-	"shield_protection": "stat_shield.png",
-	"crit_chance": "stat_crit_chance.png",
-	"crit_damage": "stat_crit_damage.png",
-	"pickup_range": "stat_pickup_range.png",
-	"shield_pen_percent": "stat_armor_pen_percent.png",
-	"exp_gain": "stat_exp_gain.png",
-	"luck": "stat_luck.png",
-	"range": "stat_range.png",
-	"dodge": "stat_dodge.png",
-	"knockback": "stat_knockback.png",
-	"shield_amount": "stat_shield.png",
-	"cooldown_reduction": "stat_speed.png",
-	## 2026-10-11: Can Çalma kendi ikonu (tools/gen_lifesteal_icon.py) - level atlama kartı ("lifesteal") + envanter/satıcı satırı.
-	"lifesteal": "stat_lifesteal.png",
-	"shield_max": "stat_shield.png",
-	"shield_regen": "stat_shield.png",
+	"speed": "speed.png",
+	"max_health": "max_health.png",
+	"damage": "damage.png",
+	"fire_rate": "fire_rate.png",
+	"health_regen": "health_regen.png",
+	"heal_power": "heal_power.png",
+	"shield_protection": "shield_protection.png",
+	"crit_chance": "crit_chance.png",
+	"crit_damage": "crit_damage.png",
+	"pickup_range": "pickup_range.png",
+	"shield_pen_percent": "shield_pen_percent.png",
+	"exp_gain": "exp_gain.png",
+	"luck": "luck.png",
+	"range": "range.png",
+	"dodge": "dodge.png",
+	"knockback": "knockback.png",
+	"shield_amount": "shield_amount.png",
+	"cooldown_reduction": "cooldown_reduction.png",
+	"lifesteal": "lifesteal.png",
+	"shield_regen": "shield_regen.png",
+	"shield_max": "shield_amount.png",
+	## Ruh dükkanı (meta_upgrades.gd "icon") - stat değil ama aynı set (kullanıcı seçimi 2026-11-13).
+	"discount": "discount.png",
+	"free_reroll": "free_reroll.png",
+	"evo_reroll": "evo_reroll.png",
+	"revive": "revive.png",
 }
 
 ## stat_id -> Texture2D önbelleği, her setup() çağrısında yeniden yüklemesin diye.

@@ -23,7 +23,8 @@ func test_drop_functions_use_killer_luck_multiplier() -> void:
 	for fn in ["func _drop_food()", "func _drop_magnet()", "func _drop_chest()"]:
 		var i: int = source.find(fn)
 		assert(i != -1, "%s bulunamadı" % fn)
-		assert(source.substr(i, 900).find("_luck_mult(LUCK_DROP_MULT_PER_POINT)") != -1, "%s çarpımsal şans kullanmalı" % fn)
+		## _drop_chest'te elit sandık yorumları şans satırını açar (madde 595'te ~1,7 KB) - pencere geniş tutulur.
+		assert(source.substr(i, 3000).find("_luck_mult(LUCK_DROP_MULT_PER_POINT)") != -1, "%s çarpımsal şans kullanmalı" % fn)
 	var g: int = source.find("func _drop_gold()")
 	assert(source.substr(g, 900).find("_luck_mult(LUCK_GOLD_MULT_PER_POINT)") != -1, "_drop_gold çarpımsal şans kullanmalı")
 	var k: int = source.find("func _killer_node()")

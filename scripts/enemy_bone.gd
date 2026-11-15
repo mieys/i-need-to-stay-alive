@@ -7,7 +7,9 @@ extends Node2D
 
 const TEXEL := 1.212 ## ateş topu ve diğer yaratık yetenek efektleriyle aynı piksel yoğunluğu
 const PaladinDome := preload("res://scripts/paladin_dome.gd")
+const KalkanGuard := preload("res://scripts/kalkan_guard.gd") ## Kalkan silahı siper duruşu (madde 685)
 const AbilitiesScript := preload("res://scripts/enemy_abilities.gd")
+const ShieldBubbleHit := preload("res://scripts/shield_bubble_hit.gd") ## mana kalkanı baloncuğu (madde 572)
 const ProjectileRangeScript := preload("res://scripts/projectile_range.gd")
 const LIFETIME := 1.8
 const HIT_RADIUS := 6.0
@@ -77,6 +79,7 @@ static func texture() -> Texture2D:
 
 
 func _ready() -> void:
+	add_to_group(KalkanGuard.GROUP)
 	z_index = 11
 	_dir = Vector2(data.get("dir", Vector2.RIGHT))
 	if _dir.length() < 0.01:
@@ -117,14 +120,25 @@ func _physics_process(delta: float) -> void:
 	for p in AbilitiesScript.damageable_players(get_tree()):
 		var pn := p as Node2D
 		if PaladinDome.node_contains(pn, global_position):
+			if authoritative:
+				PaladinDome.absorb_ranged_hit(pn, damage, source) ## kubbe atışı emer: kalkana hasar (madde 542)
 			_break()
 			return
+		KalkanGuard.guard_shot(pn, self) ## Kalkan silahı siper duruşu: önden gelen atışın hasarı %30 azalır, atış durmaz (madde 705)
 		## Talon "Kalkan Çemberi" evrimi: salvo çemberine değen yaratık atışı söner (ateş topuyla aynı kural).
 		if pn.has_method("get_talon_ward_radius"):
 			var ward_r: float = float(pn.call("get_talon_ward_radius"))
 			if ward_r > 0.0 and global_position.distance_to(pn.global_position) <= ward_r:
 				_break()
 				return
+		## Mana kalkanı baloncuğu (madde 572): kalkanı olan oyuncuya atış gövdeye değil baloncuğun DIŞ kenarına çarpar;
+		## efekt her makinede kendi kopyasıyla (shield_bubble_hit.gd), hasar yalnız yetkili kopyadan.
+		if ShieldBubbleHit.touches(pn, global_position, HIT_RADIUS):
+			ShieldBubbleHit.impact(pn, global_position)
+			if authoritative:
+				AbilitiesScript.deal_special_damage(p, damage, source, "bone")
+			_break()
+			return
 		if global_position.distance_to(pn.global_position) <= HIT_RADIUS + AbilitiesScript.TARGET_BODY_RADIUS:
 			if authoritative:
 				AbilitiesScript.deal_special_damage(p, damage, source, "bone")

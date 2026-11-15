@@ -25,16 +25,20 @@ const MeleeChainMath := preload("res://scripts/melee_chain_math.gd") ## vuruş s
 const REF_OWNER_SCALE := 0.5
 const FX_WORLD_PX := 0.575 ## pişmiş efektin 1 sanat pikseli (dünya px, k = 1) = Zanaatkâr silahlarıyla aynı yoğunluk
 const ANCHOR := Vector2(0.0, -3.5) ## çerçeve orijini hedefin bu kadar üstünde (topuz_slam_math.gd ile aynı neden)
-const TIP := 14.94 ## ikon merkezinden uca (dünya px, k = 1): mizrak_L3 sanatında uç a = 27,2 x 0,955 x 0,575
+const WeaponTierArtScript := preload("res://scripts/weapon_tier_art.gd")
+const TIP_BASE := 14.94 ## ikon merkezinden uca (dünya px, ikon x1,0 iken): mizrak_L3 sanatında uç a = 27,2 x 0,955 x 0,575
+## 2026-11-13 (silah boyut turu): ikon boyu WeaponTierArt.SIZE_MULT["mizrak"] kadar büyüdü -> uç da o kadar uzaklaşır; poz tablosu
+## ucun hedeflenen yerinden TÜRETİLİR (merkez = uç yeri - TIP x boy), böylece uç temas anında yine tam hedefte olur.
+const TIP := TIP_BASE * WeaponTierArtScript.SIZE_MULT["mizrak"] ## ikon merkezinden uca (dünya px, k = 1) - GERÇEK ikon boyuyla
 
 ## [süre (sn), ikon merkezi (çerçeve) ya da null = önceki nokta, uç açısı (derece), boy ölçeği, en ölçeği, geçiş]
 ## Merkez x = ucun hedeflenen yeri - TIP x boy (prototipte poz ucun yeriyle verilir: hedefin 20 px önü, 7 px geri, 16 px geçe).
 const STEPS := [
-	[0.13, Vector2(-34.94, 0.0), 0.0, 1.0, 1.0, "out"], ## hedefin önüne süzül (uç 20 px önde)
-	[0.07, Vector2(-40.89, 0.0), 0.0, 0.93, 1.05, "inout"], ## geri çek
-	[0.045, Vector2(-0.43, 0.0), 0.0, 1.1, 0.94, "in"], ## sapla: uç hedeften 16 px geçer (temas CONTACT)
+	[0.13, Vector2(-20.0 - TIP, 0.0), 0.0, 1.0, 1.0, "out"], ## hedefin önüne süzül (uç 20 px önde)
+	[0.07, Vector2(-27.0 - TIP * 0.93, 0.0), 0.0, 0.93, 1.05, "inout"], ## geri çek (uç 27 px önde)
+	[0.045, Vector2(16.0 - TIP * 1.1, 0.0), 0.0, 1.1, 0.94, "in"], ## sapla: uç hedeften 16 px geçer (temas CONTACT)
 	[0.06, null, 0.0, 1.0, 1.0, "shake"], ## saplıyken titre
-	[0.08, Vector2(-14.94, 0.0), 0.0, 1.0, 1.0, "out"], ## çek (uç hedefin üstüne)
+	[0.08, Vector2(-TIP, 0.0), 0.0, 1.0, 1.0, "out"], ## çek (uç hedefin üstüne)
 	[0.03, null, 0.0, 1.0, 1.0, "lin"],
 ]
 const CONTACT := 0.2357 ## uç hedeften geçtiği an (saldırı başından): 0,20 + sqrt(27/43) x 0,045
@@ -54,8 +58,8 @@ const STREAK_SPEED := 1700.0
 ## Cirit (her N. saplama, cirit.gd): büyük geri çekiliş -> RELEASE_AT'te bırak, mızrak uçar (uç THROW_TIP_X'ten), sonda FADE'de
 ## küçülerek söner, REAPPEAR sonra dinlenme yerinde POP ile belirir. Uçuş süresi hızdan (oyun hızı/saldırı hızı ölçeklemez).
 const THROW_STEPS := [
-	[0.13, Vector2(-34.94, 0.0), 0.0, 1.0, 1.0, "out"],
-	[0.12, Vector2(-47.45, 0.0), 0.0, 0.9, 1.08, "inout"], ## büyük geri çekiliş (uç hedefin 34 px önü)
+	[0.13, Vector2(-20.0 - TIP, 0.0), 0.0, 1.0, 1.0, "out"],
+	[0.12, Vector2(-34.0 - TIP * 0.9, 0.0), 0.0, 0.9, 1.08, "inout"], ## büyük geri çekiliş (uç hedefin 34 px önü)
 ]
 const RELEASE_AT := 0.25
 const THROW_TIP_X := -34.0

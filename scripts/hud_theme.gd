@@ -49,7 +49,8 @@ const PRICE := Color("#f6d27e") ## altın/sayı
 const ACCENT := Color("#f0c070") ## başlık / birinci sıra
 const GOOD := Color("#b5d98a")
 const BAD := Color("#f09a80") ## uyarı / yere düştü (kahve zeminde okunur kırmızı)
-const SHARD := Color("#a8f0b8") ## silah parçacığı sayısı (simgenin açık zümrüt tonu; madde 519)
+const SHARD := Color("#ff8e2e") ## silah parçacığı sayısı (kızıl damarlı cevher simgesinin kor turuncusu; BAD ve PRICE'tan ayrışır, madde 560)
+const SOUL := Color("#f2c4ff") ## Ruh Kıymığı sayısı (mor yıldızın açık orkide tonu; madde 559)
 const ACCENT_SOFT := Color("#e2c08a") ## sönük altın (seçili olmayan başlık, ikincil vurgu)
 const ACCENT_DK := Color("#6a4416") ## altın düğmenin kenarı / koyu altın
 const ACCENT_TEXT := Color("#24160a") ## altın zemin üstündeki yazı
@@ -86,6 +87,8 @@ const WIN_PANEL2 := STRIPE ## iç kart / satır şeridi
 const WIN_PANEL3 := PLATE_ON ## seçili / üstüne gelinen kart
 const WIN_LINE := RIM_LO ## kenar çizgisi
 const WIN_LINE_HI := RIM ## vurgulu kenar
+## Silah simgesi yuvası (madde 679): silah çizimleri siyah konturlu, WIN_INSET kuyusunda kayboluyordu -> açık ahşap kuyu. Okuyan: lobby_select_desktop.gd _kind_slot.
+const ITEM_WELL := Color("#a8875e")
 
 ## YARATIK HASAR SAYILARI (madde 429, kullanıcı 2026-11-06: "hasar sayıları çok göz yoruyor, karmaşık"): saf beyaz + saf siyah kontür yerine
 ## sıcak krem + OUTLINE kahvesi; kritik doygun kırmızı yerine turuncu-altın; süreli hasar kendi soluk tonunda. Okuyan: damage_numbers.gd spawn_hit (madde 429).
@@ -100,6 +103,12 @@ const DMG_DOT := Color("#d9c09a") ## diğer süreli hasar
 ## (game_over_board.gd DMG/TANK, phone_game_over.gd, weapon_shop_screen.gd aynı hex'i kendi sabitinde tutuyor) + grup paneli Hasar Sıralaması.
 const STAT_DEALT := Color("#e8885a")
 const STAT_TAKEN := Color("#8cc0e6")
+
+## 2v2 TAKIM renkleri (madde 608: seçim ekranı takım başlığı / şeridi): mavi = 0. takım, kızıl = 1. Kamp perdesiyle (pvp/team_bases.gd
+## ALLY_COLORS[0] / ENEMY_COLORS[0]) aynı tonlar; `Teams.NAMES` / `Teams.TITLES` aynı sırada.
+const TEAM_BLUE := Color("#4aa8ff")
+const TEAM_RED := Color("#db4538")
+const TEAM_COLORS: Array[Color] = [TEAM_BLUE, TEAM_RED]
 
 ## Koyu levhada okunan "mürekkep" renkleri (BBCode hex) - UIKit.INK'in (bej zemin) koyu HUD karşılığı, anahtarlar AYNI.
 ## Yetenek ipucu (skill_icon.gd _format_lol_style, hud_tooltip.gd) buradan okur.

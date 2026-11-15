@@ -53,7 +53,7 @@ func _push_key(code: Key) -> void:
 
 func test_categories_build_all_current_settings() -> void:
 	var s := await _open()
-	assert(_row_ids(s) == ["language", "volume", "music", "fullscreen", "resolution", "fps", "ui_opacity", "shake", "ui_anim", "auto_pick", "dmg_numbers", "ally_fx"], "GENEL: %s" % str(_row_ids(s)))
+	assert(_row_ids(s) == ["language", "volume", "music", "fullscreen", "resolution", "fps", "ui_opacity", "shake", "ui_anim", "auto_pick", "player_names", "dmg_numbers", "ally_fx"], "GENEL: %s" % str(_row_ids(s)))
 	_push_key(KEY_E)
 	assert(int(s.get("_cat")) == 1, "E -> GRAFİK")
 	## "sun" satırı yalnız güneş huzmesi ya da bulut gölgesi açıkken (madde 484: ikisi de kapalı -> satır yok).
@@ -155,6 +155,32 @@ func test_keyboard_moves_focus_and_steps_slider() -> void:
 	_cleanup()
 
 
+## 2026-11-10 oyuncu bildirimi: masaüstü GENEL sekmesi ekrana sığmıyor (~1300 px, tuval 1080) ve kaydırma yoktu, OYUN bölümü
+## erişilemiyordu. Satır sütunu artık kaydırma alanında; W/S son satıra inince alan kayar, odaklı satır görünür kalır.
+func test_desktop_rows_scroll_and_follow_keyboard_focus() -> void:
+	var s := await _open()
+	await get_tree().process_frame
+	var sc: ScrollContainer = s.find_child("RowsScroll", true, false)
+	assert(sc != null, "masaüstünde satırlar kaydırma alanında")
+	var rows: Control = s.find_child("Rows", true, false)
+	assert(rows != null and rows.get_parent() == sc, "Rows sütunu kaydırma alanının çocuğu")
+	assert(sc.position.y + sc.size.y <= SettingsScreenScript.ROWS_BOTTOM + 0.5, "alan klavye ipucu satırlarının üstünde biter")
+	assert(rows.size.y > sc.size.y, "GENEL ekrana sığmaz, kaydırma gerekli: %.0f > %.0f" % [rows.size.y, sc.size.y])
+	for i in 30:
+		_push_action("ui_down")
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var all_rows: Array = s.get("_rows")
+	assert(int(s.get("_focus")) == all_rows.size() - 1, "son satıra inildi")
+	assert(sc.scroll_vertical > 0, "son satır için alan kaydı")
+	var panel: Control = all_rows[all_rows.size() - 1]["panel"]
+	var top: float = panel.global_position.y - sc.global_position.y
+	assert(top >= -1.0 and top + panel.size.y <= sc.size.y + 1.0, "odaklı son satır alanın içinde: üst %.0f alt %.0f / %.0f" % [top, top + panel.size.y, sc.size.y])
+	_push_key(KEY_E)
+	assert(sc.scroll_vertical == 0, "yeni sekme en üstten başlar")
+	_cleanup()
+
+
 func test_escape_closes_settings_and_marks_cancel_consumed() -> void:
 	var s := await _open()
 	var closed := [false]
@@ -241,4 +267,30 @@ func test_mouse_click_sets_slider_and_locked_choice_ignores() -> void:
 	click.position = Vector2(res.size.x - 4.0, res.size.y * 0.5)
 	res.call("_gui_input", click)
 	assert(int(res.get("index")) == before, "kilitli seçim tıklamayla değişmez")
+	_cleanup()
+
+
+## Kumanda sütunu dinlerken iptal tuşu yoktu (basılan HER düğme atanır; ESC yalnız klavyede) - denetim 547: 5 sn içinde basış gelmezse
+## dinleme kendiliğinden biter; klavye sütunu zaman aşımına uğramaz.
+func test_pad_column_listen_times_out_but_keyboard_column_does_not() -> void:
+	var action: String = "inventory"
+	var s := await _open()
+	s.call("_set_category", 2, false)
+	var row: Dictionary = {}
+	for r: Dictionary in s.get("_rows"):
+		if r["id"] == "key_" + action:
+			row = r
+	assert(not row.is_empty(), "envanter satırı")
+	s.call("_start_listen", row, 1)
+	assert(str(s.get("_listen_action")) == action and int(s.get("_listen_deadline_ms")) > 0, "kumanda hücresi zaman aşımlı dinler")
+	s.call("_process", 0.0)
+	assert(str(s.get("_listen_action")) == action, "süre dolmadan dinleme sürer")
+	s.set("_listen_deadline_ms", Time.get_ticks_msec() - 1)
+	s.call("_process", 0.0)
+	assert(str(s.get("_listen_action")) == "", "5 sn basış yoksa dinleme biter, hiçbir düğme atanmaz")
+	s.call("_start_listen", row, 0)
+	assert(int(s.get("_listen_deadline_ms")) == 0, "klavye hücresinin zaman aşımı yok")
+	s.call("_process", 0.0)
+	assert(str(s.get("_listen_action")) == action, "klavye dinlemesi bekler")
+	s.call("_cancel_listen")
 	_cleanup()

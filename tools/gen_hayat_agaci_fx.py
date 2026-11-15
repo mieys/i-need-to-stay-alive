@@ -4,13 +4,12 @@
     (haritadaki "sadece agac golgeli" ile aynı sanat, bbox'a kırpılır; ölçek 1,3 oyunda Sprite2D.scale ile) + agac_kucuk_golgesiz.png
     (topraktan çıkış/çekilme anında gölge zemin çizgisinin altında kalsın diye gölgesiz sürüm). Gövde dibi noktaları aşağıda yazdırılır
     -> scripts/oakley_tree.gd TREE_BASE.
-  * alan.png      2:1 elips (169 x 84,5 = madde 265'in 130 x 65'i x1,3) soluk altın dolgu + kenar bandı, 1 dünya px.
-  * isik_arka.png / isik_on.png  kenarda yükselen altın ışık çizgileri (C dili), 14 kare döngü (12 fps); arka yarı (kuzey) / ön yarı.
-  * halka.png     açılış darbesi halkası, 6 kare (14 fps).
+  * (alan.png / isik_*.png / halka.png / meyve.png SİLİNDİ, madde 704: gölge alanı, açılış halkası ve yapraklar artık
+    shaders/oakley_agac_aura.gdshader'da dünya pikselinde çiziliyor; elma kaldırıldı.)
   * tumsek.png    toprak altında giden kökün tümseği, 2 kare.
   * kok_{s,m,l}_{arka,on}.png  yaratığın dibinden fışkıran kökler + sarılma halkası (6 kare: 0-3 büyüme, 4-5 döngü; bırakma = büyümenin
     tersi). Boylar fx_oakley_entangle.gd ile aynı eşik (gövde yarıçapı 16 / 30). Ölçek 1 (1 piksel = 1 dünya birimi, haritanın pikseli).
-  * meyve.png, arti.png, parilti_{1,2,3}.png, tohum.png  can tiki (ağaçtan dosta uçan elma -> altın artı) ve büyüme pırıltıları.
+  * arti.png, parilti_{1,2,3}.png, tohum.png  can tiki (dostun üstünde altın artı), büyüme + taç pırıltıları.
 Çizim dili madde 265 prototipiyle (tools/proto_20261018/hayat_agaci_proto.py) aynı: dolu kütleler, 1 px koyu kontur, alfa bantlı.
 Kullanım (proje kökünden): python -I tools/gen_hayat_agaci_fx.py
 """
@@ -150,65 +149,6 @@ def trees():
     return info
 
 
-# ====================================================================== alan + ışık + halka
-def zone():
-    w, h = int(2 * math.ceil(RX)) + 4, int(2 * math.ceil(RY)) + 4
-    cv = Cv(w, h)
-    d = ell_d(w, h, w / 2, h / 2, RX, RY)
-    cv.put(d <= 1.0, GOLD[3], 0.07)
-    cv.put((d <= 1.0) & (d > 0.9), GOLD[3], 0.14)
-    return save(cv.img(), 'alan.png')
-
-
-def rays():
-    """Kenarda yükselen ışık çizgileri - arka yarı (sin < 0) ve ön yarı ayrı sayfa; düğüm konumu = tuvalin (0,0) noktası:
-    arka için alanın kuzey ucu (merkez - RY), ön için güney ucu (merkez + RY)."""
-    w = int(2 * math.ceil(RX)) + 6
-    top_pad = 46
-    hb = int(math.ceil(RY)) + top_pad + 3
-    out = {}
-    for back in (True, False):
-        frames = []
-        for f in range(RAY_FRAMES):
-            t = f / RAY_FRAMES
-            cv = Cv(w, hb)
-            ## tuvalde merkez: arka -> alanın merkezi (w/2, top_pad + RY) ; ön -> (w/2, top_pad)
-            cx, cy = w / 2, (top_pad + RY) if back else top_pad
-            for i in range(RAY_N):
-                a = TAU * i / RAY_N + 0.15
-                if (math.sin(a) < 0) != back:
-                    continue
-                x = cx + RX * 0.97 * math.cos(a)
-                y = cy + RY * 0.97 * math.sin(a)
-                ph = (t + i * 0.37) % 1.0
-                L = 10 + 5 * ((i * 7) % 3)
-                lift = ph * 18
-                for j in range(L):
-                    al = band((1 - j / L) * (1 - ph) * 0.8, 4)
-                    cv.px(x, y - lift - j, GOLD[4] if j < 2 else GOLD[3], al)
-            frames.append(cv.img())
-        out[back] = save(strip(frames), 'isik_arka.png' if back else 'isik_on.png')
-    return w, hb, top_pad
-
-
-def ring_sheet():
-    rmax = 18 + (RX * 1.3 - 18)
-    w, h = int(2 * rmax) + 8, int(rmax) + 8
-    frames = []
-    for f in range(RING_FRAMES):
-        kt = f / RING_FPS
-        q = ease_out(kt / 0.42)
-        rx = 18 + (RX * 1.3 - 18) * q
-        cv = Cv(w, h)
-        for (r, th, al) in ((rx, 3.0 - 1.5 * q, 0.9 * (1 - q)), (rx * 0.82, 1.5, 0.4 * (1 - q))):
-            d = ell_d(w, h, w / 2, h / 2, r, r * 0.5)
-            cv.put((d <= 1.0) & (d >= ((r - th) / r) ** 2), GOLD[4], band(al, 5))
-        frames.append(cv.img())
-    save(strip(frames), 'halka.png')
-    return w, h
-
-
-# ====================================================================== kök
 def mound():
     frames = []
     for (rx, ry) in ((4.5, 2.6), (5.0, 2.3)):
@@ -288,8 +228,6 @@ def sparkle(k):
 
 
 def glyphs():
-    save(glyph(["...s...", "..oslo.", ".orrRo.", "orrrRwo", "orrrrRo", ".orrro.", "..ooo.."],
-               {'o': APPLE[0], 'r': APPLE[1], 'R': APPLE[2], 'w': APPLE[3], 's': ROOT[1], 'l': LEAF}), 'meyve.png')
     save(glyph(["..ooo..", "..oho..", "ooohooo", "ohhwhho", "ooohooo", "..oho..", "..ooo.."],
                {'o': GOLD[0], 'h': GOLD[3], 'w': GOLD[4]}), 'arti.png')
     for k in (1, 2, 3):
@@ -300,16 +238,12 @@ def glyphs():
 def main():
     os.makedirs(OUT, exist_ok=True)
     info = trees()
-    zw = zone()
-    rw, rh, top_pad = rays()
-    hw, hh = ring_sheet()
     mound()
     wr = wrap_sheets()
     glyphs()
     print('TREE_BASE (kırpılmış dokuda gövde dibi), boy, doku:')
     for k, (b, hgt, size) in info.items():
         print(f'  "{k}": Vector2({b[0]:.1f}, {b[1]:.1f}), boy {hgt}, doku {size}')
-    print('alan', zw.size, '| ışık kare', (rw, rh), 'üst pay', top_pad, '| halka kare', (hw, hh))
     for k, v in wr.items():
         print(f'  kök {k}: kare {v[0]}x{v[1]}, zemin satırı {v[2]}')
 

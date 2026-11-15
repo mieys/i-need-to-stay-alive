@@ -11,10 +11,11 @@ const WeaponTierArt := preload("res://scripts/weapon_tier_art.gd")
 
 
 func _tip(icon: Node2D, forward_deg: float) -> Vector2:
-	## ikonun dünya dönüşümünden ucun yeri: doku ekseninde ileri (forward) x TIP / doku ölçeği
+	## ikonun dünya dönüşümünden ucun yeri: doku ekseninde ileri (forward) x ucun doku pikseli (TIP_BASE / WORLD_PX; ikon boyu
+	## çarpanı dönüşümde zaten var)
 	var f: float = deg_to_rad(forward_deg)
 	var texel: float = icon.global_transform.x.length()
-	var local: Vector2 = Vector2.RIGHT.rotated(f) * (M.TIP / maxf(0.0001, WeaponTierArt.WORLD_PX))
+	var local: Vector2 = Vector2.RIGHT.rotated(f) * (M.TIP_BASE / maxf(0.0001, WeaponTierArt.WORLD_PX))
 	return icon.global_transform * local if texel > 0.0 else icon.global_position
 
 

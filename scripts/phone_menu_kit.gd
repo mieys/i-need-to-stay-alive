@@ -27,7 +27,7 @@ const HT := preload("res://scripts/hud_theme.gd") ## tek arayüz paleti (stil re
 const C_PANEL := HT.WIN_PANEL
 const C_DANGER_FILL := Color("#4e2018")
 const C_DANGER_TEXT := Color("#ffd8c8")
-const C_SOUL := Color("#e6dcff") ## Ruh Kıymığı sayısı = mor kristalin açık tonu (madde 343)
+const C_SOUL := HT.SOUL ## Ruh Kıymığı sayısı = mor yıldızın açık orkide tonu (madde 559; tek palet)
 
 ## Tasarım genişliği (20:9 telefon). Tuval daha darsa kök orantılı küçülür (bkz. fit).
 const DESIGN_W := 2400.0
@@ -39,7 +39,6 @@ const G_GEAR := ["...#.#...", ".#######.", ".##...##.", "##.....##", ".#.....#."
 const G_HOME := ["....#....", "...###...", "..#####..", ".#######.", "#########", ".##...##.", ".##...##.", ".##...##."]
 const G_REROLL := ["..####.#", ".#....##", "#....###", "#.......", ".......#", "###....#", "##....#.", "#.####.."]
 const G_CLOCK := ["..#####..", ".#.....#.", "#...#...#", "#...#...#", "#...###.#", "#.......#", ".#.....#.", "..#####.."]
-const G_SKULL := ["..#####..", ".#######.", "#########", "#kk###kk#", "#kk###kk#", ".###k###.", "..#####..", "..#k#k#.."]
 const G_SWORD := [".......hh", "......h#h", ".....h#h.", "....h#h..", "k..h#h...", ".k##h....", "..kk.....", ".k..k....", "k........"]
 const G_STAR := ["....#....", "...###...", "#########", ".#######.", "..#####..", ".###.###.", "##.....##"]
 const G_GRID := ["###.###", "###.###", "###.###", ".......", "###.###", "###.###", "###.###"]

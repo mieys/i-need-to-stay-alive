@@ -83,7 +83,13 @@ const GOLEM_TINT_COLOR := Color(0.86, 0.62, 1.12, 1.0)
 ## buna göre büyütüldü.
 const SEEK_RADIUS := 420.0
 const MELEE_STOP_RANGE := 84.0
-const MELEE_RESUME_CHASE_RANGE := 140.0
+## 2026-11-13 (kullanıcı: "golem tuhaf konumlara tuhaf saldırılarda bulunuyor"): eskiden 140'tı, saldırı ise yalnız 90 px'e kadar
+## iniyordu -> hedef 90-140 arasındayken golem ne yaklaşıyor ne vuruyordu (yaratıklar golemi hedeflemediği için hiç gelmiyorlardı,
+## golem yerinde donup kalıyordu). Artık duruş bandı = vuruş menzili (_process_attack bu sabiti kullanır).
+const MELEE_RESUME_CHASE_RANGE := 100.0
+## Hasar saldırı klibinin VURUŞ KARESİNDE iner (yaratıklarla aynı kare: creature_attack_timing.gd "enemy_golem" 5 = yere iniş tozu).
+## Eskiden klibin 0. karesinde iniyordu - yumruk kalkarken kıvılcım/hasar çıkıyordu.
+const ATTACK_HIT_FRAME := 5
 ## bkz. _process_attack - kullanıcı isteği: "golemi yaratıklara saldırınca
 ## alan hasarı vermiyor tekli hasar veriyor". MELEE_STOP_RANGE'den (84,
 ## golemin durup saldırmaya başladığı mesafe) biraz geniş tutuldu ki
@@ -150,6 +156,8 @@ var _frame_time: float = 0.0
 var _attack_timer: float = 0.0
 var _focus_target: Node2D = null
 var _in_melee_stance: bool = false
+## >= 0 iken bekleyen vuruşun inmesine kalan süre (sn); -1 = bekleyen vuruş yok.
+var _pending_hit_in: float = -1.0
 var _incoming_dmg_timer: float = 0.0
 var evo_knockback: float = 0.0 ## >0 iken saldırıları yaratıkları bu kadar geri iter (E2)
 var size_mult: float = 1.0 ## E4: görsel/çarpışma/vuruş alanı çarpanı
@@ -381,7 +389,11 @@ func _broadcast_network_state() -> void:
 ## 2026-10-17: minyon sahibinin görüş alanından çıkamaz; hedef de o alanın içinde olmalı.
 func _leash_to_owner_vision() -> void:
 	if owner_player and is_instance_valid(owner_player) and is_inside_tree():
-		global_position = ProjectileRangeScript.clamp_to_owner_vision(global_position, owner_player.global_position, get_tree())
+		var clamped: Vector2 = ProjectileRangeScript.clamp_to_owner_vision(global_position, owner_player.global_position, get_tree())
+		## 2026-11-13: tasma golemi doğrudan elips kenarına koyuyordu - kenar duvar/ağaç içindeyse golem oraya ışınlanıp
+		## sıkışıyordu ("tuhaf konum"). Duvar içine düşecekse çekilmez; sahibe yetişme yürüyüşü (_process_movement) onu getirir.
+		if clamped != global_position and not GameManager.is_position_blocked_by_walls(clamped):
+			global_position = clamped
 
 
 func _update_focus_target() -> void:
@@ -434,6 +446,12 @@ func _process_movement(delta: float) -> void:
 	## DÜZELTME: bkz. skeleton_pet.gd'deki AYNI notun karşılığı - ayrışma
 	## itişi artık TÜM dallarda (saldırı/bekleme dahil) uygulanıyor.
 	var separation: Vector2 = _compute_pet_separation()
+	## 2026-11-13: saldırı klibi oynarken golem yürümez (eskiden hedef uzaklaşınca saldırı pozunda kayıyordu).
+	if _animation_state == "attack":
+		velocity = separation
+		_block_movement_into_terrain()
+		move_and_slide()
+		return
 	if _focus_target and is_instance_valid(_focus_target):
 		var to_target: Vector2 = _focus_target.global_position - global_position
 		var dist: float = to_target.length()
@@ -453,6 +471,9 @@ func _process_movement(delta: float) -> void:
 			velocity = separation
 			_block_movement_into_terrain()
 			move_and_slide()
+			## 2026-11-13: duruştayken de hedefe döner - eskiden yön yalnız yürürken güncelleniyordu, hedef (her karede en yakın
+			## yaratık) yan/arka tarafa geçince golem boşluğa yumruk atıyordu.
+			_update_facing(to_target)
 		return
 	_in_melee_stance = false
 	if not owner_player or not is_instance_valid(owner_player):
@@ -623,6 +644,13 @@ func _play_attack_animation() -> void:
 func _process_attack(delta: float) -> void:
 	## 2026-10-12: sahibi ölü/yerde yatıyorsa saldırmaz.
 	if is_instance_valid(owner_player) and owner_player.get("is_dead") == true:
+		_pending_hit_in = -1.0
+		return
+	if _pending_hit_in >= 0.0:
+		_pending_hit_in -= delta
+		if _pending_hit_in <= 0.0:
+			_pending_hit_in = -1.0
+			_land_attack_hit()
 		return
 	if _animation_state == "attack":
 		return
@@ -631,10 +659,20 @@ func _process_attack(delta: float) -> void:
 		return
 	if not _focus_target or not is_instance_valid(_focus_target) or _focus_target.get("is_dead") == true:
 		return
-	if global_position.distance_to(_focus_target.global_position) > MELEE_STOP_RANGE * size_mult + 6.0:
+	var to_target: Vector2 = _focus_target.global_position - global_position
+	if to_target.length() > MELEE_RESUME_CHASE_RANGE * size_mult:
 		return
 	_attack_timer = ATTACK_INTERVAL
+	_update_facing(to_target) ## klip hedefe bakan satırdan oynasın
 	_play_attack_animation()
+	var attack_frames: int = max(int(ATTACK_TEXTURE.get_width() / float(CELL_SIZE)), 1)
+	_pending_hit_in = float(mini(ATTACK_HIT_FRAME, attack_frames - 1)) / SPRITE_FPS
+
+
+## Vuruş karesi ekrana geldiğinde: golemin çevresindeki TÜM yaratıklara alan hasarı (hedef bu arada ölmüş/kaçmış olabilir).
+func _land_attack_hit() -> void:
+	if is_dead:
+		return
 	## DÜZELTME (kullanıcı bildirimi: "necromancerin golemi yaratıklara
 	## saldırınca alan hasarı vermiyor tekli hasar veriyor") - eskiden SADECE
 	## _focus_target'a hasar veriyordu. Golem büyük/ağır bir yakın dövüşçü

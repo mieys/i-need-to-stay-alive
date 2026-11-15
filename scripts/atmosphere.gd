@@ -24,6 +24,7 @@ extends Node2D
 const AtmosphereMath := preload("res://scripts/atmosphere_math.gd")
 const OverlayScript := preload("res://scripts/atmosphere_overlay.gd")
 const RainScript := preload("res://scripts/weather_rain.gd")
+const SnowScript := preload("res://scripts/weather_snow.gd")
 const WindScript := preload("res://scripts/weather_wind.gd")
 const StormScript := preload("res://scripts/weather_storm.gd")
 const AudioBuses := preload("res://scripts/audio_buses.gd")
@@ -96,6 +97,7 @@ var _grade: Dictionary = {}
 
 var _overlay: CanvasLayer = null
 var _rain: Node2D = null
+var _snowfall: bool = false ## Ayaz Dağı: _rain düğümü kar çizer (weather_snow.gd)
 var _wind: Node2D = null
 var _storm: Node = null
 var _rain_player: AudioStreamPlayer = null
@@ -118,7 +120,9 @@ func _ready() -> void:
 
 	_rain = Node2D.new()
 	_rain.name = "Rain"
-	_rain.set_script(RainScript)
+	## Ayaz Dağı (kış, map_profiles "kar_yagisi"): yağmur yerine kar - aynı set_intensity arayüzü, yağmur sesi çalmaz (_update_sounds).
+	_snowfall = MapProfilesScript.snowfall()
+	_rain.set_script(SnowScript if _snowfall else RainScript)
 	add_child(_rain)
 	_wind = Node2D.new()
 	_wind.name = "Wind"
@@ -206,7 +210,7 @@ func _process(delta: float) -> void:
 				if not alive:
 					set_night_lock(false)
 	else:
-		cycle_time = AtmosphereMath.wrap_time(cycle_time + delta * AtmosphereMath.CLOCK_SPEED * debug_time_scale)
+		cycle_time = AtmosphereMath.wrap_time(cycle_time + delta * AtmosphereMath.clock_rate(cycle_time) * debug_time_scale)
 	if is_authority():
 		_process_weather_authority(delta)
 	elif _time_fix != 0.0:
@@ -229,9 +233,11 @@ func _process(delta: float) -> void:
 		_overlay.call("apply", _grade, indoors)
 	var outdoor_k: float = 0.0 if indoors else 1.0
 	_rain.call("set_intensity", rain_intensity * lerpf(1.0, STORM_RAIN_DENSITY, storm_intensity) * outdoor_k, 1.0 if cos(wind_angle) >= 0.0 else -1.0, storm_intensity)
+	if _snowfall:
+		_rain.call("set_outdoor", outdoor_k)
 	_wind.call("set_wind", wind_intensity * outdoor_k, wind_angle, outdoor_k, storm_intensity)
 	_gust_t += delta
-	_update_sounds(rain_intensity * outdoor_k, wind_intensity * outdoor_k, storm_intensity * outdoor_k)
+	_update_sounds((0.0 if _snowfall else rain_intensity) * outdoor_k, wind_intensity * outdoor_k, storm_intensity * outdoor_k)
 	_update_map_atmosphere()
 
 

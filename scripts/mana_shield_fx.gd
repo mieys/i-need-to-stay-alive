@@ -3,7 +3,9 @@ extends Node2D
 ## MANA KALKANI görseli "B - Mühür" (kullanıcı 2026-10-14, CLAUDE.md madde 148: prototip B seçildi; Kale mor, Enerji sarı;
 ## "kazmayla vurunca çatlama olmamalı"; "kalkan kırılınca her taraftan kırılmış gibi görünmeli"). Eski su baloncuğu
 ## (shield_visual.gd) artık SADECE Şovalye R kubbesi (is_shielded) için; mana kalkanının bütün görseli burada:
-##   - darbe: hasarın geldiği yönde dönen büyü mührü (yan darbede dar oval, kuzeyden gelende karakterin ARDINDA)
+##   - darbe (madde 572, eski dönen mühür kalktı - "3D izometrik gibi"): darbe baloncuğa DIŞARIDAN vurur - vurulan noktada
+##     baloncuğun kendi sanatı yuvarlak yama hâlinde belirip söner, kenar parlar (A "Işıyan Yüzey", shaders/kalkan_darbe);
+##     menzilli atışta (ranged_hit, shield_bubble_hit.gd: mermi baloncuğun kenarında söner) ek olarak kıvılcımlar DIŞARI seker
 ##   - kırılma (darbe kalkanı 0'a indirdi): karakteri saran küre mühür her yanından çatlar, parçalar dört bir yana saçılır
 ##   - yenilenme: ayak altında mühür; dolan kısım (kalkan/azami) parlak, kalanı soluk; her tikte ilerler
 ##   - doldu: yer mührü parlayıp söner, ayaktan başa bir halka tarar
@@ -17,7 +19,6 @@ extends Node2D
 ## oturur: 1 sanat px = 1 karakter pikseli (prototiple birebir). Sayfalar tools/gen_mana_shield_fx.py'den (ton numaralı),
 ## renk shaders/mana_shield.gdshader + PALETTES.
 
-const DISC_TEX: Texture2D = preload("res://assets/fx/mana_shield/disc.png")
 const BREAK_BACK_TEX: Texture2D = preload("res://assets/fx/mana_shield/break_back.png")
 const BREAK_FRONT_TEX: Texture2D = preload("res://assets/fx/mana_shield/break_front.png")
 const GROUND_TEX: Texture2D = preload("res://assets/fx/mana_shield/ground.png")
@@ -26,11 +27,9 @@ const RISE_FRONT_TEX: Texture2D = preload("res://assets/fx/mana_shield/rise_fron
 const DEBRIS_TEX: Texture2D = preload("res://assets/fx/mana_shield/debris.png")
 const EnemyAbilitiesScript := preload("res://scripts/enemy_abilities.gd")
 const SHADER: Shader = preload("res://shaders/mana_shield.gdshader")
+const HIT_SHADER: Shader = preload("res://shaders/kalkan_darbe.gdshader")
 
 ## --- tools/gen_mana_shield_fx.py ile AYNI tutulmalı ---
-const DISC_COLS := 9 ## [beliriş 0,35, beliriş 0,7, krem flaş, dönüş 0..5]
-const DISC_ROWS := 4 ## yatay basıklık sınıfları: 0,4 / 0,6 / 0,8 / 1,0 (f = 0,4 + 0,6 * |sin(açı)|)
-const DISC_ROT_FRAMES := 6
 const BREAK_FRAMES := 14
 const BREAK_BODY := Vector2(44.0, 42.0) ## kırılma hücresinde gövde merkezi
 const GROUND_C := Vector2(23.0, 11.0) ## yer mührü hücresinde elips merkezi
@@ -43,12 +42,14 @@ const DEBRIS_FEET := Vector2(44.0, 24.0)
 const FPS := 20.0
 ## ---
 
-const DISC_OFFSET := Vector2(15.0, 9.0) ## darbe mührü gövde merkezinden (cos, sin) x bu kadar uzakta
-const DISC_LIFE := 0.6
-const DISC_FADE_FROM := 0.3
-const DISC_ROT_FPS := 19.0 ## 6 kare = 90 derece = ~0,31 sn
-const MAX_DISCS := 3
-const BACK_SIN := -0.3 ## sin(açı) bundan küçükse (kuzeyden gelen darbe) mühür karakterin ardında
+## --- Darbe (madde 572): baloncuğun texel ızgarasında; düğüm ölçeği = ShieldVisual/BubbleSprite ölçeği ---
+const HIT_CANVAS := 48 ## shader tuvali (texel); baloncuk karesi 24x24, kıvılcımlar dışarı taşar
+const BUBBLE_R := 11.0 ## baloncuğun görünen yarıçapı (texel) - shield_bubble_hit.gd BUBBLE_R ile aynı
+const HIT_LIFE := 0.55 ## yama 0,5 sn'de söner
+const MAX_HITS := 4 ## shader dizisi
+const SPARK_TIME := 0.32 ## menzilli: seken kıvılcımların uçuşu
+const SPARK_OFFS := [-1.05, -0.45, 0.45, 1.05] ## dış normale göre (rad), her darbede +-0,15 sarsılır
+const BUBBLE_LOOP_FPS := 10.0 ## baloncuk "loop" klibinin hızı (bubble_frames.tres)
 const REGEN_HOLD := 1.3 ## son artıştan sonra yer mührü bu kadar açık kalır (tik saniyede 1, SHIELD_REGEN_TICK_INTERVAL)
 const REGEN_FADE := 0.2
 const RISE_DURATION := RISE_FRAMES / FPS
@@ -61,16 +62,12 @@ const SHIELD_ALPHA := 0.7
 const DEBRIS_DIM_AT := 0.6 ## parıltı söner
 const DEBRIS_FADE_FROM := 1.0
 const DEBRIS_FADE := 1.6
-const IMPACT_LIFE := 0.18
-const SPARK_LIFE := 0.35
 const GLINT_LIFE := 0.3
 const SAVAS := "shield_savas"
 const STANDART := "shield_standart"
 
 const CREAM := Color8(255, 250, 228)
 const WHITE := Color8(255, 255, 255)
-const BOLT_HOT := Color8(255, 150, 60) ## cana geçen kısmın kıvılcımı (soğurma kısmi: %55-75)
-const BOLT_DIM := Color8(200, 60, 24)
 ## [kontur, koyu, orta, açık, parlak] - gen_mana_shield_fx.py PALS ile aynı. Anahtar = GÖRSEL anahtarı: oyunda hangi türün hangi paleti
 ## gösterdiği ShieldEnchantDefs.EFFECT_OF'ta (2026-11-09: Standart sarı, Enerji mor, Kale mavi); paletin kendisi Kale mor, Enerji sarı (2026-10-14).
 const PALETTES := {
@@ -93,8 +90,15 @@ var _break_back: Sprite2D = null
 var _break_front: Sprite2D = null
 var _rise_back: Sprite2D = null
 var _rise_front: Sprite2D = null
-var _discs: Array = [] ## {"spr": Sprite2D, "age": float, "row": int}
-var _impacts: Array = [] ## {"pos": Vector2 (ayağa göre, karakter pikseli), "angle": float, "age": float, "big": bool}
+var _hits: Array = [] ## {"angle": float, "age": float, "ranged": bool, "spark": Array, "reach": float}
+var _surf: Node2D = null ## darbe katmanı: sahibin son çocuğu, BubbleSprite'ın konum + ölçeğinde
+var _surf_spr: Sprite2D = null
+var _surf_px: Node2D = null
+var _surf_mat: ShaderMaterial = null
+var _surf_light: Color = Color(0.8, 1.0, 0.7)
+var _surf_light_key: String = ""
+var _clock: float = 0.0
+var _last_ranged_msec: int = -100000
 var _type: String = "-"
 var _pal: Array = []
 var _break_age: float = -1.0
@@ -153,10 +157,41 @@ func _ready() -> void:
 	_rise_front = _sprite(self, RISE_FRONT_TEX, RISE_FRAMES, _mat)
 	_rise_front.position = -RISE_FEET
 	_back.draw.connect(_draw_back)
+	_build_hit_layer()
 	set_shield_type(STANDART)
 	if play_sounds:
 		_break_sound = _copy_sound("ShieldVisual/BreakSound")
 		_regen_sound = _copy_sound("ShieldVisual/RegenSound")
+
+
+## Darbe katmanı (madde 572): sahibin SON çocuğu (karakter sprite'ından + baloncuktan sonra çizilir), her karede
+## ShieldVisual/BubbleSprite'ın konum + ölçeğine oturur -> 1 birim = 1 baloncuk texel'i. Shader yüzeyi + piksel çocuğu.
+func _build_hit_layer() -> void:
+	_surf = Node2D.new()
+	_surf.name = "ManaShieldHit"
+	_surf.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_surf.visible = false
+	_surf_spr = Sprite2D.new()
+	_surf_spr.texture = _blank_canvas()
+	_surf_spr.centered = true
+	_surf_mat = ShaderMaterial.new()
+	_surf_mat.shader = HIT_SHADER
+	_surf_mat.set_shader_parameter("canvas_px", float(HIT_CANVAS))
+	_surf_spr.material = _surf_mat
+	_surf.add_child(_surf_spr)
+	_surf_px = Node2D.new()
+	_surf.add_child(_surf_px)
+	_surf_px.draw.connect(_draw_hit_pixels)
+	host.add_child.call_deferred(_surf)
+
+
+static var _blank_tex: ImageTexture = null
+
+
+static func _blank_canvas() -> ImageTexture:
+	if _blank_tex == null:
+		_blank_tex = ImageTexture.create_from_image(Image.create(HIT_CANVAS, HIT_CANVAS, false, Image.FORMAT_RGBA8))
+	return _blank_tex
 
 
 func _make_mat(progress: bool) -> ShaderMaterial:
@@ -208,25 +243,52 @@ func set_shield_type(key: String) -> void:
 		_stop_regen()
 
 
-## Kalkan hasar soğurdu. broke = bu darbe kalkanı 0'a indirdi -> her taraftan kırılma.
+## Kalkan hasar soğurdu (yakın dövüş / temas). broke = bu darbe kalkanı 0'a indirdi -> her taraftan kırılma.
+## Yerelde player.gd take_damage, uzakta network_manager.gd "shield_hit_flash".
 func hit(angle: float, broke: bool) -> void:
 	if _is_suppressed():
 		return
 	if hit_only and broke:
-		return ## kalkanı bitiren darbede mühür YOK (kırılmayı eski baloncuk gösterir)
+		return ## kalkanı bitiren darbede efekt YOK (kırılmayı eski baloncuk gösterir)
 	if broke:
 		_play_break()
 	else:
-		_spawn_disc(angle)
-	var dir := Vector2(cos(angle), sin(angle))
-	_impacts.append({"pos": Vector2(0.0, -FEET_TO_BODY) + Vector2(dir.x * DISC_OFFSET.x, dir.y * DISC_OFFSET.y), "angle": angle, "age": 0.0, "big": broke})
-	if _impacts.size() > 6:
-		_impacts.pop_front()
+		_add_hit(angle, false)
+	_after_hit()
+
+
+## MENZİLLİ atış baloncuğun dış kenarında söndü (shield_bubble_hit.gd impact - her makine kendi mermi kopyasıyla çağırır,
+## ağ olayı yok): A yaması + dışarı seken kıvılcımlar. Hasar (ve kalkanın düşmesi) ayrıca hedefin kendi makinesinde gelir.
+func ranged_hit(angle: float) -> void:
+	if _is_suppressed():
+		return
+	_last_ranged_msec = Time.get_ticks_msec()
+	_add_hit(angle, true)
+	_after_hit()
+
+
+## Menzilli hasar geldi ama bu makinede o merminin kopyası baloncuğa değmedi (kalkan durumu ağda bir an farklıydı ya da
+## ateş topu patlaması gibi alan hasarı): son 0,25 sn'de menzilli darbe gösterilmediyse kaynağın yönünde gösterir.
+func ranged_hit_if_missing(angle: float) -> void:
+	if Time.get_ticks_msec() - _last_ranged_msec > 250:
+		ranged_hit(angle)
+
+
+func _add_hit(angle: float, ranged: bool) -> void:
+	var sparks: Array = []
+	if ranged:
+		for off: float in SPARK_OFFS:
+			sparks.append(off + randf_range(-0.15, 0.15))
+	_hits.append({"angle": angle, "age": 0.0, "ranged": ranged, "spark": sparks, "reach": randf_range(7.5, 9.5)})
+	if _hits.size() > MAX_HITS:
+		_hits.pop_front()
+
+
+func _after_hit() -> void:
 	## Darbe yenilenme beklemesini sıfırlar: yer mührü söner.
 	_regen_hold = 0.0
 	if _regen_on:
 		_stop_regen()
-	queue_redraw()
 
 
 ## Ölü/düşmüş yerel oyuncu: her kare çağrılır (player.gd _hide_combat_visuals_while_dead).
@@ -244,11 +306,9 @@ func set_suppressed(value: bool) -> void:
 
 
 func hide_all() -> void:
-	for d: Dictionary in _discs:
-		if is_instance_valid(d["spr"]):
-			(d["spr"] as Node).queue_free()
-	_discs.clear()
-	_impacts.clear()
+	_hits.clear()
+	if _surf:
+		_surf.visible = false
 	for s: Sprite2D in [_ground, _break_back, _break_front, _rise_back, _rise_front]:
 		if s:
 			s.visible = false
@@ -257,13 +317,12 @@ func hide_all() -> void:
 	_regen_on = false
 	_ground_fade = -1.0
 	_glint = 0.0
-	queue_redraw()
 	if _back:
 		_back.queue_redraw()
 
 
 func is_anything_visible() -> bool:
-	if not _discs.is_empty() or not _impacts.is_empty():
+	if not _hits.is_empty():
 		return true
 	for s: Sprite2D in [_ground, _break_back, _break_front, _rise_back, _rise_front]:
 		if s and s.visible:
@@ -275,8 +334,15 @@ func is_regen_shown() -> bool:
 	return _regen_on
 
 
-func disc_count() -> int:
-	return _discs.size()
+## Görünen darbe sayısı (yakın + menzilli); ranged_only: yalnız menzilliler.
+func hit_count(ranged_only: bool = false) -> int:
+	if not ranged_only:
+		return _hits.size()
+	var n := 0
+	for h: Dictionary in _hits:
+		if bool(h["ranged"]):
+			n += 1
+	return n
 
 
 func _is_suppressed() -> bool:
@@ -298,16 +364,10 @@ func _process(delta: float) -> void:
 		return
 	if not hit_only:
 		_update_regen(delta)
-	_update_discs(delta)
+	_update_hits(delta)
 	_update_break(delta)
 	_update_rise(delta)
 	_update_ground_fade(delta)
-	if not _impacts.is_empty():
-		for i in range(_impacts.size() - 1, -1, -1):
-			_impacts[i]["age"] = float(_impacts[i]["age"]) + delta
-			if float(_impacts[i]["age"]) >= SPARK_LIFE:
-				_impacts.remove_at(i)
-		queue_redraw()
 	if _glint > 0.0:
 		_glint = maxf(0.0, _glint - delta)
 		_back.queue_redraw()
@@ -432,52 +492,126 @@ func _update_rise(delta: float) -> void:
 	_rise_front.frame = fr
 
 
-func _spawn_disc(angle: float) -> void:
-	var f := 0.4 + 0.6 * absf(sin(angle))
-	var row := clampi(int(round((f - 0.4) / 0.2)), 0, DISC_ROWS - 1)
-	if _discs.size() >= MAX_DISCS:
-		var old: Dictionary = _discs.pop_front()
-		if is_instance_valid(old["spr"]):
-			(old["spr"] as Node).queue_free()
-	var behind := sin(angle) < BACK_SIN
-	var spr := _sprite(_back if behind else self, DISC_TEX, DISC_COLS, _mat)
-	spr.vframes = DISC_ROWS
-	spr.centered = true
-	spr.position = (Vector2(0.0, -FEET_TO_BODY) + Vector2(cos(angle) * DISC_OFFSET.x, sin(angle) * DISC_OFFSET.y)).round()
-	spr.frame = row * DISC_COLS
-	spr.visible = true
-	_discs.append({"spr": spr, "age": 0.0, "row": row})
+## Darbeleri yaşlandırır; varsa katmanı baloncuğun o anki konum/ölçeğine + "loop" karesine oturtup shader'a yazar.
+func _update_hits(delta: float) -> void:
+	if _hits.is_empty():
+		if _surf and _surf.visible:
+			_surf.visible = false
+		return
+	_clock += delta
+	for i in range(_hits.size() - 1, -1, -1):
+		_hits[i]["age"] = float(_hits[i]["age"]) + delta
+		if float(_hits[i]["age"]) >= HIT_LIFE:
+			_hits.remove_at(i)
+	if _surf == null or not _surf.is_inside_tree():
+		return
+	if _hits.is_empty() or not _bind_bubble():
+		_surf.visible = false
+		return
+	_surf.visible = true
+	_surf.modulate.a = modulate.a / SHIELD_ALPHA ## karakterin saydamlığı (çalı / görünmezlik), _follow_host
+	var ang := PackedFloat32Array([0.0, 0.0, 0.0, 0.0])
+	var ages := PackedFloat32Array([-1.0, -1.0, -1.0, -1.0])
+	for i in _hits.size():
+		ang[i] = float(_hits[i]["angle"])
+		ages[i] = float(_hits[i]["age"])
+	_surf_mat.set_shader_parameter("hit_angle", ang)
+	_surf_mat.set_shader_parameter("hit_age", ages)
+	_surf_px.queue_redraw()
 
 
-func _update_discs(delta: float) -> void:
-	for i in range(_discs.size() - 1, -1, -1):
-		var d: Dictionary = _discs[i]
-		var age: float = float(d["age"]) + delta
-		d["age"] = age
-		var spr: Sprite2D = d["spr"]
-		if age >= DISC_LIFE or not is_instance_valid(spr):
-			if is_instance_valid(spr):
-				spr.queue_free()
-			_discs.remove_at(i)
+## Katmanı ShieldVisual/BubbleSprite'a oturtur + o anki "loop" karesini shader'a verir (tür değişince kare de değişir).
+func _bind_bubble() -> bool:
+	var bub: AnimatedSprite2D = host.get_node_or_null("ShieldVisual/BubbleSprite") as AnimatedSprite2D
+	if bub == null or bub.sprite_frames == null or not bub.sprite_frames.has_animation("loop"):
+		return false
+	_surf.position = host.to_local(bub.global_position)
+	_surf.scale = bub.global_scale / host.global_scale
+	var n: int = maxi(1, bub.sprite_frames.get_frame_count("loop"))
+	var tex := bub.sprite_frames.get_frame_texture("loop", int(_clock * BUBBLE_LOOP_FPS) % n) as AtlasTexture
+	if tex == null or tex.atlas == null:
+		return false
+	_surf_mat.set_shader_parameter("sheet", tex.atlas)
+	_surf_mat.set_shader_parameter("sheet_size", tex.atlas.get_size())
+	_surf_mat.set_shader_parameter("frame_rect", Vector4(tex.region.position.x, tex.region.position.y, tex.region.size.x, tex.region.size.y))
+	var key := str(tex.atlas.resource_path)
+	if key != _surf_light_key:
+		_surf_light_key = key
+		_surf_light = _light_of(tex)
+	return true
+
+
+static var _light_cache: Dictionary = {} ## sayfa yolu -> kıvılcım/flaş açık tonu
+
+
+## Baloncuk sanatının belirgin piksellerinin ortalaması, beyaza %45 açılmış (kıvılcım + elmas flaş türün renginde).
+static func _light_of(tex: AtlasTexture) -> Color:
+	var key := str(tex.atlas.resource_path)
+	if _light_cache.has(key):
+		return _light_cache[key]
+	var col := Color(0.8, 1.0, 0.7)
+	var im: Image = tex.atlas.get_image()
+	if im != null:
+		if im.is_compressed():
+			im.decompress()
+		var acc := Vector3.ZERO
+		var cnt := 0
+		for y in range(int(tex.region.position.y), int(tex.region.end.y)):
+			for x in range(int(tex.region.position.x), int(tex.region.end.x)):
+				var c := im.get_pixel(x, y)
+				if c.a > 0.55:
+					acc += Vector3(c.r, c.g, c.b)
+					cnt += 1
+		if cnt > 0:
+			acc /= float(cnt)
+			col = Color(acc.x, acc.y, acc.z).lerp(Color.WHITE, 0.45)
+	_light_cache[key] = col
+	return col
+
+
+func _dot(p: Vector2, col: Color) -> void:
+	_surf_px.draw_rect(Rect2(p.floor(), Vector2.ONE), col)
+
+
+## Darbe pikselleri baloncuğun texel ızgarasında (1 birim = 1 texel, tam sayı konum - kesirli blok yok, madde 564 ek 4):
+## değme noktasında artı -> elmas flaş; menzilli darbede 4 kıvılcım dış normale yakın açılarla DIŞARI seker.
+func _draw_hit_pixels() -> void:
+	var light := _surf_light
+	var dim := Color(light.r, light.g, light.b, 0.55)
+	for h: Dictionary in _hits:
+		var a: float = h["angle"]
+		var t: float = h["age"]
+		var n := Vector2(cos(a), sin(a))
+		var c := n * (BUBBLE_R - 0.5)
+		if t < 0.06:
+			_dot(c, WHITE)
+			for o: Vector2 in [Vector2(1, 0), Vector2(-1, 0), Vector2(0, 1), Vector2(0, -1)]:
+				_dot(c + o, WHITE)
+		elif t < 0.14:
+			for x in range(-2, 3):
+				var y := 2 - absi(x)
+				_dot(c + Vector2(x, y), light)
+				if y != 0:
+					_dot(c + Vector2(x, -y), light)
+		if not bool(h["ranged"]):
 			continue
-		var col: int
-		if age < 0.045:
-			col = 0
-		elif age < 0.09:
-			col = 1
-		elif age < 0.13:
-			col = 2
-		else:
-			col = 3 + int(age * DISC_ROT_FPS) % DISC_ROT_FRAMES
-		spr.frame = int(d["row"]) * DISC_COLS + col
-		spr.modulate.a = 1.0 - maxf(0.0, (age - DISC_FADE_FROM) / (DISC_LIFE - DISC_FADE_FROM))
+		var u := clampf(t / SPARK_TIME, 0.0, 1.0)
+		if u >= 1.0:
+			continue
+		var reach: float = h["reach"]
+		var hit_p := n * (BUBBLE_R + 0.5)
+		for off: float in h["spark"]:
+			var dir := Vector2(cos(a + off), sin(a + off))
+			var p := hit_p + dir * (0.5 + reach * (1.0 - pow(1.0 - u, 2.0)))
+			_dot(p, WHITE if u < 0.35 else light)
+			if u < 0.7:
+				_dot(p - dir, light if u < 0.35 else dim)
+			if u < 0.35:
+				_dot(p - dir * 2.0, dim)
 
 
 func _play_break() -> void:
-	for d: Dictionary in _discs:
-		if is_instance_valid(d["spr"]):
-			(d["spr"] as Node).queue_free()
-	_discs.clear()
+	_hits.clear()
 	_regen_on = false
 	_ground.visible = false
 	_ground_fade = -1.0
@@ -548,33 +682,6 @@ func _spawn_debris() -> void:
 	tw.tween_callback(holder.queue_free)
 
 
-## Ön katman: çarpma parlaması + kıvılcımlar (çoğu saldırgana geri seker = soğurulan kısım; 2 turuncu kıvılcım içeri geçer =
-## cana geçen kısım). Karakter pikseli ızgarasında 1x1 dikdörtgenler; darbe başına ~20 çizim, 0,35 sn.
-func _draw() -> void:
-	for imp: Dictionary in _impacts:
-		var age: float = imp["age"]
-		var p: Vector2 = imp["pos"]
-		var a: float = imp["angle"]
-		var big: bool = imp["big"]
-		if age < IMPACT_LIFE:
-			var k := age / IMPACT_LIFE
-			var r := (6.0 if big else 4.0) * (0.6 + 0.6 * k)
-			_pixel_ellipse(p, r, r * 0.9, CREAM if k < 0.45 else _pal[4], k >= 0.45)
-		var ks := age / SPARK_LIFE
-		var n := 6 if big else 4
-		var reach := 13.0 if big else 9.0
-		for i in n:
-			var da := (i - (n - 1) / 2.0) * 0.55
-			var dist := reach * (1.0 - pow(1.0 - ks, 3.0)) * (0.7 + 0.1 * float(i % 3))
-			var dir := Vector2(cos(a + da), sin(a + da) * 0.8)
-			var tail := maxi(1, int(3.0 * (1.0 - ks)))
-			for j in tail:
-				_px(p + dir * (dist - j), CREAM if (j == 0 and ks < 0.5) else _pal[3])
-		for i in 2:
-			var b := a + PI + (i - 0.5) * 0.5
-			_px(p + Vector2(cos(b), sin(b) * 0.8) * 6.0 * (1.0 - pow(1.0 - ks, 3.0)), BOLT_HOT if ks < 0.6 else BOLT_DIM)
-
-
 ## Arka katman: yenilenme tikinde yer mührünün ilerleyen ucunda yıldız parıltısı.
 func _draw_back() -> void:
 	if _glint <= 0.0 or not _regen_on or _pal.is_empty():
@@ -587,26 +694,3 @@ func _draw_back() -> void:
 		for o: Vector2 in [Vector2(k, 0), Vector2(-k, 0), Vector2(0, k), Vector2(0, -k)]:
 			_back.draw_rect(Rect2((c + o).floor(), Vector2.ONE), col)
 	_back.draw_rect(Rect2(c.floor(), Vector2.ONE), WHITE)
-
-
-func _px(p: Vector2, col: Color) -> void:
-	draw_rect(Rect2(p.floor(), Vector2.ONE), col)
-
-
-func _pixel_ellipse(c: Vector2, rx: float, ry: float, col: Color, ring: bool) -> void:
-	var y0 := int(floor(c.y - ry))
-	var y1 := int(ceil(c.y + ry))
-	for y in range(y0, y1):
-		var dy := (y + 0.5 - c.y) / ry
-		if absf(dy) > 1.0:
-			continue
-		var hw := rx * sqrt(1.0 - dy * dy)
-		var x0 := int(round(c.x - hw))
-		var x1 := int(round(c.x + hw))
-		if x1 <= x0:
-			continue
-		if ring and absf(dy) < 0.75:
-			draw_rect(Rect2(x0, y, 1, 1), col)
-			draw_rect(Rect2(x1 - 1, y, 1, 1), col)
-		else:
-			draw_rect(Rect2(x0, y, x1 - x0, 1), col)

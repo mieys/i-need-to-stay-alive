@@ -69,6 +69,13 @@ func _run() -> void:
 			shop.call("_select", it) ## kilitli (kıymık yetmeyen) bir karakter
 			break
 	await _shot("gercek_c_char_kilitli")
+	## Karakter ayrıntısı yetenek sekmeleri (madde 604): Vampir E + en uzun metin Cadı R (anahtar notuyla)
+	for k: Array in [[13, 2, "gercek_c_char_vampir_e"], [15, 3, "gercek_c_char_cadi_r"]]:
+		for it: Dictionary in items:
+			if str(it["kind"]) == "char" and int(it["key"]) == int(k[0]):
+				shop.call("_select", it)
+				shop.call("_on_sk_tab", int(k[1]))
+				await _shot(str(k[2]))
 	shop.call("_on_tab_pressed", "upgrades")
 	await _shot("gercek_c_gelistirme")
 	shop.call("_on_reset_pressed") ## ilk basış: sıfırlama onayı

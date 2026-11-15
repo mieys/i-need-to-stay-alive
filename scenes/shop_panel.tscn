@@ -6,15 +6,15 @@
 [ext_resource type="Texture2D" uid="uid://y3rowtdx30ns" path="res://assets/weapons/fire/firestaff_icon_v2.png" id="5"]
 [ext_resource type="Texture2D" uid="uid://cy5fycpl3r2bm" path="res://assets/weapons/lightning/icon_v2.png" id="6"]
 [ext_resource type="Texture2D" uid="uid://cnqpdhxx1k15d" path="res://assets/weapons/tuftuf/icon_v2.png" id="8"]
-[ext_resource type="Texture2D" uid="uid://cn1rktgjdue6l" path="res://assets/weapons/tufek/icon.png" id="9"]
-[ext_resource type="Texture2D" uid="uid://rofxqg4h6tyw" path="res://assets/weapons/tabanca/icon_v2.png" id="10"]
+[ext_resource type="Texture2D" uid="uid://cn1rktgjdue6l" path="res://assets/weapons/yeni/tufek.png" id="9"]
+[ext_resource type="Texture2D" uid="uid://rofxqg4h6tyw" path="res://assets/weapons/yeni/tabanca.png" id="10"]
 [ext_resource type="Texture2D" uid="uid://bqv2bc5v2g58t" path="res://assets/weapons/base_knife/icon_v2.png" id="11"]
 [ext_resource type="Texture2D" uid="uid://c7i8onxs2cncw" path="res://assets/weapons/arcane/icon_v2.png" id="12"]
 [ext_resource type="Texture2D" uid="uid://81v2iv7uvvlp" path="res://assets/weapons/yay/draw1.png" id="13"]
 [ext_resource type="Texture2D" uid="uid://dvtmnqjstga3r" path="res://assets/weapons/crossbow/icon.png" id="14"]
-[ext_resource type="Texture2D" uid="uid://cvuqe273rdlr8" path="res://assets/weapons/boomerang/icon.png" id="15"]
+[ext_resource type="Texture2D" path="res://assets/weapons/yeni/chakram.png" id="15"]
 [ext_resource type="Texture2D" uid="uid://drrdioe7kmi7u" path="res://assets/weapons/buz_asasi/icon.png" id="16"]
-[ext_resource type="Texture2D" uid="uid://caq0m1eittus1" path="res://assets/weapons/fisek/icon.png" id="17"]
+[ext_resource type="Texture2D" path="res://assets/weapons/yeni/dinamit.png" id="17"]
 [ext_resource type="Texture2D" uid="uid://vu0626ie60hg" path="res://assets/weapons/pence/icon.png" id="18"]
 [ext_resource type="Texture2D" uid="uid://b04sghlcv4ofw" path="res://assets/weapons/topuz/icon.png" id="19"]
 [ext_resource type="Texture2D" uid="uid://b7ubkfk5hdg5k" path="res://assets/weapons/uzunkilic/icon.png" id="20"]
@@ -1103,7 +1103,7 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_override_colors/font_color = Color(0.96, 0.89, 0.74, 1)
 theme_override_font_sizes/font_size = 36
-text = "Fişek"
+text = "Dinamit"
 horizontal_alignment = 1
 autowrap_mode = 2
 
@@ -1208,7 +1208,7 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_override_colors/font_color = Color(0.96, 0.89, 0.74, 1)
 theme_override_font_sizes/font_size = 36
-text = "Topuz"
+text = "Balyoz"
 horizontal_alignment = 1
 autowrap_mode = 2
 

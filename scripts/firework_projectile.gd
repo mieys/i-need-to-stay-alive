@@ -1,49 +1,38 @@
 extends Node2D
 
-## Fişek: normal mermilerin aksine yol boyunca hiçbir düşmana çarpışma hasarı
-## vermez (üstlerinden "uçarak" geçer) - yukarı fırlayıp yumuşak, TEK PARÇA
-## bir kavis (quadratic Bezier) çizerek hedefin (ateş anındaki, SABİT)
-## noktasına iner ve orada ANINDA geniş bir alan hasarı patlatır.
-## GÜNCELLEME: eskiden "rise" (düz çizgi, launch->apex) + "descend" (düz
-## çizgi, apex->target) diye İKİ AYRI doğrusal faz halinde hareket
-## ediyordu; rotasyon da rise sırasında ayrı bir lerp ile hesaplanıp,
-## descend sırasında ise SABİT kalıyordu. Sonuç: hareketin yönüyle burnun
-## baktığı yön birbirinden kopuk, "kırık" (smooth olmayan) bir yörünge
-## hissi. Kullanıcı isteği: "ucu yukarı şekilde yukarı fırlayıp ucunun
-## dönüş açısıyla beraber aynı anda dönüp yaratıkların üstünde patlaması" -
-## yani rotasyon HER an gerçek hareket yönünü (eğrinin o andaki teğetini)
-## takip etmeli. Artık TEK bir sürekli Bezier eğrisi (launch -> apex ->
-## target) var ve rotasyon her karede o eğrinin teğetinden hesaplanıyor -
-## böylece hem yörünge hem dönüş baştan sona pürüzsüz ve birbiriyle her an
-## tam tutarlı (t=0'da teğet yukarı bakar -> "ucu yukarı fırlar", t=1'de
-## teğet doğrudan hedefe iner -> "yaratığın üstünde patlar").
+## DİNAMİT (madde 651, 2026-11-13; eski adıyla Fişek - anahtar `fisek`, sahne/betik adları AYNI: kayıt/ağ/efsun uyumu).
+## Kullanıcı: "oyundaki fişeği bununla değiştir ancak fişek artık dinamit olduğu için yukarı çıkıp uçmucak fırlatılıp
+## patlıcak, ayrıca ucundaki ipte de efekt olmalı."
+## - Görünüş: kullanıcının 32x32 dinamit çizimi (assets/weapons/yeni/dinamit.png = WeaponTierArt ART["fisek"]), kafadaki
+##   ikonla AYNI piksel boyunda (ART_WORLD_PX).
+## - Uçuş: eski "yukarı fırlayıp hedefin üstüne çakılan roket" (Bezier, burun teğete dönük) YOK. Dinamit hedefin ateş anındaki
+##   SABİT noktasına alçak bir kavisle FIRLATILIR (yatayda sabit hız, yükseklik parabol), havada takla atar (gövde döner),
+##   yere düşünce kısa bir sekip fitil son kez cızırdar, sonra patlar. Yerde altında, yükseldikçe küçülen bir gölge.
+## - Fitil: ucunda Korsan bombasıyla AYNI tasarım kıvılcım (nefes alan hale + titreyen çekirdek + uçuşan korlar,
+##   tools/gen_dinamit_fitil.py -> assets/fx/dinamit/fuse_*). Kıvılcım ayrı düğüm: fitil ucunu izler ama DÖNMEZ (korlar hep
+##   aşağı düşer). Arkasında düşen kıvılcım izi (fx_particle_trail "fisek_kivilcim"); roketin duman izi kalktı.
+## - Kural (değişmedi): yolda kimseye çarpmaz; inince ANINDA splash_radius içine alan hasarı. Uzak oyuncudaki kopya AYNI
+##   sahne/betik (network_manager.gd broadcast_projectile, network_spawned): aynı başlangıç/hedeften aynı yörünge, hasarsız.
 
-@export var flight_duration: float = 1.15
-## Kullanıcı isteği: "havai fişekler animasyon anında yukarı doğru daha çok
-## uçsun öyle üstlerine çakılsın" - eskiden 90px idi, kavis (rise_height +
-## apex_horizontal_bias) çok yatık kalıyordu. Artık belirgin biçimde önce
-## yukarı fırlayıp sonra hedefin üstüne dik gibi çakılan bir mermi hissi
-## için hem tepe yüksekliği hem de tepe noktasının ATIŞ tarafına yakın
-## durması (aşağıdaki apex_horizontal_bias) birlikte kullanılıyor.
-@export var rise_height: float = 230.0
-## Bezier tepe noktasının ateş/hedef arasında hangi orana oturduğu (0 =
-## tam ateş noktasında, 1 = tam hedefte). 0.5 (eski davranış) tepe
-## noktasını TAM ORTAYA koyduğu için iniş de çıkış kadar "yatık" oluyordu.
-## Daha düşük bir değer (ateşe yakın) erken fazı büyük ölçüde DİKEY
-## yükselişe, geç fazı ise hedefin üstüne DİK bir iniş/çakılmaya ayırır -
-## gerçek havai fişek/havan topu hissi.
-@export var apex_horizontal_bias: float = 0.3
-## Kullanıcı isteği ("AoE olan silahler tek hedefli silahlerle aynı hasarı/
-## ateş hızını yakalamamalı" dengelemesi kapsamında): TAM hasarlı, alan
-## çapında sınırsız hedef vuran bu mermi eskiden hem çok hızlı ateşliyor
-## (fire_rate) hem de çok geniş bir alanı (70px) kapsıyordu - grup temizleme
-## gücü tek-hedefli silahlerin tek-hedef DPS'inin kat kat üzerindeydi. Alan
-## biraz daraltıldı (70 -> 55). Yeni kullanıcı isteği: "havai fişeğin saldırı
-## hızını %50 azaltıp saldırı gücü oranını %50 arttır hasar alanının
-## boyutunu %20 arttır" - fire_rate/card_damage_bonus_ratio bkz.
-## weapon_fisek.tscn, buradaki alan 55 -> 66 (+%20, patlama FX'i de
-## fx_hit_big_burst.tscn'de aynı oranda büyütüldü).
-## 2026-10-10 (kullanıcı: "havai fişeğin patlama alanını %20 arttır"): 66 -> 79,2. Patlama efekti de aynı oranda büyür (_spawn_impact: FX_BASE_RADIUS'a göre ölçek).
+## Hava süresi (sn) - TABAN atış mesafesinde (REF_DIST); yakına daha kısa, uzağa biraz daha uzun (DIST_MIN..MAX çarpanı).
+## Efsun hız çarpanı bunu böler (enchant_behavior.gd "flight_duration").
+@export var flight_duration: float = 0.62
+const REF_DIST := 180.0
+const DIST_MULT_MIN := 0.7
+const DIST_MULT_MAX := 1.3
+## Kavis tepesi (dünya px): mesafeyle orantılı, sınırlı - "yukarı uçma" değil, el ile atış.
+const ARC_PER_DIST := 0.24
+const ARC_MIN := 16.0
+const ARC_MAX := 52.0
+## Takla hızı (rad/sn; yönü atış yönüne göre) ve yere düşünce sekme + son cızırtı.
+const SPIN_SPEED := 13.0
+const LAND_HOLD := 0.2
+const BOUNCE_HEIGHT := 4.0
+## Yerde yatış açısı: çizimin gövde ekseni -48,8 derece (sol-alt -> sağ-üst); +48,8 döndürünce yatay yatar.
+const REST_ANGLE := 0.852
+
+## 2026-10-10 (kullanıcı: "havai fişeğin patlama alanını %20 arttır"): 66 -> 79,2. Patlama efekti de aynı oranda büyür
+## (_spawn_impact: FX_BASE_RADIUS'a göre ölçek). Ayrıntılı geçmiş: docs/notlar (fişek dengesi).
 @export var splash_radius: float = 79.2
 const FX_BASE_RADIUS := 66.0 ## fx_hit_big_burst.tscn bu yarıçapa göre boyutlu
 @export var impact_scene: PackedScene
@@ -55,93 +44,85 @@ var is_crit: bool = false
 ## Efsun (bkz. weapon.gd enchant_on_projectile_hit / enchant_on_explode).
 var source_weapon: Node = null
 var shield_pen_percent: float = 0.0
-## weapon.gd _fire_at() bunu ateş yönüne göre dolduruyor - target_position
-## henüz (0,0) ise (güvenlik durumu) ilk yörünge tahmininde kullanılır,
-## gerçek iniş noktası her zaman target_position (aşağıda).
+## weapon.gd _fire_at() bunu ateş yönüne göre doldurur - target_position henüz (0,0) ise (güvenlik) iniş noktası tahmini.
 var direction: Vector2 = Vector2.RIGHT
-## weapon.gd _fire_at() bunu hedefin ateş anındaki SABİT konumuna ayarlar -
-## fişek yolda hedefin öldürülmesi/kaçması gibi durumlardan etkilenmeden hep
-## bu noktaya iner (diğer tüm mermiler gibi "ateş anında yakalanan hedef
-## konumu" mantığı, bkz. weapon.gd target_pos_at_attack).
+## weapon.gd _fire_at() bunu hedefin ateş anındaki SABİT konumuna ayarlar - dinamit hep bu noktaya düşer.
 var target_position: Vector2 = Vector2.ZERO
-## Kafanın üstündeki ikonu havadayken gizleyip inince tekrar gösteren silaha
-## geri bildirim - bkz. weapon.gd hide_icon_while_projectile_flying /
-## _on_ranged_projectile_landed(). weapon.gd bu bayrağı açmadıkça hiç
-## atanmaz, no-op.
+## Kafanın üstündeki ikonu havadayken gizleyip patlayınca tekrar gösteren silaha geri bildirim (weapon.gd
+## hide_icon_while_projectile_flying / _on_ranged_projectile_landed).
 var return_callback_target: Node = null
 
-var _launch_position: Vector2
-var _apex_position: Vector2
-var _elapsed: float = 0.0
-var _trajectory_ready: bool = false
-var _done: bool = false
+const WeaponTierArtScript := preload("res://scripts/weapon_tier_art.gd")
+## Dinamit pikseli (dünya px) = kafadaki ikonun pikseli (weapon_tier_art.gd WORLD_PX x SIZE_MULT["fisek"]).
+const ART_WORLD_PX := WeaponTierArtScript.WORLD_PX * 1.3
+## Fitil ucu, çizimin dokusunda (32x32, merkeze göre): kıvrılan ipin serbest ucu (27,3) pikselinin ortası.
+const FUSE_TIP_TEX := Vector2(11.5, -12.5)
+## Kıvılcım sayfasında (gen_dinamit_fitil.py) fitil ucu kare merkezinin 2 px altında.
+const FUSE_SHEET_OFFSET := Vector2(0.0, -2.0)
+const FUSE_FRAMES := preload("res://assets/fx/dinamit/fuse_frames.tres")
+## Gölge (sanat pikseli): Korsan bombası gibi sert kenarlı iki tonlu elips, yükseldikçe küçülür.
+const SHADOW_RX := 7.0
+const SHADOW_RY := 2.2
 
-@onready var launch_sound: AudioStreamPlayer2D = get_node_or_null("LaunchSound")
-@onready var sparkle: AnimatedSprite2D = get_node_or_null("Sparkle")
-
-## fişek ikonu (assets/weapons/fisek/icon.png) zaten doğal olarak yukarı
-## (burun yukarıda) çizilmiş - yani hareket yönü tam yukarıyken (Vector2(0,-1))
-## rotation 0 olmalı. Vector2(0,-1).angle() == -PI/2 olduğundan, gerçek
-## hareket yönünün açısına +PI/2 eklenerek "burun yukarı" sanatına kalibre
-## ediliyor (bkz. _rotation_for_tangent).
-const ROTATION_CORRECTION := PI / 2.0
-## Kullanıcı isteği (2026-09-24): "füze ateşlendiğinde arkasında partiküller bıraksın füze olduğu hissedilsin" - kıvılcım ->
-## alev -> duman izi (pixel spritesheet, bkz. fx_particle_trail.gd "missile"). Patlayınca (_done) iz bırakmayı keser.
 const ParticleTrail := preload("res://scripts/fx_particle_trail.gd")
 const BalanceLogScript: GDScript = preload("res://scripts/balance_log.gd")
 const EnemyQueryScript := preload("res://scripts/enemy_world/enemy_query.gd")
 
+var _launch_position: Vector2
+var _duration: float = 0.62
+var _arc: float = 30.0
+var _spin_dir: float = 1.0
+var _elapsed: float = 0.0
+var _land_elapsed: float = 0.0
+var _landed: bool = false
+var _height: float = 0.0
+var _trajectory_ready: bool = false
+var _done: bool = false
+
+@onready var launch_sound: AudioStreamPlayer2D = get_node_or_null("LaunchSound")
+@onready var icon: Sprite2D = get_node_or_null("Icon")
+@onready var fuse: AnimatedSprite2D = get_node_or_null("Fuse")
+
 
 func _ready() -> void:
-	if sparkle and sparkle.sprite_frames and sparkle.sprite_frames.has_animation("loop"):
-		sparkle.play("loop")
-	## Madde 201 (A Zanaatkâr): eski kalın "missile" duman izi yerine silah pikselinde düşen kıvılcım + yükselen duman.
+	if fuse:
+		fuse.sprite_frames = FUSE_FRAMES
+		fuse.offset = FUSE_SHEET_OFFSET
+		fuse.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		fuse.play(&"loop")
 	ParticleTrail.attach(self, "fisek_kivilcim")
-	ParticleTrail.attach(self, "fisek_duman")
 
 
-## Madde 402 (2026-11-06): Zanaatkâr kademe sanatı (çapraz roket + egzoz alevi, madde 198/201) kalktı - uçan fişek kafadaki ESKİ
-## ikonun kendisi (sahnedeki düz yukarı roket + parıltı, ROTATION_CORRECTION), kademeyle değişmez. Kıvılcım + duman izi (madde 201) duruyor.
+## Kök ölçeği (weapon.gd _fire_at: karakter ölçeği 0,5; uzak kopyada proj_scale) ateşten SONRA atanır -> sanat ölçeği her
+## karede kök ölçeğine göre (dünya pikseli hep ART_WORLD_PX).
+func _art_local_scale() -> float:
+	return ART_WORLD_PX / maxf(0.01, absf(scale.x))
 
 
-## weapon.gd _fire_at() önce add_child() çağırıp SONRA global_position/
-## direction/target_position atıyor (bkz. weapon.gd) - bu sıralama diğer tüm
-## mermiler için sorun değil çünkü onlar yönü her frame'de canlı okuyor, ama
-## fişek eskiden bunu SADECE _ready() içinde bir kere hesaplıyordu - yani
-## add_child() sırasında _ready() senkron çalıştığında henüz atanmamış (hâlâ
-## varsayılan (0,0)/RIGHT/ZERO) değerlerle tüm yörüngeyi yanlış donduruyordu.
-## Bu yüzden yörünge hesabı _ready() yerine ilk _process() tick'ine
-## ertelenir - o noktada weapon.gd'nin atamaları kesinlikle tamamlanmış olur.
+## weapon.gd _fire_at() önce add_child() çağırıp SONRA global_position/direction/target_position atıyor - yörünge ilk
+## _process'te kurulur (o noktada atamalar tamam).
 func _init_trajectory() -> void:
 	_trajectory_ready = true
 	_launch_position = global_position
 	if target_position == Vector2.ZERO:
-		target_position = global_position + direction * 300.0
-	## Kavisin tepe noktası: ateş/hedef arasında apex_horizontal_bias oranına
-	## oturur (varsayılan ateşe yakın), yukarı doğru rise_height kadar
-	## kaldırılmış - bu, hem belirgin bir "yukarı fırlama" hem de "hedefin
-	## üzerine dik çakılma" hissini TEK, sürekli bir eğride birleştirir.
-	_apex_position = _launch_position.lerp(target_position, apex_horizontal_bias) + Vector2(0, -rise_height)
-	rotation = _rotation_for_tangent(_bezier_tangent(0.0))
+		target_position = global_position + direction * REF_DIST
+	var dist: float = _launch_position.distance_to(target_position)
+	_duration = maxf(0.05, flight_duration) * clampf(dist / REF_DIST, DIST_MULT_MIN, DIST_MULT_MAX)
+	_arc = clampf(dist * ARC_PER_DIST, ARC_MIN, ARC_MAX)
+	var dx: float = target_position.x - _launch_position.x
+	_spin_dir = 1.0 if dx >= 0.0 else -1.0
 	if launch_sound:
 		launch_sound.play()
 
 
-func _bezier_point(t: float) -> Vector2:
-	var u: float = 1.0 - t
-	return _launch_position * (u * u) + _apex_position * (2.0 * u * t) + target_position * (t * t)
+## Saf yörünge (test + iki istemcide aynı): t 0..1 -> [yerdeki nokta, yükseklik].
+static func throw_ground_point(from: Vector2, to: Vector2, t: float) -> Vector2:
+	return from.lerp(to, clampf(t, 0.0, 1.0))
 
 
-## Bezier eğrisinin B(t)'nin türevi - o andaki GERÇEK hareket yönü (rotasyon
-## bundan hesaplanır, konumdan bağımsız ayrı bir lerp'ten DEĞİL).
-func _bezier_tangent(t: float) -> Vector2:
-	return (_apex_position - _launch_position) * (2.0 * (1.0 - t)) + (target_position - _apex_position) * (2.0 * t)
-
-
-func _rotation_for_tangent(tangent: Vector2) -> float:
-	if tangent.length() < 0.001:
-		return rotation
-	return tangent.angle() + ROTATION_CORRECTION
+static func throw_height(arc: float, t: float) -> float:
+	var k: float = clampf(t, 0.0, 1.0)
+	return 4.0 * arc * k * (1.0 - k)
 
 
 func _process(delta: float) -> void:
@@ -149,29 +130,85 @@ func _process(delta: float) -> void:
 		_init_trajectory()
 	if _done:
 		return
-	_elapsed += delta
-	var t: float = clamp(_elapsed / max(0.01, flight_duration), 0.0, 1.0)
-	global_position = _bezier_point(t)
-	rotation = _rotation_for_tangent(_bezier_tangent(t))
+	var art_scale: float = _art_local_scale()
+	if icon:
+		icon.scale = Vector2.ONE * art_scale
+	if fuse:
+		fuse.scale = Vector2.ONE * art_scale
+	if not _landed:
+		_elapsed += delta
+		var t: float = clampf(_elapsed / _duration, 0.0, 1.0)
+		_height = throw_height(_arc, t)
+		global_position = throw_ground_point(_launch_position, target_position, t) + Vector2(0.0, -_height)
+		if icon:
+			icon.rotation += SPIN_SPEED * _spin_dir * delta
+		if t >= 1.0:
+			_landed = true
+			if fuse:
+				fuse.speed_scale = 2.0 ## son cızırtı
+	else:
+		_land_elapsed += delta
+		var k: float = clampf(_land_elapsed / LAND_HOLD, 0.0, 1.0)
+		_height = sin(minf(1.0, k * 2.0) * PI) * BOUNCE_HEIGHT
+		global_position = target_position + Vector2(0.0, -_height)
+		if icon:
+			icon.rotation = lerp_angle(icon.rotation, _rest_angle(icon.rotation), minf(1.0, delta * 25.0))
+			## patlamadan hemen önce titrer
+			icon.position = Vector2((randf() - 0.5) * 1.2, 0.0) * k
+		if k >= 1.0:
+			global_position = target_position
+			_explode()
+			return
+	if fuse and icon:
+		fuse.position = icon.transform * FUSE_TIP_TEX
+	queue_redraw()
 
-	if t >= 1.0:
-		_explode()
+
+## Yatışın iki yönünden (ip sağda / solda) dönüşe en yakını.
+func _rest_angle(cur: float) -> float:
+	var a: float = REST_ANGLE
+	var b: float = REST_ANGLE + PI
+	return a if absf(angle_difference(cur, a)) <= absf(angle_difference(cur, b)) else b
+
+
+## Gölge: kök yerel uzayında, gövdenin _height kadar altında (yer), sanat pikseli ızgarasında.
+func _draw() -> void:
+	if _done or not _trajectory_ready:
+		return
+	var px: float = _art_local_scale()
+	var ground_y: float = _height / maxf(0.01, absf(scale.y))
+	var shrink: float = 1.0 - minf(0.45, _height / ART_WORLD_PX / 60.0)
+	var rx: float = SHADOW_RX * shrink
+	var ry: float = SHADOW_RY * shrink
+	for dy in range(-3, 3):
+		var yy: float = dy + 0.5
+		if absf(yy) > ry:
+			continue
+		var half: float = rx * sqrt(maxf(0.0, 1.0 - (yy / ry) * (yy / ry)))
+		var w: int = int(round(half))
+		if w <= 0:
+			continue
+		var inner: bool = absf(yy) <= ry * 0.62
+		draw_rect(Rect2(Vector2(-w, dy) * px + Vector2(0.0, ground_y), Vector2(w * 2, 1) * px), Color(0, 0, 0, 0.24))
+		if inner:
+			var wi: int = int(round(half * 0.62))
+			if wi > 0:
+				draw_rect(Rect2(Vector2(-wi, dy) * px + Vector2(0.0, ground_y), Vector2(wi * 2, 1) * px), Color(0, 0, 0, 0.14))
 
 
 func _explode() -> void:
 	_done = true
-	## Ağ üzerinden spawnlanan görsel kopyalar hasar vermez —
-	## sadece darbe efektini ve sesini oynatır.
+	queue_redraw()
+	## Ağ üzerinden spawnlanan görsel kopyalar hasar vermez — sadece darbe efektini ve sesini oynatır.
 	if get_meta("network_spawned", false):
 		_spawn_impact()
 		_play_impact_sound()
 		queue_free()
 		return
-	## Şaman pasifi (Totem Auraları): bu patlama TEK bir "saldırı" sayılır -
-	## yakma EN FAZLA 1 düşmanda tetiklenebilir (bkz. enemy.gd
-	## try_shaman_weapon_burn() üstündeki kök neden notu).
+	## Şaman pasifi (Totem Auraları): bu patlama TEK bir "saldırı" sayılır - yakma EN FAZLA 1 düşmanda tetiklenebilir (bkz.
+	## enemy.gd try_shaman_weapon_burn() üstündeki kök neden notu).
 	var _shaman_burn_applied: bool = false
-	## FPS (2026-10-18): tüm "enemies" grubu yerine patlama merkezinin çevresindeki adaylar (C++ ızgara sorgusu); süzgeç aynen aşağıda (merkez mesafesi <= splash_radius).
+	## FPS (2026-10-18): tüm "enemies" grubu yerine patlama merkezinin çevresindeki adaylar (C++ ızgara sorgusu).
 	for e in EnemyQueryScript.candidates(get_tree(), global_position, splash_radius):
 		if not is_instance_valid(e) or e.get("is_dead") == true:
 			continue

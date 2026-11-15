@@ -43,6 +43,15 @@ const MAX_SEGMENT_LINES := 20
 ## their head instead - see enemy_spawner.gd's _attach_boss_bar.
 var y_offset: float = -62.0
 
+## F3 arayüzü gizle (madde 612, bkz. ui_hide.gd): çubuk (+ saklanma/zaman simgesi çocukları) `visibility_layer` ile kapanır - sahipler
+## (enemy.gd vb.) çubuğun `visible`ını sürekli değiştirdiği için `visible` kullanılmaz.
+const UiHideScript := preload("res://scripts/ui_hide.gd")
+
+
+func _ready() -> void:
+	pass ## F3 arayüz gizliyken de görünür kalır (kullanıcı isteği 2026-11-14): mark_world YOK
+
+
 ## OYNANABİLİR KARAKTERLERİN barı (kullanıcı bildirimi 2026-09-25: "karakterin üstündeki can ve kalkan barını biraz yukarı
 ## yükselt, bazı karakterlerin şapkasının görünmemesine neden oluyor"). Ölçüm (tüm karakterlerin idle/walk karelerindeki en
 ## üst opak piksel, characters.gd ölçek/ofset x EntityScale 0.95, karakter kökünün yerel biriminde): en uzunlar Büyücü
@@ -272,6 +281,19 @@ func _draw_carved_bar(r: Rect2i, ratio: float, col: Color, segmented: bool) -> v
 				_px(tx + tw - 1, y0 + 1, 1, h - 1, lo)
 		if fill_end < b and fl >= 2:
 			_px(tx + fl - 1, y0 + 1, 1, h - 2, col.lightened(0.5)) ## kırık karonun ucu: açık kesit
+	## DOLU kısımdaki derzler oyuk (DEEP) değil, dolgunun koyu tonu (kullanıcı bildirimi 2026-11-13: "oyuncuların can barı bazen
+	## siyah siyah görünüyor"): ~820+ canda 20 çizgi 44 birime düşünce aradaki karolar 1 birim kalıyor, çubuğun YARISI DEEP derz
+	## olup yalnız iki uç karo yeşil görünüyordu (kamera uzaklaşınca 1 birimlik yeşil sütunlar örneklemede tamamen kayboluyordu).
+	## Derz sayısı/konumu aynı (40 canda bir, en çok 20); yalnız dolu derz rengi değişti, boş kısımdaki derz yine oyuk.
+	for i in range(1, cuts.size() - 1):
+		var c: int = cuts[i]
+		if c < fw:
+			_px(x0 + c, y0, 1, h, filled_seam_color(col))
+
+
+## Dolu kısımdaki derzin rengi: dolgunun koyu tonu (çubuk dolu okunsun, bölme yine seçilsin).
+static func filled_seam_color(col: Color) -> Color:
+	return col.darkened(0.4)
 
 
 func _draw() -> void:

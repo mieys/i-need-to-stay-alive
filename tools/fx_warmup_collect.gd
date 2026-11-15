@@ -8,7 +8,7 @@ extends SceneTree
 ## Ortam: FXW_CHARS=1,2,... (varsayılan hepsi), FXW_WEAPONS=a,b (varsayılan hepsi).
 
 const ALL_CHARS: Array = [1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15]
-const ALL_WEAPONS: Array = ["dagger", "fire_staff", "lightning_staff", "tabanca", "tuftuf", "tufek", "arcane", "yay", "crossbow", "boomerang", "buz_asasi", "fisek", "pence", "topuz", "uzunkilic", "gokkusagi", "mizrak", "yinyang", "pompali"]
+const ALL_WEAPONS: Array = ["dagger", "fire_staff", "lightning_staff", "tabanca", "tuftuf", "tufek", "arcane", "yay", "crossbow", "boomerang", "buz_asasi", "fisek", "pence", "topuz", "uzunkilic", "gokkusagi", "mizrak", "yinyang", "pompali", "makineli"]
 const DUMMY_ROSTER: Array = ["slime1", "zombie1", "zombie2", "iskelet2", "ork1"]
 
 var _gm: Node = null
@@ -156,6 +156,10 @@ func _run() -> void:
 				await _clear_weapons()
 				await _wait(0.5)
 				print("FXW MARK weapon=%s" % k)
+				## Defter (owned_weapons) silahtan ÖNCE: buy_weapon_copy kalıcı özelliği (Ateş Nefesi alevi vb.) defterden takar.
+				## Eskiden defter yazılmıyordu -> silah özelliksiz geliyor, özellik efektlerinin kaynakları listeye HİÇ girmiyordu (madde 550).
+				(_gm.get("owned_weapons") as Array).clear()
+				(_gm.get("owned_weapons") as Array).append((load("res://scripts/enchant_defs.gd") as GDScript).new_weapon_entry(k, 1, 0))
 				_player.call("buy_weapon_copy", k, 1)
 				await _wait(4.5)
 				print("FXW END")

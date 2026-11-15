@@ -18,6 +18,7 @@ Oyunun terimleri her yerde AYNI karşılıkla çevrilir. Yeni terim çıkınca �
 | Ulti | Ultimate | |
 | Ruhani Yetenek | Spirit Ability | |
 | Evrim | Evolution | |
+| Lanet Çukuru (Hadime E) / çukur | Cursed Pit / pit | eski "Kara Delik / Black Hole" (madde 556); evrimler Genişleyen Çukur / Gezgin Çukur / Yer Yarılması (Widening Pit / Wandering Pit / Earth Rupture) |
 | Takas kartı | Trade-off card | |
 | Elit | Elite | |
 | Saldırı Gücü (SG) | Attack Power (AP) | |
@@ -36,6 +37,10 @@ Oyunun terimleri her yerde AYNI karşılıkla çevrilir. Yeni terim çıkınca �
 | Ev kuşatması | House siege | |
 | Babaanne | Grandma | |
 | Zindan | Dungeon | |
+| Şarjör / doldurma | Magazine / reload | madde 652 Makineli: de Magazin / Nachladen, es cargador / recarga, fr chargeur / rechargement, it caricatore / ricarica, pl magazynek / przeładowanie, pt pente / recarga, ru магазин / перезарядка, zh 弹匣 / 换弹 |
+| Hafif Makineli Tüfek (silah, anahtar `makineli`) | Submachine Gun | de Maschinenpistole, es Subfusil, fr Mitraillette, it Mitra, pl Pistolet maszynowy, pt Submetralhadora, ru Пистолет-пулемёт, zh 冲锋枪 |
+| Balista (Arbalet özelliği) / balista oku | Ballista / ballista bolt | de Balliste / Ballistenbolzen, es/it/pl/pt Balista (virote / dardo / bełt / virote), fr Baliste / carreau, ru Баллиста / болт, zh 弩炮 / 弩炮箭 |
+| Zehir yükü | Poison stack | de Giftladung, es carga de veneno, fr charge de poison, it carica di veleno, pl ładunek jadu, pt carga de veneno, ru заряд яда, zh 毒素层 |
 
 ## Biçim kuralları
 - Yüzde: Türkçe `%50` -> İngilizce `50%` (kalıp `"%%%d"` -> `"%d%%"`).

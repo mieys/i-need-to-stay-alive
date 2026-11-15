@@ -1,7 +1,10 @@
 extends Node2D
 
 const PaladinDome := preload("res://scripts/paladin_dome.gd") ## Şovalye kubbesi alanı (elips)
+const KalkanGuard := preload("res://scripts/kalkan_guard.gd") ## Kalkan silahı siper duruşu (madde 685)
 const PhysicsInterp := preload("res://scripts/physics_interp.gd")
+const ShieldBubbleHit := preload("res://scripts/shield_bubble_hit.gd") ## mana kalkanı baloncuğu: mermi dış kenarda söner (madde 572)
+const AbilitiesScript := preload("res://scripts/enemy_abilities.gd")
 
 ## Mirror of scripts/projectile.gd (the player's shot) but for ranged enemies
 ## (Demon/Lich/Röntgen/İblis, see enemy.gd's is_ranged) - flies toward the
@@ -69,6 +72,10 @@ static var _targets: Array = [] ## [Node2D gövde, Vector2 şekil merkezi, float
 static var _dome_owners: Array = [] ## aktif Şovalye kalkanı olan oyuncular (genelde boş)
 ## Talon "Kalkan Çemberi" evrimi (2026-09-28): salvo sürerken mermileri silah çemberinde söndüren oyuncular [gövde, yarıçap].
 static var _ward_owners: Array = []
+## Kalkan silahı siper duruşu olan oyuncular (yerel + kukla; madde 685, bkz. kalkan_guard.gd) - genelde boş.
+static var _guard_owners: Array = []
+## Mana kalkanı olan oyuncular (yerel + kukla) [gövde, baloncuk merkezi, baloncuk yarıçapı] (madde 572).
+static var _bubble_owners: Array = []
 ## İlk kullanımda yüklenir (preload DEĞİL: yeni sayfa henüz içe aktarılmadıysa bu script derlenmeye devam etsin).
 const WARD_BLOCK_SCENE_PATH := "res://scenes/fx_evo_talon_block.tscn"
 static var _ward_block_scene: PackedScene = null
@@ -81,6 +88,7 @@ func _ready() -> void:
 	## kalan düşman mermileri de düşmanlar gibi gizlenir, karanlıktan gelen
 	## ateş top yalnızca görüş alanına girince belirir.
 	add_to_group("enemy_projectiles")
+	add_to_group(KalkanGuard.GROUP)
 	if style != LichFlame.STYLE_ORB:
 		if visual:
 			remove_child(visual)
@@ -107,6 +115,8 @@ static func _refresh_cache(tree: SceneTree) -> void:
 	_targets.clear()
 	_dome_owners.clear()
 	_ward_owners.clear()
+	_guard_owners.clear()
+	_bubble_owners.clear()
 	var bodies: Array = []
 	var local_p: Node = tree.get_first_node_in_group("player")
 	if local_p:
@@ -128,6 +138,12 @@ static func _refresh_cache(tree: SceneTree) -> void:
 			var ward_r: float = float(b.call("get_talon_ward_radius"))
 			if ward_r > 0.0:
 				_ward_owners.append([b, ward_r])
+		if KalkanGuard.guard_dir(b) != Vector2.ZERO:
+			_guard_owners.append(b)
+		if not b.is_in_group("player_allies"):
+			var bubble_r: float = ShieldBubbleHit.radius_of(b)
+			if bubble_r > 0.0:
+				_bubble_owners.append([b, ShieldBubbleHit.center_of(b as Node2D), bubble_r])
 		if not (b is CollisionObject2D) or ((b as CollisionObject2D).collision_layer & TARGET_LAYER_MASK) == 0:
 			continue
 		for c in (b as Node).get_children():
@@ -176,6 +192,9 @@ func _physics_process(delta: float) -> void:
 	## mermi kime hedeflenmiş olursa olsun.
 	for p in _dome_owners:
 		if is_instance_valid(p) and PaladinDome.contains(p.global_position, float(p.get("paladin_zone_radius")), global_position):
+			## Kubbe dışarıdan gelen atışı EMER: kalkana hasar işler (madde 542). MP görsel kopyası hasar vermez (host'ta yetkili kopya vurur).
+			if not get_meta("network_spawned", false):
+				PaladinDome.absorb_ranged_hit(p, damage, source)
 			queue_free()
 			return
 	for w in _ward_owners:
@@ -184,12 +203,31 @@ func _physics_process(delta: float) -> void:
 			queue_free()
 			return
 
+	## Kalkan silahı siper duruşu (madde 705): bakılan yönden gelen atış kalkana çarpar, hasarı %30 azalır, yoluna devam eder (her makine kendi kopyasıyla).
+	for g in _guard_owners:
+		if is_instance_valid(g):
+			KalkanGuard.guard_shot(g, self)
+
 	## Seyyar satıcının güvenli bölgesi - yukarıdaki Şovalye kalkanıyla AYNI
 	## "sınıra değince sessizce kaybol" davranışı, ama sabit bir dünya
 	## konumuna göre (bkz. enemy.gd'deki AYNI desen notu).
 	if GameManager.merchant_zone_active and global_position.distance_to(GameManager.merchant_zone_pos) <= GameManager.MERCHANT_ZONE_RADIUS:
 		queue_free()
 		return
+
+	## Mana kalkanı baloncuğu (madde 572, kullanıcı: "menzilli atışlar kalkanın içine girememeli, kalkanın dışına vurmalı"):
+	## kalkanı olan oyuncuya mermi gövdeye değil baloncuğun DIŞ kenarına çarpıp orada söner. Her makine kendi kopyasıyla aynı
+	## kuralı işletir; efekt her ekranda kendi kopyasının değdiği yerde, hasar yalnız yetkili kopyadan ("projectile" türü:
+	## hedefin player.gd'si efekti ikinci kez oynatmaz, bkz. shield_bubble_hit.gd).
+	for bb in _bubble_owners:
+		var reach_b: float = float(bb[2]) + HIT_RADIUS
+		if is_instance_valid(bb[0]) and global_position.distance_squared_to(bb[1]) <= reach_b * reach_b:
+			ShieldBubbleHit.impact(bb[0], global_position)
+			if not get_meta("network_spawned", false):
+				AbilitiesScript.deal_special_damage(bb[0], damage, source, "projectile")
+			_spawn_impact()
+			queue_free()
+			return
 
 	for t in _targets:
 		var reach: float = HIT_RADIUS + float(t[2])

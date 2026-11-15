@@ -37,7 +37,7 @@ const SKILL_ICONS := [
 const SFX_PATH := "res://scripts/shaman_sfx.gd"
 const SMOOTH_DRAW_SCRIPTS := [
 	"res://scripts/fx_shaman_cast.gd", "res://scripts/fx_totem_puff.gd", "res://scripts/fx_totem_fire_bolt.gd",
-	"res://scripts/totem_shield_wave.gd", "res://scripts/totem_base.gd", "res://scripts/totem_attack.gd",
+	"res://scripts/totem_link_ribbon.gd", "res://scripts/totem_base.gd", "res://scripts/totem_attack.gd", "res://scripts/totem_rune_stone.gd",
 ]
 const TOTEM_BASE_PATH := "res://scripts/totem_base.gd"
 const PLAYER_PATH := "res://scripts/player.gd"
@@ -86,19 +86,16 @@ func test_plant_collapse_and_rune_puffs_carry_their_kind() -> void:
 		fx.free()
 
 
-## Totem sahneleri (v4, madde 176): 40x56 karelik 8 kareli döngü, Shaman pikseli ölçeğinde (0.903), NEAREST, TotemSprite adıyla (TotemBase bulur).
+## Totem sahneleri (madde 557'den beri RÜN TAŞI, ayrıntı tests/test_shaman_rune_stone.gd): 32x32 taş, Shaman pikselinin %70'i (0.632;
+## "neredeyse Shaman kadar büyük, %30 küçült"), NEAREST, TotemSprite adıyla (TotemBase bulur).
 func test_totem_scenes_use_48px_pixel_sprites() -> void:
 	for path: String in TOTEM_SCENES:
 		var inst: Node = (load(path) as PackedScene).instantiate()
-		var spr: AnimatedSprite2D = inst.get_node_or_null("TotemSprite")
-		assert(spr != null, "%s 'TotemSprite' taşımalı" % path)
+		var spr: Sprite2D = inst.get_node_or_null("TotemSprite") as Sprite2D
+		assert(spr != null, "%s 'TotemSprite' (rün taşı Sprite2D) taşımalı" % path)
 		assert(spr.texture_filter == CanvasItem.TEXTURE_FILTER_NEAREST, "%s NEAREST olmalı" % path)
-		var anim: StringName = spr.animation
-		assert(spr.sprite_frames.get_frame_count(anim) == 8, "%s 8 kare olmalı" % path)
-		assert(is_equal_approx(spr.scale.x, 0.903), "%s Shaman pikseli ölçeğinde (0.903) olmalı" % path)
-		assert(spr.sprite_frames.get_animation_loop(anim), "%s idle döngüsü olmalı" % path)
-		var tex: Texture2D = spr.sprite_frames.get_frame_texture(anim, 0)
-		assert(tex.get_width() == 40 and tex.get_height() == 56, "%s kareleri 40x56 olmalı - v4 totem, bkz. tools/gen_shaman_totems_v4.py (bulunan %s)" % [path, tex.get_size()])
+		assert(is_equal_approx(spr.scale.x, 0.632), "%s Shaman pikselinin %%70'i (0.632) olmalı" % path)
+		assert(spr.texture.get_width() == 32 and spr.texture.get_height() == 32, "%s taşı 32x32 olmalı - bkz. tools/gen_shaman_rune_stones.py (bulunan %s)" % [path, spr.texture.get_size()])
 		inst.free()
 
 
@@ -168,15 +165,17 @@ func test_expire_spawns_dust_as_sibling() -> void:
 		"sönme tozu KARDEŞ olarak eklenmeli (çocuk olursa totemle birlikte silinir)")
 
 
-## Oyuncu tarafı: cast efekti kanonik ağ-yardımcısıyla oynatılmalı ki
-## diğer oyuncularda da AYNI efekt görünsün.
-func test_player_uses_broadcast_helper_for_shaman_cast() -> void:
-	var src: String = _read(PLAYER_PATH)
-	assert(src.contains("ShamanCastShieldScene := preload(\"res://scenes/fx_shaman_cast_shield.tscn\")"), "kalkan cast sahnesi bağlı olmalı")
-	assert(src.contains("ShamanCastAttackScene := preload(\"res://scenes/fx_shaman_cast_attack.tscn\")"), "saldırı cast sahnesi bağlı olmalı")
-	assert(src.contains("_play_and_broadcast_skill_fx(ShamanCastShieldScene)"), "kalkan cast ağ-yardımcısıyla oynatılmalı")
-	assert(src.contains("_play_and_broadcast_skill_fx(ShamanCastAttackScene)"), "saldırı cast ağ-yardımcısıyla oynatılmalı")
+## Kullanıcı isteği (2026-11-11): "shaman Q ve E yeteneğini kullandığında kendi üzerinde bir efekt çıkıyor, çıkmasın" - Q/E'de
+## karakterin üstünde cast parlaması (fx_shaman_cast_*) OYNAMAMALI (ne yerelde ne ağ yayınıyla); totemin kendi efektleri duruyor.
+func test_shaman_q_e_play_no_cast_fx_on_caster() -> void:
+	var src: String = _strip_comments(_read(PLAYER_PATH))
+	assert(not src.contains("ShamanCastShieldScene"), "kalkan cast parlaması karakterin üstünde oynamamalı")
+	assert(not src.contains("ShamanCastAttackScene"), "saldırı cast parlaması karakterin üstünde oynamamalı")
+	assert(not src.contains("fx_shaman_cast"), "player.gd fx_shaman_cast sahnelerine bağlanmamalı")
+	assert(src.contains("_spawn_shaman_totem(TotemShieldScene"), "Kalkan Totemi hâlâ dikilmeli")
+	assert(src.contains("_spawn_shaman_totem(TotemAttackScene"), "Saldırı Totemi hâlâ dikilmeli")
 	## Eski jenerik patlama artık Shaman yeteneklerinde KULLANILMAMALI.
+	src = _read(PLAYER_PATH)
 	assert(not src.contains("_spawn_burst(Color(0.35, 0.65, 1.0))"), "eski jenerik kalkan patlaması kaldırılmalı")
 	assert(not src.contains("_spawn_burst(Color(1.0, 0.55, 0.25))"), "eski jenerik saldırı patlaması kaldırılmalı")
 	assert(not src.contains("_spawn_burst(Color(0.65, 0.35, 0.85))"), "eski jenerik alan patlaması kaldırılmalı")

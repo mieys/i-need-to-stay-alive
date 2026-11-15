@@ -52,7 +52,10 @@ func process(delta: float, player: Node2D, dist: float) -> void:
 func _explode() -> void:
 	var pos: Vector2 = e.global_position
 	var data: Dictionary = {"radius": BLAST_RADIUS}
-	AbilitiesScript.spawn_world_fx(e.get_tree(), "pumpkin_blast", pos, data, true, e, BLAST_DAMAGE)
+	## Sabit hasar Balkabağı'nın eski kademesi (8) için yazılı: sahibi bossun yuva çarpanı (madde 682).
+	var boss: Variant = e.get_meta("summoner", null)
+	var mult: float = float((boss as Node).get_meta("boss_damage_mult", 1.0)) if boss != null and is_instance_valid(boss) else 1.0
+	AbilitiesScript.spawn_world_fx(e.get_tree(), "pumpkin_blast", pos, data, true, e, BLAST_DAMAGE * mult)
 	AbilitiesScript._broadcast_world_fx("pumpkin_blast", pos, data)
 	_dissolve()
 

@@ -32,7 +32,7 @@ func _process(_delta: float) -> void:
 
 func _draw() -> void:
 	var y: float = 0.0
-	for ally: Node in get_tree().get_nodes_in_group("remote_players"):
+	for ally: Node in get_tree().get_nodes_in_group("remote_allies"):
 		if not is_instance_valid(ally) or int(ally.get("peer_id")) <= 0:
 			continue
 		if y + FACE > size.y:

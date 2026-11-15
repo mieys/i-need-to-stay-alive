@@ -60,7 +60,7 @@ func test_timeline_and_speed() -> void:
 
 func test_fx_layers() -> void:
 	var plan: Dictionary = TopuzSlamMath.make_plan(Vector2(-1.0, 0.0), Vector2(50.0, 80.0), 1.0, TopuzSlamMath.REF_OWNER_SCALE)
-	for spec: Array in [[TopuzSlamMath.GroundFxScene, -1, 30.0, true], [TopuzSlamMath.TopFxScene, 60, 30.0, false],
+	for spec: Array in [[TopuzSlamMath.GroundFxScene, 0, 30.0, true], [TopuzSlamMath.TopFxScene, 60, 30.0, false],
 			[TopuzSlamMath.SmearFxScene, 0, 60.0, false]]:
 		var fx: AnimatedSprite2D = TopuzSlamMath.spawn_fx(spec[0], self, plan, 1.5)
 		assert(fx != null, "efekt oluşmalı")
@@ -223,7 +223,7 @@ func test_seismic_wave_opens_on_the_strike_point() -> void:
 	get_tree().current_scene = prev_scene
 
 
-## 2026-10-19 (maç analizi): dalga hedef sınırı - merkeze en yakın 8 düşman tam hasar, sonrakiler %35. Sarsma herkese uygulanır.
+## 2026-10-19 (maç analizi): dalga hedef sınırı - merkeze en yakın 4 düşman tam hasar (2026-11-14: 8 -> 4), sonrakiler %35. Sarsma herkese uygulanır.
 func test_seismic_wave_caps_full_damage_targets() -> void:
 	var prev_scene: Node = get_tree().current_scene
 	get_tree().current_scene = self
@@ -260,11 +260,11 @@ func test_seismic_wave_caps_full_damage_targets() -> void:
 	await get_tree().physics_frame
 	var full_loss: float = 600000.0 - float(foes[0].health)
 	assert(full_loss > 100.0, "ana hedef dalgayla vurulur: %s" % full_loss)
-	for i in range(8):
-		assert(is_equal_approx(600000.0 - float(foes[i].health), full_loss), "ilk 8 düşman tam hasar alır (#%d): %s" % [i, 600000.0 - float(foes[i].health)])
-	for i in range(8, 12):
+	for i in range(4):
+		assert(is_equal_approx(600000.0 - float(foes[i].health), full_loss), "ilk 4 düşman tam hasar alır (#%d): %s" % [i, 600000.0 - float(foes[i].health)])
+	for i in range(4, 12):
 		var loss: float = 600000.0 - float(foes[i].health)
-		assert(loss > 0.0 and absf(loss - full_loss * 0.35) < full_loss * 0.01, "9. ve sonrası %%35 hasar alır (#%d): %s / %s" % [i, loss, full_loss])
+		assert(loss > 0.0 and absf(loss - full_loss * 0.35) < full_loss * 0.01, "5. ve sonrası %%35 hasar alır (#%d): %s / %s" % [i, loss, full_loss])
 	for n in foes + [p]:
 		if is_instance_valid(n):
 			n.free()

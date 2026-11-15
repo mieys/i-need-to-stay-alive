@@ -1,7 +1,7 @@
 extends Node
 
 ## Kalkan (madde 338; prototip madde 330/333, kullanıcı seçimi: görünüş B "Şövalye", efekt D "Hayalet Kalkan"): ikon dönmez, yüzü
-## baktığı yöne dönük görünüş (8 yön), geniş darbe önündeki herkese tam hasar + 45 px itme, özellik "Siper" sabit kalkan doldurur.
+## baktığı yöne dönük görünüş (8 yön), geniş darbe önündeki herkese tam hasar + 45 px itme, özellik "Siper" hasar/itme/yavaşlatma güçlendirir (kalkan doldurmaz).
 ## Ortak plan scripts/kalkan_bash_math.gd (weapon.gd + remote_player.gd aynı dosyayı kullanır), özellik scripts/weapon_traits/siper.gd.
 
 const K := preload("res://scripts/kalkan_bash_math.gd")
@@ -40,7 +40,7 @@ func test_only_the_shield_is_a_shield() -> void:
 		if pair[1]:
 			assert(w.get("melee") == true, "kalkan configure_melee görmeden yakın dövüş (kukla kopyası için)")
 			assert(is_equal_approx(float(w.get("attack_range")), 110.0), "menzil 110: %s" % w.get("attack_range"))
-			assert(is_equal_approx(float(w.get("card_damage_bonus_ratio")), 1.25), "%125 saldırı gücü (2026-10-20: %80 -> %100 kullanıcı onayı, denge turu %100 -> %125, BALANCE_REV 94)")
+			assert(is_equal_approx(float(w.get("card_damage_bonus_ratio")), 1.5), "%150 saldırı gücü (2026-10-20: %80 -> %100 kullanıcı onayı, denge turu %100 -> %125 BALANCE_REV 94, 2026-11-14 %125 -> %150 BALANCE_REV 162)")
 			assert(is_equal_approx(float(w.call("damage_stat_mult")), 1.0), "yakın dövüş ek çarpanı yok: gerçek oran %125")
 			assert(float(w.get("sprite_forward_angle_deg")) == 0.0, "önden dik sanat")
 			assert((w.get("icon_sprite") as Sprite2D).texture.resource_path.ends_with("kalkan_L1.png"), "1. seviye sanatı")
@@ -234,8 +234,7 @@ func test_puppet_plays_the_same_bash() -> void:
 	_cleanup(prev_scene)
 
 
-## Siper (gerçek oyuncu + silah): sabit kalkan, darbe üst sınırı, elit 2 sayılır, dosta yok; tam çözüm: Taşan Siper havuzu hasarı
-## önce karşılar ve söner, Ağır Kenar, Final sayacı + iki kat kalkan.
+## Siper (gerçek oyuncu + silah): kalkan DOLDURMAZ (2026-11-14); tam çözüm: Sağlam Siper (madde 705), Sert İtiş, Ağır Kenar, Final sayacı.
 func test_siper_trait() -> void:
 	var prev_scene: Node = get_tree().current_scene
 	get_tree().current_scene = self
@@ -254,7 +253,11 @@ func test_siper_trait() -> void:
 	var beh: Node = w.get("enchant_behavior")
 	assert(beh != null and beh.get_script().resource_path == "res://scripts/weapon_traits/siper.gd", "doğuştan Siper")
 	var st: Dictionary = beh.get("stats")
-	assert(is_equal_approx(float(st["siper_per"]), 1.0) and is_equal_approx(float(st["siper_cap"]), 3.0) and int(st["siper_wall"]) == 0)
+	assert(is_equal_approx(float(st["siper_guard"]), 0.0) and is_equal_approx(float(st["siper_push"]), 0.0) and int(st["siper_wall"]) == 0)
+	assert(not st.has("siper_dmg"), "Sert Darbe kaldırıldı (madde 705)")
+	assert(is_equal_approx(float(beh.call("guard_reduction")), 0.3), "temel siper azaltması %30")
+	assert(is_equal_approx(float(w.call("kalkan_guard_reduction")), 0.3), "silah yayını %30")
+	assert(not st.has("siper_per") and not st.has("siper_cap") and not st.has("siper_surplus"), "kalkan doldurma kaldırıldı")
 	var foes: Array = []
 	for i in range(5):
 		foes.append(_foe(Vector2(8100.0 + 20.0 * i, 8000.0)))
@@ -262,40 +265,31 @@ func test_siper_trait() -> void:
 	p.item_shield_max = 100.0
 	p.item_shield_hp = 50.0
 	beh.call("on_bash", [foes[0], foes[1]], false)
-	assert(is_equal_approx(float(p.item_shield_hp), 52.0), "düşman başına 1 sabit kalkan: %s" % p.item_shield_hp)
 	beh.call("on_bash", foes, false)
-	assert(is_equal_approx(float(p.item_shield_hp), 55.0), "darbe başına en fazla 3: %s" % p.item_shield_hp)
-	foes[0].set("is_elite", true)
-	assert(is_equal_approx(float(beh.call("bash_gain", [foes[0]], false)), 2.0), "elit 2 sayılır")
-	assert(is_equal_approx(float(beh.call("bash_damage_mult", false)), 1.0), "Ağır Kenar alınmadan çarpan yok")
+	assert(is_equal_approx(float(p.item_shield_hp), 50.0), "darbe kalkan doldurmaz: %s" % p.item_shield_hp)
+	assert(is_equal_approx(float(beh.call("bash_damage_mult", false)), 1.0), "özellik alınmadan çarpan yok")
+	assert(is_equal_approx(float(beh.call("bash_push_mult")), 1.0))
 	## tam dolu çözüm
 	var full: Dictionary = EnchantDefs.resolve({"id": "siper", "ups": [0, 1, 2, 3], "final": true}, "kalkan")
-	assert(is_equal_approx(float(full["siper_per"]), 2.0) and is_equal_approx(float(full["siper_cap"]), 5.0))
-	assert(is_equal_approx(float(full["siper_surplus"]), 15.0) and is_equal_approx(float(full["siper_heavy"]), 0.3))
+	assert(is_equal_approx(float(full["siper_guard"]), 0.2) and is_equal_approx(float(full["siper_push"]), 0.5))
+	assert(is_equal_approx(float(full["siper_heavy"]), 0.3))
 	assert(is_equal_approx(float(full["siper_slow"]), 0.25) and int(full["siper_wall"]) == 5)
 	for k in full:
 		st[k] = full[k]
-	## Ağır Kenar: kalkan %50 üstünde -> %80 -> %110; Final x1,5
-	assert(is_equal_approx(float(beh.call("bash_damage_mult", false)), 1.3), "kalkan %55: Ağır Kenar darbe hasarı x1,3")
+	## Sağlam Siper %50; Ağır Kenar: kalkan %50 üstünde x1,3; Final x1,5
+	assert(is_equal_approx(float(beh.call("guard_reduction")), 0.5), "Sağlam Siper: %50")
+	assert(is_equal_approx(float(w.call("kalkan_guard_reduction")), 0.5))
+	p.item_shield_hp = 90.0
+	assert(is_equal_approx(float(beh.call("bash_damage_mult", false)), 1.3), "kalkan %90: yalnız Ağır Kenar")
 	assert(is_equal_approx(float(beh.call("bash_damage_mult", true)), 1.5 * 1.3))
+	assert(is_equal_approx(float(beh.call("bash_push_mult")), 1.5), "Sert İtiş x1,5")
 	p.item_shield_hp = 40.0
-	assert(is_equal_approx(float(beh.call("bash_damage_mult", false)), 1.0), "kalkan %40: Ağır Kenar yok")
-	## Taşan Siper: kalkan doluyken 3 düşman x 2 = 5 (üst sınır) -> hepsi havuza
-	foes[0].set("is_elite", false)
-	p.item_shield_hp = 100.0
-	beh.call("on_bash", [foes[1], foes[2], foes[3]], false)
-	assert(is_equal_approx(float(beh.call("surplus")), 5.0), "taşan kalkan havuzda: %s" % beh.call("surplus"))
-	assert(is_equal_approx(float(beh.call("on_owner_damaged", 8.0, null)), 3.0), "havuz hasarı kalkandan önce karşılar")
-	assert(is_zero_approx(float(beh.call("surplus"))))
-	beh.call("on_bash", [foes[1], foes[2], foes[3]], false)
-	beh.set("_surplus_until_msec", Time.get_ticks_msec() - 1)
-	assert(is_zero_approx(float(beh.call("surplus"))) and is_equal_approx(float(beh.call("on_owner_damaged", 8.0, null)), 8.0), "4 sn darbesiz söner")
-	## Final sayacı: 5. darbe; kalkan + üst sınır x2 (3 düşman x 2 x 2 = 12 -> üst sınır 10)
+	assert(is_equal_approx(float(beh.call("bash_damage_mult", false)), 1.0), "kalkan %40: darbe çarpanı yok (Sert Darbe kalktı)")
+	## Final sayacı: 5. darbe
 	beh.set("attacks", 4)
 	assert(not beh.call("wants_wall"))
 	beh.set("attacks", 5)
 	assert(beh.call("wants_wall"), "5. darbe Yıkılmaz Duvar")
-	assert(is_equal_approx(float(beh.call("bash_gain", [foes[1], foes[2], foes[3]], true)), 10.0))
 	GameManager.owned_weapons = saved
 	p.free()
 	_cleanup(prev_scene)

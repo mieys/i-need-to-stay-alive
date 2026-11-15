@@ -20,6 +20,18 @@ func test_catalog_has_every_weapon_with_icon_name_and_text() -> void:
 	assert(WeaponCatalog.is_valid(WeaponCatalog.DEFAULT_KEY))
 
 
+func test_every_weapon_has_unique_stat_bars() -> void:
+	var seen: Dictionary = {}
+	for key: String in WeaponCatalog.KEYS:
+		assert(WeaponCatalog.STAT_BARS.has(key), "%s stat çubuğu değerleri yok" % key)
+		var v: Array = WeaponCatalog.stat_bars(key)
+		assert(v.size() == 4, "%s: 4 değer bekleniyordu" % key)
+		for n in v:
+			assert(int(n) >= 1 and int(n) <= WeaponCatalog.STAT_BAR_MAX, "%s: değer 1..%d dışında" % [key, WeaponCatalog.STAT_BAR_MAX])
+		assert(not seen.has(str(v)), "%s ile %s aynı stat çubuklarına sahip" % [key, seen.get(str(v), "")])
+		seen[str(v)] = key
+
+
 func test_invalid_selection_falls_back_to_default() -> void:
 	var old: String = GameManager.selected_start_weapon
 	GameManager.selected_start_weapon = "yok_boyle_silah"
@@ -69,6 +81,16 @@ func test_character_select_has_weapon_picker() -> void:
 			break
 	desk.call("_on_option_pressed", other)
 	assert(GameManager.selected_start_weapon == other, "SİLAH sekmesinde seçilen silah başlangıç silahı olmalı")
+	## 2026-11-13: seçilen silahın stat çubukları ayrıntı kutusunda; silah değişince değerler de değişir.
+	var bars: Control = desk.get("_detail_bars")
+	assert(bars != null and bars.visible, "SİLAH sekmesinde stat çubukları görünmüyor")
+	assert(bars.call("values") == WeaponCatalog.stat_bars(other), "çubuklar seçilen silahın değerlerini göstermiyor")
+	var third: String = WeaponCatalog.KEYS[0] if other != WeaponCatalog.KEYS[0] else WeaponCatalog.KEYS[1]
+	desk.call("_on_option_pressed", third)
+	assert(bars.call("values") == WeaponCatalog.stat_bars(third), "silah değişince çubuklar güncellenmedi")
+	desk.call("_set_tab", "pet")
+	assert(not bars.visible, "EVCİL sekmesinde silah çubukları görünmemeli")
+	desk.call("_set_tab", "weapon")
 	## 2026-10-19: 17 silahla ızgara 4 satıra çıkınca sağ panel OYUNU BAŞLAT'ın altına taşıyordu.
 	await get_tree().process_frame
 	var panel: Control = desk.get("_tab_grid")

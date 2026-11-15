@@ -10,12 +10,13 @@ const DropShadowScript := preload("res://scripts/drop_shadow.gd")
 ## sadece "Invalid set index" hatasını durdurmak için vardı, görsel/miktar
 ## hiç ayrışmıyordu (hepsi aynı çizilmiş elma şeklini kullanıp sabit 25
 ## can veriyordu). Sıra: yaygın/az iyileştiren -> nadir/çok iyileştiren.
+## KULLANICI İSTEĞİ (2026-11-11): beş ikon kullanıcının 32x32 çizimleriyle değişti (elma / but / ekmek / çorba / tabak), sıra aynı.
 const FOOD_TIER_TEXTURES: Dictionary = {
 	1: "res://assets/food/apple.png",
-	2: "res://assets/food/carrot.png",
-	3: "res://assets/food/steak.png",
-	4: "res://assets/food/kebab.png",
-	5: "res://assets/food/pie.png",
+	2: "res://assets/food/drumstick.png",
+	3: "res://assets/food/bread.png",
+	4: "res://assets/food/soup.png",
+	5: "res://assets/food/platter.png",
 }
 
 ## KULLANICI İSTEĞİ (2026-09-21): "Yiyeceklerin verdiği canı değiştiriyoruz: 1. kademe %8, 2. %16, 3. %24, 4. %32, 5. %40
@@ -32,9 +33,9 @@ const FOOD_TIER_HEAL_PERCENT: Dictionary = {
 const DEFAULT_TIER := 1
 
 ## İkonun ekranda kaç piksel (en uzun kenar) kaplayacağı - kaynak
-## görsellerin çözünürlüğü farklı olsa bile (bkz. kebab.png diğerlerinden
-## farklı en-boy oranında) hepsi aynı görünür boyuta normalize edilir.
-const TARGET_PIXEL_SIZE := 34.0
+## görsellerin çözünürlüğü farklı olsa bile hepsi aynı görünür boyuta normalize edilir.
+## 32 = 32x32 ikonlar tam 1x çizilir (nearest filtrede 34 ölçeği 1,0625 olup bazı piksel sütunlarını çiftliyordu).
+const TARGET_PIXEL_SIZE := 32.0
 
 @export var tier: int = DEFAULT_TIER:
 	set(val):

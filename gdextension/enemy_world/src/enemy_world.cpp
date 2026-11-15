@@ -367,6 +367,7 @@ void EnemyWorld::ensure_capacity(int32_t n) {
 	view_y.resize(s, NAN);
 	view_frame.resize(s, -1);
 	taunt_id.resize(s, 0);
+	zone_focus_id.resize(s, 0);
 	taunt_t.resize(s, 0.0f);
 	fear_x.resize(s, 0.0f);
 	fear_y.resize(s, 0.0f);
@@ -475,6 +476,7 @@ int32_t EnemyWorld::add_enemy(Object *p_node, Object *p_sprite, const Vector2 &p
 	view_x[i] = view_y[i] = NAN;
 	view_frame[i] = -1;
 	taunt_id[i] = 0;
+	zone_focus_id[i] = 0;
 	taunt_t[i] = 0.0f;
 	fear_x[i] = fear_y[i] = 0.0f;
 	fear_wdx[i] = 1.0f;
@@ -1026,6 +1028,7 @@ int32_t EnemyWorld::find_closest(int32_t i) const {
 // enemy.gd _apply_aggro_overrides: ağaç > tahrik (kışkırtan hedeflenemiyorsa tahrik biter + E_TAUNT_LOST) > Şovalye
 // baloncuğu odağı (hedef bir baloncuğun +ZONE_FOCUS_MARGIN içindeyse sahibi; birden çok baloncukta yaratığa en yakını).
 int32_t EnemyWorld::apply_overrides(int32_t i, int32_t t) {
+	zone_focus_id[i] = 0;
 	if (tree_index >= 0 && !concealed_from(i, tree_index)) {
 		return tree_index;
 	}
@@ -1050,10 +1053,16 @@ int32_t EnemyWorld::apply_overrides(int32_t i, int32_t t) {
 	int32_t focus = -1;
 	float fd = INFINITY;
 	for (int z = 0; z < (int)tx.size(); z++) {
-		if (t_zone[z] <= 0.0f || concealed_from(i, z)) {
+		if (t_zone[z] <= 0.0f) {
 			continue;
 		}
+		// Sahibi çalıda GİZLİ (bu yaratıktan saklı) olsa da kubbe yerinde duran sert bir bariyer: içindeki / yanındaki GÖRÜNÜR hedefe
+		// giden yaratık kubbeye odaklanır ve ona vurur (eskiden atlanıyordu -> kimse kubbeye saldırmıyordu). Sahibin kendisi hedef olmaz.
+		const bool owner_hidden = concealed_from(i, z);
 		if (z == t) {
+			if (owner_hidden) {
+				continue;
+			}
 			return t; // hedef zaten bir baloncuğun sahibi
 		}
 		const float zx = tx[t] - tx[z], zy = ty[t] - ty[z];
@@ -1066,6 +1075,9 @@ int32_t EnemyWorld::apply_overrides(int32_t i, int32_t t) {
 			fd = od;
 			focus = z;
 		}
+	}
+	if (focus >= 0 && concealed_from(i, focus)) {
+		zone_focus_id[i] = t_id[focus]; // gizli sahipli kubbe odağı: concealed_ai bunu gizli saymaz
 	}
 	return focus >= 0 ? focus : t;
 }
@@ -2076,7 +2088,7 @@ void EnemyWorld::step(double p_delta) {
 			bool think = !has_decision[i] || (frame % AI_THINK_INTERVAL_FRAMES) == (uint64_t)(i % AI_THINK_INTERVAL_FRAMES);
 			if (!think && !wandering[i]) {
 				const int32_t ct = target[i];
-				if (ct < 0 || ct >= nt || !t_targetable[ct] || concealed_from(i, ct)) {
+				if (ct < 0 || ct >= nt || !t_targetable[ct] || concealed_ai(i, ct)) {
 					think = true;
 				}
 			}
@@ -2118,7 +2130,7 @@ void EnemyWorld::step(double p_delta) {
 					closest[i] = c;
 				}
 				t = apply_overrides(i, c);
-				if (t >= 0 && t_targetable[t] && !concealed_from(i, t)) {
+				if (t >= 0 && t_targetable[t] && !concealed_ai(i, t)) {
 					const float tpx = tx[t] - px[i], tpy = ty[t] - py[i];
 					dist = std::sqrt(tpx * tpx + tpy * tpy);
 					const float dirx = dist > 0.1f ? tpx / dist : 0.0f, diry = dist > 0.1f ? tpy / dist : 0.0f;

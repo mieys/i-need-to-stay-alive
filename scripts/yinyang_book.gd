@@ -2,14 +2,14 @@ extends RefCounted
 
 ## YİN YANG KİTABI (madde 334) - kitabın ortak kuralları TEK yerde: kara küre (yinyang_projectile.gd, kaster + uzak kopya), ak küre
 ## (yinyang_light.gd, kaster + uzak kopya) ve Denge özelliği (weapon_traits/denge.gd) buradan okur.
-## Mekanik: menzilli tek hedef; isabet başına saldırı gücünün %10'u (Denge "ys_shield") mana kalkanı. Alıcı = kitabın KENDİ menzili (attack_range)
+## Mekanik: menzilli tek hedef; isabet başına saldırı gücünün %15'i (Denge "ys_shield") mana kalkanı. Alıcı = kitabın KENDİ menzili (attack_range)
 ## içinde kalkanı ORAN olarak en boş canlı oyuncu (sahibi dahil, eşitlikte sahibi; tek kişilikte hep sahibi). Kimse alamıyorsa (hepsi dolu / kalkan türü yok) Denge'nin
 ## Yin kuralı: kalkan hasara döner. Görsel (prototip yinyang_proto.py B v2, kullanıcı: "atıldığı anda ikiye bölünsün, kitaptan havaya
 ## yükselip ayrılsın"): iki küre kitaptan sarmal çizerek RISE sn yükselir, tepede ayrılır - kara hedefe, ak kalkanı alana (Yin'de o da düşmana).
 
 const KEY := "yinyang"
 const SRC := &"w:yinyang" ## balans kaydı / Shift ipucu: silah kaynağı (BalanceLog "w:<anahtar>")
-const SHIELD_AP := 0.10
+const SHIELD_AP := 0.15
 const RISE := 0.2 ## kitaptan yükselme (sn) - bu sırada kara küre çarpmaz
 const RISE_H := 13.0 ## yükselme (dünya px)
 const SPIN_R := 3.6 ## sarmal yarıçapı (dünya px, yere yatık elips y x0,6)
@@ -80,7 +80,7 @@ static func pick_recipient(owner: Node, range_px: float = 0.0) -> Node2D:
 			best_r = r0
 	if owner != null and is_instance_valid(owner) and owner.is_inside_tree():
 		var origin: Vector2 = (owner as Node2D).global_position if owner is Node2D else Vector2.ZERO
-		for rp in owner.get_tree().get_nodes_in_group("remote_players"):
+		for rp in owner.get_tree().get_nodes_in_group("remote_allies"):
 			if not can_receive(rp):
 				continue
 			if range_px > 0.0 and (rp as Node2D).global_position.distance_to(origin) > range_px:
@@ -155,7 +155,7 @@ static func resolve_hit(weapon: Node, body: Node, rcp: Node2D, decided_yin: bool
 	if not decided_yin and (not can_receive(rcp) or shield_ratio(rcp) >= FULL_RATIO):
 		rcp = pick_recipient(owner, recipient_range(weapon))
 	if decided_yin or rcp == null:
-		var amt: float = ap * stat(weapon, "yin_ap", 0.2)
+		var amt: float = ap * stat(weapon, "yin_ap", 0.4)
 		if has_beh:
 			(beh as Node).call("hit", body, amt)
 		elif is_instance_valid(body) and body.has_method("take_damage") and body.get("is_dead") != true:

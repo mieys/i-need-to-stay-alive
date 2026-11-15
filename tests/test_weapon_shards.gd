@@ -50,8 +50,8 @@ func test_drop_count_rules_boss_five_elite_one_normal_half_percent() -> void:
 	assert(Enemy.weapon_shard_count(false, false, 0.004) == 1, "zar şansın altında: 1")
 	assert(Enemy.weapon_shard_count(false, false, 0.005) == 1, "tam sınırda: 1")
 	assert(Enemy.weapon_shard_count(false, false, 0.0051) == 0, "zar şansın üstünde: 0")
-	assert(Enemy.weapon_shard_count(false, false, 0.0099, 2.0) == 1 and Enemy.weapon_shard_count(false, false, 0.0101, 2.0) == 0,
-		"şans çarpanı (luck) %0,5'i büyütür")
+	## Şans parçacığı etkilemez (2026-11-14): fonksiyonun şans parametresi yok, sınır sabit %0,5.
+	assert(Enemy.weapon_shard_count(false, false, 0.0099) == 0, "şans çarpanı yok: 0,0099 zarı artık düşürmez")
 	_end()
 
 

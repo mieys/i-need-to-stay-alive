@@ -187,9 +187,20 @@ func attract_to_player(target_peer_id: int = -1) -> void:
 	DropAttraction.wake(self) ## uyuyorsa (bkz. drop_attraction.gd) mıknatıs anında uyandırır
 
 
+## Toplayıcı ruhani çekişi kesildi (2v2'de rakipten hasar, scripts/toplayici.gd release): küre olduğu yerde kalır, normal menzil kuralı sürer.
+func release_pull() -> void:
+	remove_meta(&"toplayici_pulled")
+	remove_meta(&"toplayici_peer")
+	is_magnetized = false
+	magnet_target_peer_id = -1
+	attract_speed = 0.0
+	_recoil_t = -1.0
+	_chase_target = null
+
+
 func _physics_process(delta: float) -> void:
 	## Hedef seçimi + menzil kontrolü ortak/önbellekli yardımcıda (bkz. drop_attraction.gd PERF notu).
-	var player: Node2D = DropAttraction.attraction_target(self, is_magnetized, magnet_target_peer_id)
+	var player: Node2D = DropAttraction.attraction_target(self, is_magnetized, magnet_target_peer_id, true)
 	if player == null and _recoil_t >= 0.0 and _chase_valid():
 		player = _chase_target ## çekim başladıysa geri tepme menzil dışına itse de takip sürer (bkz. RECOIL notu)
 	if player == null:
@@ -307,7 +318,7 @@ func _on_body_entered(body: Node) -> void:
 		# gerçek bir uzak oyuncu kuklası dokunmuş olabilir - ikisi de
 		# ortak takım XP'sine eklenir, kimin dokunduğu önemli değildir).
 		if NetworkManager.is_host:
-			NetworkManager.host_collect_xp(xp_value * xp_gain_mult_for(body))
+			NetworkManager.host_collect_xp(xp_value * gain_mult_for(body), int(body.get("peer_id")) if "peer_id" in body else 0)
 			var drop_id: int = int(get_meta("drop_network_id", 0))
 			if drop_id > 0:
 				NetworkManager.queue_remove_drop(drop_id)
@@ -315,7 +326,7 @@ func _on_body_entered(body: Node) -> void:
 			return
 	else:
 		# Tek oyunculu mod: doğrudan ortak takıma ekle
-		GameManager.add_team_xp(xp_value * xp_gain_mult_for(body))
+		GameManager.add_team_xp(xp_value * gain_mult_for(body))
 		queue_free()
 
 
@@ -323,6 +334,14 @@ func _on_body_entered(body: Node) -> void:
 ## ekranda gösteriliyordu, XP'ye hiç uygulanmıyordu. Artık orb'u TOPLAYAN oyuncunun bonusu uygulanır: yerel Player
 ## ya da host'taki RemotePlayer kuklası (değer durum kanalından gelir, bkz. main.gd extra dict "exp_gain").
 ## network_manager.gd request_drop_pickup'un istemci toplama yolu da AYNI fonksiyonu kullanır.
+## Bu kürenin toplayana çarpanı: Toplayıcı çekişiyle gelen kürede toplayanın XP bonusu İŞLEMEZ (madde 625; +EXP eşyasıyla birleşip
+## görüşteki bütün XP'yi şişirmesin). network_manager.gd request_drop_pickup da bunu çağırır.
+func gain_mult_for(collector: Node) -> float:
+	if get_meta(&"toplayici_pulled", false):
+		return 1.0
+	return xp_gain_mult_for(collector)
+
+
 static func xp_gain_mult_for(collector: Node) -> float:
 	if collector == null or not is_instance_valid(collector) or not ("exp_gain_percent" in collector):
 		return 1.0

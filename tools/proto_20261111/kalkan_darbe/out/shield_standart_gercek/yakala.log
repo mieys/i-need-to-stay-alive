@@ -1,0 +1,137 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+Vulkan 1.4.351 - Forward+ - Using Device #0: NVIDIA - NVIDIA GeForce RTX 5060
+
+WARNING: res://scenes/remote_player.tscn:3 - ext_resource, invalid UID: uid://b00g7qwyj3h8f - using text path instead: res://scripts/remote_player.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _run (res://tools/proto_20261111/kalkan_darbe/yakala_gercek.gd:64)
+WARNING: res://scenes/remote_player.tscn:4 - ext_resource, invalid UID: uid://c6s78w221s8vj - using text path instead: res://scripts/shadow_blob.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _run (res://tools/proto_20261111/kalkan_darbe/yakala_gercek.gd:64)
+WARNING: res://scenes/remote_player.tscn:5 - ext_resource, invalid UID: uid://dfw4p8b0v84x1 - using text path instead: res://scripts/shield_visual.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _run (res://tools/proto_20261111/kalkan_darbe/yakala_gercek.gd:64)
+WARNING: res://scenes/remote_player.tscn:6 - ext_resource, invalid UID: uid://bsh25h8y0v2xq - using text path instead: res://scripts/overhead_bar.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _run (res://tools/proto_20261111/kalkan_darbe/yakala_gercek.gd:64)
+WARNING: res://shaders/cloud_shadows_material.tres:3 - ext_resource, invalid UID: uid://fcyufq7kts1o - using text path instead: res://shaders/cloud_shadows.gdshader
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _run (res://tools/proto_20261111/kalkan_darbe/yakala_gercek.gd:64)
+WARNING: res://scenes/fx_oyku_heal.tscn:3 - ext_resource, invalid UID: uid://dh4h1d77x2n3p - using text path instead: res://scripts/fx_oyku_heal.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _run (res://tools/proto_20261111/kalkan_darbe/yakala_gercek.gd:64)
+WARNING: res://scenes/fx_buyucu_fastfire.tscn:3 - ext_resource, invalid UID: uid://cd84h1d77x2n5 - using text path instead: res://scripts/fx_buyucu_fastfire.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _run (res://tools/proto_20261111/kalkan_darbe/yakala_gercek.gd:64)
+WARNING: res://scenes/fx_shield_active.tscn:3 - ext_resource, invalid UID: uid://cd100h1d77x2n - using text path instead: res://scripts/fx_shield_active.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _run (res://tools/proto_20261111/kalkan_darbe/yakala_gercek.gd:64)
+WARNING: res://scenes/fx_paladin_cast.tscn:3 - ext_resource, invalid UID: uid://cd99h1d77x2n2 - using text path instead: res://scripts/fx_paladin_cast.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _run (res://tools/proto_20261111/kalkan_darbe/yakala_gercek.gd:64)
+WARNING: res://scenes/fx_assasin_stealth.tscn:3 - ext_resource, invalid UID: uid://cd94h1d77x2n6 - using text path instead: res://scripts/fx_assasin_stealth.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _run (res://tools/proto_20261111/kalkan_darbe/yakala_gercek.gd:64)
+WARNING: res://scenes/fx_talha_rage.tscn:3 - ext_resource, invalid UID: uid://d74h1d77x2n4q - using text path instead: res://scripts/fx_talha_rage.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _run (res://tools/proto_20261111/kalkan_darbe/yakala_gercek.gd:64)
+WARNING: res://scenes/fx_matthew_sacrifice.tscn:3 - ext_resource, invalid UID: uid://cd95h1d77x2n7 - using text path instead: res://scripts/fx_matthew_sacrifice.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _run (res://tools/proto_20261111/kalkan_darbe/yakala_gercek.gd:64)
+WARNING: res://scenes/fx_matthew_explosion.tscn:3 - ext_resource, invalid UID: uid://cd96h1d77x2n8 - using text path instead: res://scripts/fx_matthew_explosion.gd
+   at: load (scene/resources/resource_format_text.cpp:501)
+   GDScript backtrace (most recent call first):
+       [0] _run (res://tools/proto_20261111/kalkan_darbe/yakala_gercek.gd:64)
+WARNING: Camera2D overridden to physics process mode due to use of physics interpolation.
+   at: _update_process_callback (scene/2d/camera_2d.cpp:88)
+   GDScript backtrace (most recent call first):
+       [0] opt_in (res://scripts/physics_interp.gd:34)
+       [1] _ready (res://scripts/player.gd:1246)
+[Yaratık sistemi] C++ EnemyWorld
+KD oyuncu (1926.0, 1389.0)
+DARBE suan 0
+DARBE suan 4
+DARBE suan 8
+DARBE suan 21
+DARBE suan 27
+DARBE suan 39
+DARBE suan 43
+DARBE suan 50
+DARBE suan 56
+DARBE suan 67
+DARBE suan 70
+DARBE suan 73
+DARBE suan 80
+SECENEK suan kare 90 darbe 13 yaratik 5
+DARBE a 0
+DARBE a 4
+DARBE a 8
+DARBE a 22
+DARBE a 27
+DARBE a 39
+DARBE a 43
+DARBE a 51
+DARBE a 57
+DARBE a 66
+DARBE a 70
+DARBE a 74
+DARBE a 79
+DARBE a 88
+SECENEK a kare 90 darbe 14 yaratik 5
+DARBE b 0
+DARBE b 4
+DARBE b 8
+DARBE b 22
+DARBE b 26
+DARBE b 39
+DARBE b 43
+DARBE b 50
+DARBE b 57
+DARBE b 60
+DARBE b 64
+DARBE b 74
+DARBE b 78
+DARBE b 84
+DARBE b 87
+SECENEK b kare 90 darbe 15 yaratik 11
+DARBE c 0
+DARBE c 4
+DARBE c 8
+DARBE c 22
+DARBE c 27
+DARBE c 39
+DARBE c 42
+DARBE c 51
+DARBE c 56
+DARBE c 66
+DARBE c 71
+DARBE c 79
+DARBE c 88
+SECENEK c kare 90 darbe 13 yaratik 5
+DARBE d 0
+DARBE d 4
+DARBE d 8
+DARBE d 22
+DARBE d 27
+DARBE d 39
+DARBE d 42
+DARBE d 50
+DARBE d 56
+DARBE d 67
+DARBE d 71
+DARBE d 73
+DARBE d 79
+DARBE d 88
+SECENEK d kare 90 darbe 14 yaratik 5
+BITTI

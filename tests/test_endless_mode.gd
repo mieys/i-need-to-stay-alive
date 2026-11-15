@@ -1,11 +1,11 @@
 extends Node
 
-## Kullanıcı isteği (2026-10-05): Final'in 13 bossunu yenince ZAFER, ardından "Sonsuza Devam Et" ile SONSUZ MOD (kat kat güçlenen
+## Kullanıcı isteği (2026-10-05; madde 597: Final = Kademe 10'un bossu): son bossu yenince ZAFER, ardından "Sonsuza Devam Et" ile SONSUZ MOD (kat kat güçlenen
 ## yaratıklar + her 3 katta boss dalgası). Host/tek oyunculu mantığı enemy_spawner.gd "ZAFER + SONSUZ MOD" bloğunda.
 
 const SpawnerScript: GDScript = preload("res://scripts/enemy_spawner.gd")
 const TIER_SECONDS := 100.0
-const FINAL_TIME := TIER_SECONDS * 15.0 + 1.0
+const FINAL_TIME := TIER_SECONDS * 9.0 + 76.0 ## Kademe 10'un %75'i: son boss tetik zamanı (madde 597)
 const RUN_START := 1700.0 ## sonsuz modun başladığı oyun saati (testlerde)
 
 
@@ -54,7 +54,6 @@ func _cleanup() -> void:
 		if is_instance_valid(n):
 			n.free()
 	_made.clear()
-	GameManager.bosses_enabled = false
 	GameManager.game_time = 0.0
 	GameManager.victory_reached = false
 	GameManager.endless_active = false
@@ -64,10 +63,8 @@ func _cleanup() -> void:
 	NetworkManager.is_multiplayer_active = false
 
 
-## 2026-10-08: boss sistemi varsayılan KAPALI (GameManager.bosses_enabled, bkz. CLAUDE.md madde 39) - bu dosya boss/Final akışını sınar, bu yüzden geçici açar
 func _spawner() -> Node:
 	_cleanup()
-	GameManager.bosses_enabled = true
 	_victory_heard = 0
 	_endless_heard = 0
 	_layers_heard.clear()
@@ -168,30 +165,31 @@ func test_no_victory_when_final_never_spawned() -> void:
 	_cleanup()
 
 
-func test_final_is_retried_when_nothing_could_spawn() -> void:
+func test_the_last_boss_is_retried_when_nothing_could_spawn() -> void:
 	var sp: Node = _spawner() ## canlı oyuncu yok -> boss doğamaz
 	GameManager.game_time = FINAL_TIME
-	sp._check_final_tier()
-	assert(not sp._final_spawned, "hiç boss doğmadıysa Final 'doğdu' sayılmamalı (yoksa zafer hiç gelmez)")
+	sp._check_boss_tiers()
+	assert(not sp._final_spawned, "hiç boss doğmadıysa son boss 'doğdu' sayılmamalı (yoksa zafer hiç gelmez)")
 	assert(sp._final_bosses.is_empty())
 	_cleanup()
 
 
-func test_final_spawn_registers_all_thirteen_and_victory_follows_their_death() -> void:
+func test_last_boss_spawn_registers_it_and_victory_follows_its_death() -> void:
 	var sp: Node = _spawner()
 	_player()
 	GameManager.game_time = FINAL_TIME
-	sp._check_final_tier()
-	assert(sp._final_spawned, "Final doğmalı")
-	assert(sp._final_bosses.size() == SpawnerScript.FINAL_CREATURES.size(), "13 bossun hepsi kayıtlı: %d" % sp._final_bosses.size())
+	sp._boss_tiers_spawned[5] = true ## zaman atlandığı için K5 bossu da tetik zamanını geçmiş sayılır: onu doğurma
+	sp._check_boss_tiers()
+	assert(sp._final_spawned, "son boss doğmalı")
+	assert(sp._final_bosses.size() == SpawnerScript.NEW_BOSS_TIERS[SpawnerScript.LAST_TIER].size(), "son kademenin bossları kayıtlı: %d" % sp._final_bosses.size())
 	for boss in sp._final_bosses:
-		assert(boss.is_in_group("boss"), "Final bosslar 'boss' grubunda")
+		assert(boss.is_in_group("boss"), "son bosslar 'boss' grubunda")
 	sp._check_victory()
 	assert(sp.get_run_phase() == SpawnerScript.RunPhase.NORMAL, "bosslar sağken zafer yok")
 	for boss in sp._final_bosses:
 		boss.set("is_dead", true)
 	sp._check_victory()
-	assert(sp.get_run_phase() == SpawnerScript.RunPhase.VICTORY, "13'ü de ölünce zafer")
+	assert(sp.get_run_phase() == SpawnerScript.RunPhase.VICTORY, "son boss ölünce zafer")
 	_cleanup()
 
 
@@ -256,13 +254,13 @@ func test_scale_tier_follows_the_layer_while_roster_tier_is_untouched() -> void:
 	var sp: Node = _spawner()
 	assert(sp._scale_tier_for(7) == 7, "normalde ölçek = roster kademesi")
 	_start_endless(sp)
-	assert(sp._scale_tier_for(15) == 16, "Kat 1: Final'in ölçeği (16)")
+	assert(sp._scale_tier_for(10) == 11, "Kat 1: son kademenin ardındaki ölçek (11)")
 	sp._endless_layer = 4
-	assert(sp._scale_tier_for(15) == 19, "Kat 4: 19")
+	assert(sp._scale_tier_for(10) == 14, "Kat 4: 14")
 	_cleanup()
 
 
-func test_regular_spawns_in_endless_use_the_scaled_tier_but_the_tier_15_roster() -> void:
+func test_regular_spawns_in_endless_use_the_scaled_tier_but_the_tier_10_roster() -> void:
 	var sp: Node = _spawner()
 	_player()
 	_start_endless(sp)
@@ -276,19 +274,19 @@ func test_regular_spawns_in_endless_use_the_scaled_tier_but_the_tier_15_roster()
 			spawned.append(e)
 	assert(spawned.size() >= 1, "sonsuzda normal yaratık doğmalı")
 	for e in spawned:
-		assert(int(e.get("_current_tier")) == 18, "Kat 3 yaratığının ölçek kademesi 18 olmalı: %d" % int(e.get("_current_tier")))
-		assert(int(e.get_meta("spawn_tier", 0)) == 15, "roster kademesi (meta) 15'te kalmalı")
+		assert(int(e.get("_current_tier")) == 13, "Kat 3 yaratığının ölçek kademesi 13 olmalı: %d" % int(e.get("_current_tier")))
+		assert(int(e.get_meta("spawn_tier", 0)) == 10, "roster kademesi (meta) 10'da kalmalı")
 		var cid: String = str(e.get_meta("creature_id", ""))
 		if bool(e.get("is_elite")):
-			## Elit rastgele vadeyle doğar ve ELİT HAVUZUNDAN gelir (2026-10-08, ELITE_POOL) - roster listesinde olmak zorunda değil (örn. demon3). Bu test sıradan yaratığı sınar;
-			## eskiden elit denk gelirse rastgele düşüyordu (3 koşuda ~1 kez, 2026-10-10'da kalıcı olarak düzeltildi).
-			assert(SpawnerScript.ELITE_POOL.has(cid), "elit, elit havuzundan: %s" % cid)
+			## Elit rastgele vadeyle doğar ve ELİT TABLOSUNDAN gelir (madde 597, ELITE_BY_TIER; sonsuzda 5 elitten biri) - roster listesinde olmak zorunda değil. Bu test sıradan yaratığı sınar.
+			assert(SpawnerScript.ELITE_BY_TIER.values().has(cid), "elit, elit tablosundan: %s" % cid)
 		else:
-			assert(SpawnerScript.TIER_ROSTER[15].has(cid), "roster 15'ten: %s" % cid)
+			assert(SpawnerScript.TIER_ROSTER[10].has(cid), "roster 10'dan: %s" % cid)
 	_cleanup()
 
 
 func test_endless_boss_wave_spawns_once_at_the_right_time_with_scaled_stats() -> void:
+	## (Madde 597: eski 13'lü Final havuzu kalktı; dalga EndlessMath.WAVE_POOL'dan gelir, ilk dalga 2 boss.)
 	var sp: Node = _spawner()
 	_player()
 	_start_endless(sp)
@@ -304,12 +302,12 @@ func test_endless_boss_wave_spawns_once_at_the_right_time_with_scaled_stats() ->
 	sp._process_endless()
 	sp._check_endless_boss_wave()
 	var wave: Array[Node] = _real_bosses()
-	assert(wave.size() == 3, "ilk dalga 3 boss: %d" % wave.size())
+	assert(wave.size() == 2, "ilk dalga 2 boss: %d" % wave.size())
 	for b in wave:
-		assert(int(b.get("_current_tier")) == 18, "boss ölçeği Kat 3 = 18: %d" % int(b.get("_current_tier")))
-		assert(SpawnerScript.FINAL_CREATURES.has(str(b.get_meta("creature_id", ""))), "boss Final havuzundan")
+		assert(int(b.get("_current_tier")) == 13, "boss ölçeği Kat 3 = 13: %d" % int(b.get("_current_tier")))
+		assert(EndlessMathScript.WAVE_POOL.has(str(b.get_meta("creature_id", ""))), "boss dalga havuzundan")
 	sp._check_endless_boss_wave()
-	assert(_real_bosses().size() == 3, "aynı kat için ikinci dalga olmamalı")
+	assert(_real_bosses().size() == 2, "aynı kat için ikinci dalga olmamalı")
 	_cleanup()
 
 
@@ -317,7 +315,7 @@ func test_endless_has_no_tier_boss_hold() -> void:
 	var sp: Node = _spawner()
 	_start_endless(sp)
 	var boss := _boss()
-	sp._tier_bosses[15] = [boss] ## Kademe 15'in bossu sağ gibi (kapı normalde saati tutar)
+	sp._tier_bosses[10] = [boss] ## Kademe 10'un bossu sağ gibi (kapı normalde saati tutar)
 	GameManager.game_time = RUN_START + 500.0
 	sp._process_endless()
 	assert(sp.get_endless_layer() == 6, "sonsuz kat saati boss kapısına takılmamalı: Kat %d" % sp.get_endless_layer())
@@ -347,21 +345,21 @@ func test_elite_waits_for_its_window_inside_the_layer() -> void:
 
 func test_normal_elite_rule_is_unchanged_outside_endless() -> void:
 	var sp: Node = _spawner()
-	GameManager.game_time = 205.0 ## Kademe 3'ün başı: vade (ilk doğumdan en az %10 sonra) henüz gelmedi
-	assert(not sp._roll_elite_for(3), "normal modda elit vadesinden önce doğmamalı")
-	GameManager.game_time = 295.0 ## Kademe 3'ün sonu: vade (en geç bitişten 10 sn önce) geldi
-	assert(sp._roll_elite_for(3), "normal modda Kademe başına elit hâlâ çalışmalı (sonsuz kuralı bunu bozmamalı)")
-	assert(not sp._roll_elite_for(3), "aynı Kademe'de ikinci elit olmamalı")
+	GameManager.game_time = 305.0 ## Kademe 4'ün başı (madde 597: elit yalnız çift kademelerde): vade (ilk doğumdan en az %10 sonra) henüz gelmedi
+	assert(not sp._roll_elite_for(4), "normal modda elit vadesinden önce doğmamalı")
+	GameManager.game_time = 395.0 ## Kademe 4'ün sonu: vade (en geç bitişten 10 sn önce) geldi
+	assert(sp._roll_elite_for(4), "normal modda çift Kademe'de elit hâlâ çalışmalı (sonsuz kuralı bunu bozmamalı)")
+	assert(not sp._roll_elite_for(4), "aynı Kademe'de ikinci elit olmamalı")
 	_cleanup()
 
 
 func test_catchup_state_restores_flags_for_a_late_joiner() -> void:
 	_spawner()
-	NetworkManager.sync_run_phase_state(true, true, 4, 16)
+	NetworkManager.sync_run_phase_state(true, true, 4, 11)
 	assert(GameManager.victory_reached and GameManager.endless_active and GameManager.endless_layer == 4, "kat 4 durumu geri yüklenmeli")
-	assert(GameManager.run_max_tier == 16, "en yüksek kademe de taşınmalı")
+	assert(GameManager.run_max_tier == 11, "en yüksek kademe de taşınmalı")
 	assert(_layers_heard == [4], "kat bildirimi (HUD) tetiklenmeli: %s" % str(_layers_heard))
-	NetworkManager.sync_run_phase_state(true, false, 0, 16)
+	NetworkManager.sync_run_phase_state(true, false, 0, 11)
 	assert(GameManager.victory_reached and not GameManager.endless_active and GameManager.endless_layer == 0, "zafer penceresi açıkken girenin durumu")
 	assert(_victory_heard == 1, "zafer penceresi tetiklenmeli")
 	_cleanup()
@@ -396,10 +394,10 @@ func test_creature_compound_only_applies_past_layer_one() -> void:
 	var a: Node = sp._spawn_creature("ork1", Vector2.ZERO, 9001)
 	var b: Node = sp._spawn_creature("ork1", Vector2.ZERO, 9002)
 	assert(a != null and b != null, "yaratık doğmalı")
-	a.apply_tier_scaling(16) ## kat 1 = Final'in kademesi: bileşik çarpan yok
-	b.apply_tier_scaling(20) ## kat 5: 1,08^4
-	var steps_a: float = 15.0
-	var steps_b: float = 19.0
+	a.apply_tier_scaling(11) ## kat 1 = son kademenin ardındaki ölçek (11): bileşik çarpan yok
+	b.apply_tier_scaling(15) ## kat 5: 1,08^4
+	var steps_a: float = 10.0
+	var steps_b: float = 14.0
 	var ramp_a: float = 1.0 + steps_a * Enemy.TIER_HEALTH_RAMP_LINEAR + steps_a * steps_a * Enemy.TIER_HEALTH_RAMP_QUAD
 	var ramp_b: float = 1.0 + steps_b * Enemy.TIER_HEALTH_RAMP_LINEAR + steps_b * steps_b * Enemy.TIER_HEALTH_RAMP_QUAD
 	var expected: float = ramp_b / ramp_a * pow(1.0 + EndlessMathScript.HEALTH_COMPOUND_PER_LAYER, 4.0)
@@ -426,9 +424,8 @@ func test_wave_boss_mult_scales_health_shield_and_damage() -> void:
 	_cleanup()
 
 
-func test_endless_wave_uses_the_new_pool_when_old_bosses_are_off() -> void:
+func test_endless_wave_uses_the_new_pool_and_can_be_switched_off() -> void:
 	var sp: Node = _spawner()
-	GameManager.bosses_enabled = false ## _spawner() eski sistemi açar; bu test yeni havuzu sınar
 	assert(GameManager.endless_boss_waves, "yeni sonsuz dalga varsayılan açık")
 	_player()
 	_start_endless(sp)
@@ -439,12 +436,12 @@ func test_endless_wave_uses_the_new_pool_when_old_bosses_are_off() -> void:
 	assert(wave.size() == 2, "yeni sistemde ilk dalga 2 boss: %d" % wave.size())
 	for b in wave:
 		assert(EndlessMathScript.WAVE_POOL.has(str(b.get_meta("creature_id", ""))), "boss yeni havuzdan: %s" % str(b.get_meta("creature_id", "")))
-		assert(int(b.get("_current_tier")) == 18, "ölçek kademesi kat 3 = 18")
+		assert(int(b.get("_current_tier")) == 13, "ölçek kademesi kat 3 = 13")
 	GameManager.endless_boss_waves = false
 	sp._endless_bosses_spawned.clear()
 	for b in wave:
 		b.free()
 	sp._check_endless_boss_wave()
-	assert(_real_bosses().is_empty(), "yeni dalga kapalıyken (ve eski sistem de kapalı) sonsuzda boss gelmez")
+	assert(_real_bosses().is_empty(), "yeni dalga kapalıyken sonsuzda boss gelmez")
 	GameManager.endless_boss_waves = true
 	_cleanup()

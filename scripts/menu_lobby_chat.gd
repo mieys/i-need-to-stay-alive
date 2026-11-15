@@ -38,6 +38,7 @@ func setup(sz: Dictionary, mobile: bool, log_min_h: float, expand: bool = false)
 	_input = LineEdit.new()
 	_input.placeholder_text = "Mesaj yaz..."
 	_input.max_length = 200
+	_input.keep_editing_on_text_submit = not _mobile ## Enter sonrası odak kaybolmasın
 	_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_input.custom_minimum_size = Vector2(0, float(sz.get("chat_input_h", sz["ctl_h"])))
 	_input.add_theme_font_size_override("font_size", int(sz.get("chat_input_fs", _fs_body)))

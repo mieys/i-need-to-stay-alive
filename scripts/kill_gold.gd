@@ -5,7 +5,7 @@ const Loc := preload("res://scripts/localization.gd") ## dil desteği: Loc.t / L
 ## +'altın miktarı' yazacak ve altın sesi çıkacak. yaratıklar kademelerine göre altın verecek."
 ## Altın artık yere düşmez: öldüren oyuncunun kişisel altınına HEMEN eklenir, ölen yaratığın olduğu yerde "+N" yazısı
 ## yükselir ve altın sesi çalar. Miktar: yaratığın kademesine göre sahne değerleri (gold_min/gold_max x gold_chance, bkz.
-## amount_for) - her ölüm en az 1 altın verir. Host/tek oyunculu hesaplar; uzak öldürene NetworkManager.grant_kill_gold gider.
+## amount_for) - her ölüm en az 1 altın verir. Host/tek oyunculu hesaplar. (2026-10-24'ten beri altın yine yere düşer, aşağıya bak.)
 
 const FloatingText := preload("res://scenes/floating_text.tscn")
 const VisionFogScript := preload("res://scripts/vision_fog.gd")
@@ -13,21 +13,14 @@ const BalanceLog := preload("res://scripts/balance_log.gd")
 const SOUND: AudioStream = preload("res://assets/audio/gold_pickup.mp3")
 const SOUND_DB := -4.0 ## yerden toplama sesi (gold_drop.tscn) -10 dB; yaratık altını kullanıcı isteğiyle +6 dB yükseltildi (2026-10-15)
 const TEXT_COLOR := Color(1.0, 0.85, 0.25)
-const ASSIST_COLOR := Color(0.65, 0.9, 1.0) ## asist payı daha soluk/mavimsi (bkz. assist.gd)
-const TEAM_KIND := 4 ## assist.gd KIND_TEAM: yakındaki canlı takım arkadaşı payı ("TAKIM +N"; assist.gd'yi önyüklememek için kopya)
+const TEAM_KIND := 4 ## balans kaydı türü: takım payı (balance_log.gd on_kill_gold "team"; NetworkManager._receive_team_gold)
 const TEXT_OFFSET := Vector2(0.0, -26.0)
-## 2026-10-21: altın yerde dönen para olarak düşer, HOVER_TIME (kill_gold_coin.gd) sonra alıcıya uçup varınca verilir. Aynı anda en çok
-## MAX_ACTIVE_COINS para uçar/bekler; fazlası eski gibi anında verilir (kalabalık ölümlerinde düğüm sayısı patlamasın).
-const COIN_SCRIPT := preload("res://scripts/kill_gold_coin.gd")
-const MAX_ACTIVE_COINS := 60
 ## 2026-10-24 (kullanıcı: "yaratıklar ölünce altını karaktere otomatik göndermesin; eskisi gibi rastgele yere düşsün, toplama mesafesine bağlı
-## XP gibi toplansın, toplanınca karakterin üstünde +altın + ses"): true = altın yerde GoldDrop (gold_drop.gd) olarak kalır, toplayan oyuncu
-## credit() ile alır (miktar hesabı amount_for aynı, gelir değişmez). false = eski doğrudan teslim (dönen para + asist/takım payı bölüşümü,
-## enemy.gd _award_gold_directly): yerden toplamada altın toplayana gittiği için asist/takım payı yalnız bu modda çalışır.
-const GROUND_DROPS := true
+## XP gibi toplansın, toplanınca karakterin üstünde +altın + ses"): altın yerde GoldDrop (gold_drop.gd) olarak kalır, toplayan oyuncu credit() ile
+## alır (çok oyunculuda takım payı NetworkManager.host_split_creature_gold). Eski doğrudan teslim (dönen para + asist bölüşümü, assist.gd,
+## GROUND_DROPS = false) 2026-11-15'te silindi (kullanıcı kararı; Savaş Şevki artık yalnız öldürmeyle yığılır).
 ## 2026-11-06 (kullanıcı: "karakter altın toplayınca üstünde + altın görünmesin"): toplanan/teslim edilen altında karakterin üstünde "+N" yazısı ve
-## simgesi ÇIKMAZ; altın sesi ve balans kaydı aynen sürer. false = yazı yok. Asist/takım payı yazıları ("ASİST +N", "TAKIM +N", yalnız GROUND_DROPS = false
-## modunda) bu bayraktan etkilenmez.
+## simgesi ÇIKMAZ; altın sesi ve balans kaydı aynen sürer. false = yazı yok.
 const SHOW_PICKUP_TEXT := false
 const COIN_FRAMES := preload("res://assets/pickups/gold/gold_coin_frames.tres")
 const ICON_SCALE := 0.8 ## 16 px para -> ~13 px (yazı 16 pt piksel fontu)
@@ -36,7 +29,69 @@ const ICON_GAP := 3.0
 const MIN_SOUND_GAP_MSEC := 55
 
 static var _last_sound_msec: int = -100000
-static var active_coins: int = 0
+
+## 2026-11-13 (kullanıcı: "yaratıklardan %15 daha fazla altın düşsün; tek tek 1-1 düşürmek yerine daha çok sayıda altın versin, yoksa yerde
+## çok altın oluyor ve değersiz hissettiriyorlar"): (1) her yaratığın altını INCOME_MULT ile çarpılır (kesirli kısım şansla yuvarlanır, beklenen
+## değer tam %15); (2) normal yaratıkların küçük payları havuzda birikir, havuz MIN_COIN'e varınca TEK büyük altın düşer (boss altını havuza
+## girmez). Gelir aynı kalır (+%15), yerdeki altın sayısı ~MIN_COIN/ortalama pay kat azalır. Host/tek oyunculu hesaplar.
+const INCOME_MULT := 1.15
+const MIN_COIN := 15 ## bir altın düşmesi en az bu kadar değer taşır (boss hariç)
+static var _pool: int = 0
+
+
+## TAKIM PAYLAŞIMI (2026-11-15, kullanıcı: "öldüremeyenler fazla altın kasamıyor, item bitiremiyor; öldürebilenler çok rahat item alabiliyor" +
+## "toplayana azcık daha fazla versin"): çok oyunculuda yerden toplanan SIRADAN yaratık altını toplayana kalmaz, canlı katılımcılara bölünür.
+## Toplayanın payı diğerlerinin PICKER_SHARE_WEIGHT katı (5 oyuncu: %27 / %18'er, 4: %33 / %22, 2: %60 / %40). Boss altını eskisi gibi
+## tam eşit (NetworkManager.host_share_boss_gold). Cüzdanlar kişisel kalır. Host hesaplar: NetworkManager.host_split_creature_gold.
+const PICKER_SHARE_WEIGHT := 1.5
+## peer id -> henüz ödenmemiş kesir (0..1). 15 altınlık para 5 kişide 4,09 + 4 x 2,73 eder; aşağı yuvarlayıp artanı toplayana vermek onun
+## payını %27'den %47'ye çıkarırdı - kesirler birikir, uzun vadede oran tam tutar.
+static var _share_carry: Dictionary = {}
+
+
+static func reset_pool() -> void:
+	_pool = 0
+	_share_carry.clear()
+
+
+## Bir altının paylarını döndürür: peer id -> şimdi ödenecek tam altın (0 olabilir; kesir _share_carry'de bekler). Toplayan listede yoksa
+## herkes eşit ağırlıkta. Tek katılımcı tamamını alır.
+static func split_shares(amount: int, peer_ids: Array, picker_id: int) -> Dictionary:
+	var out: Dictionary = {}
+	if amount <= 0 or peer_ids.is_empty():
+		return out
+	if peer_ids.size() == 1:
+		out[int(peer_ids[0])] = amount
+		return out
+	var total_w: float = 0.0
+	for pid in peer_ids:
+		total_w += PICKER_SHARE_WEIGHT if int(pid) == picker_id else 1.0
+	for pid in peer_ids:
+		var id: int = int(pid)
+		var exact: float = float(amount) * (PICKER_SHARE_WEIGHT if id == picker_id else 1.0) / total_w + float(_share_carry.get(id, 0.0))
+		var pay: int = int(floor(exact + 0.000001))
+		_share_carry[id] = maxf(0.0, exact - float(pay))
+		out[id] = pay
+	return out
+
+
+## Kesirli çarpan: 3 x 1,15 = 3,45 -> %45 ihtimalle 4, aksi 3 (beklenen değer tam).
+static func scale_amount(amount: int) -> int:
+	if amount <= 0:
+		return 0
+	var v: float = float(amount) * INCOME_MULT
+	var whole: int = int(floor(v))
+	return whole + (1 if randf() < v - float(whole) else 0)
+
+
+## Normal yaratık payını havuza ekler; havuz MIN_COIN'e vardıysa boşaltıp tek düşmenin miktarını döndürür, aksi halde 0 (bu ölüm altın düşürmez).
+static func pool_take(amount: int) -> int:
+	_pool += maxi(amount, 0)
+	if _pool < MIN_COIN:
+		return 0
+	var out: int = _pool
+	_pool = 0
+	return out
 
 
 ## Bir yaratığın vereceği altın. gold_chance 1 (boss) ise [min,max] arası rastgele; aksi halde beklenen değer
@@ -65,22 +120,22 @@ static func resolve_pos(tree: SceneTree, world_pos: Vector2) -> Vector2:
 
 
 ## Yazı + ses (altın ZATEN eklendi). Her makinede yalnızca altını kazanan oyuncunun ekranında çağrılır.
-static func show_at(tree: SceneTree, amount: int, world_pos: Vector2, assist: int = 0) -> void:
+static func show_at(tree: SceneTree, amount: int, world_pos: Vector2) -> void:
 	if amount <= 0:
 		return
-	BalanceLog.on_kill_gold(amount, assist) ## balans kaydı: öldürme/asist altını (bkz. balance_log.gd)
+	BalanceLog.on_kill_gold(amount, 0) ## balans kaydı: öldürme altını (bkz. balance_log.gd)
 	if tree == null or tree.current_scene == null:
 		return
 	world_pos = resolve_pos(tree, world_pos)
-	if assist == 0 and not SHOW_PICKUP_TEXT:
+	if not SHOW_PICKUP_TEXT:
 		_play_sound(tree, world_pos)
 		return
 	var ft: Node = FloatingText.instantiate()
 	tree.current_scene.add_child(ft)
 	ft.global_position = world_pos + TEXT_OFFSET
-	var text: String = Loc.t("TAKIM +%d" if assist == TEAM_KIND else ("ASİST +%d" if assist > 0 else "+%d")) % amount
+	var text: String = "+%d" % amount
 	if ft.has_method("setup"):
-		ft.setup(text, ASSIST_COLOR if assist > 0 else TEXT_COLOR)
+		ft.setup(text, TEXT_COLOR)
 	_add_coin_icon(ft, text)
 	_play_sound(tree, world_pos)
 
@@ -121,53 +176,9 @@ static func _play_sound(tree: SceneTree, world_pos: Vector2) -> void:
 	s.play()
 
 
-## Host/tek oyunculu: altını öldürene ver. killer = enemy._killer_node() sonucu.
-## 2026-10-21 (kullanıcı: "altını yere düşürüp 0.5 saniye sonra vermesi gereken kişiye doğru uçarak versin"): yerel alıcı için ölüm
-## noktasında dönen para belirir (drop_coin), 0,5 sn sonra ona uçar ve varınca altın eklenir. Uzak alıcıya host HEMEN RPC atar; para o
-## makinede aynı şekilde düşer (NetworkManager.grant_kill_gold -> drop_coin).
-static func award(tree: SceneTree, amount: int, world_pos: Vector2, killer: Node, assist: int = 0) -> void:
-	if amount <= 0:
-		return
-	if _send_to_remote(amount, world_pos, killer, assist):
-		return
-	drop_coin(tree, amount, world_pos, assist)
-
-
-## Yerel alıcı için yerde dönen para. Para görünmeyecekse (sahne/oyuncu yok, doğuş noktası görüş dışı, çok para var) eski gibi anında verilir.
-static func drop_coin(tree: SceneTree, amount: int, world_pos: Vector2, assist: int = 0) -> void:
-	if amount <= 0:
-		return
-	var p: Node = tree.get_first_node_in_group("player") if tree else null
-	if tree == null or tree.current_scene == null or p == null or not is_instance_valid(p) or not (p is Node2D) 			or active_coins >= MAX_ACTIVE_COINS or not VisionFogScript.own_vision_contains(tree, (p as Node2D).global_position, world_pos):
-		credit(tree, amount, world_pos, assist)
-		return
-	var coin: Node2D = COIN_SCRIPT.new()
-	coin.call("setup", amount, assist, p as Node2D, func(a: int, pos: Vector2, kind: int) -> void: credit(tree, a, pos, kind))
-	coin.position = world_pos + Vector2(randf_range(-7.0, 7.0), randf_range(-4.0, 4.0)) ## aynı noktada birikenler üst üste yığılmasın
-	active_coins += 1
-	coin.tree_exited.connect(func() -> void: active_coins = maxi(0, active_coins - 1))
-	tree.current_scene.add_child.call_deferred(coin) ## fizik sorgusu akışından (öldürme) çağrılabilir
-
-
-static func _send_to_remote(amount: int, world_pos: Vector2, killer: Node, assist: int) -> bool:
-	if killer != null and is_instance_valid(killer) and not killer.is_in_group("player") 			and killer.is_in_group("remote_players") and "peer_id" in killer and int(killer.peer_id) > 0 			and NetworkManager.is_multiplayer_active:
-		NetworkManager.grant_kill_gold.rpc_id(int(killer.peer_id), amount, world_pos, assist)
-		return true
-	return false
-
-
-## Altını gerçekten ekler + "+N" yazısı/ses (para varınca, ya da para gösterilemiyorsa hemen).
-static func credit(tree: SceneTree, amount: int, world_pos: Vector2, assist: int = 0) -> void:
+## Altını gerçekten ekler + ses (yazı SHOW_PICKUP_TEXT ile). Yerden toplama (gold_drop.gd) ve host'un uzak oyuncuya verdiği pay (grant_personal_gold).
+static func credit(tree: SceneTree, amount: int, world_pos: Vector2) -> void:
 	if amount <= 0:
 		return
 	GameManager.gold += amount
-	show_at(tree, amount, world_pos, assist)
-
-
-## Gecikmesiz hali (testler, para animasyonu istenmeyen çağrılar).
-static func award_now(tree: SceneTree, amount: int, world_pos: Vector2, killer: Node, assist: int = 0) -> void:
-	if amount <= 0:
-		return
-	if _send_to_remote(amount, world_pos, killer, assist):
-		return
-	credit(tree, amount, world_pos, assist)
+	show_at(tree, amount, world_pos)

@@ -166,7 +166,9 @@ func _run() -> void:
 		_player.set("pickup_range", 0.0) ## yere bırakılanlar toplanmasın
 		await _wait(1.0)
 		var pp: Vector2 = _player.global_position
-		var offs := {"gold_drop": Vector2(-90, 10), "food_drop": Vector2(-50, 55), "magnet_drop": Vector2(55, 55), "shield_orb_drop": Vector2(95, 5)}
+		var offs := {"gold_drop": Vector2(-90, 10), "food_drop": Vector2(-50, 55), "magnet_drop": Vector2(55, 55), "shield_orb_drop": Vector2(95, 5),
+				"weapon_shard_drop": Vector2(-10, 70), "xp_orb": Vector2(25, 80)} ## madde 560: parçacık + XP kristali yan yana
+		_gm.set("weapon_shards", 12) ## HUD konsolunda parçacık sayacı görünsün
 		for sc: String in offs:
 			var d: Node2D = (load("res://scenes/%s.tscn" % sc) as PackedScene).instantiate()
 			_main.add_child(d)

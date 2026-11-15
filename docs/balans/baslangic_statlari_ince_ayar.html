@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Başlangıç Statları</title>
+<style>
+:root {
+  --bg: #1d1712; --panel: #2a211a; --line: #4a3a2c; --text: #f1e4cf; --muted: #b39d82;
+  --accent: #e8b25a; --good: #8fcf6a; --bad: #e0705a; --input: #15100c;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.4 system-ui, "Segoe UI", sans-serif; padding: 16px; }
+h1 { font-size: 20px; margin: 0 0 4px; color: var(--accent); }
+p.sub { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
+.box { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px; margin-bottom: 14px; }
+.settings { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; font-size: 13px; }
+.settings label { display: flex; gap: 6px; align-items: center; color: var(--muted); }
+.wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; min-width: 720px; }
+th, td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: center; white-space: nowrap; }
+th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .03em; }
+td.name { text-align: left; font-weight: 600; }
+td.cur { color: var(--muted); font-size: 13px; }
+tr.off td:not(.chk) { opacity: .45; }
+input[type=number] { width: 64px; background: var(--input); color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 4px; font: inherit; text-align: center; }
+input[type=number].changed { border-color: var(--accent); }
+input[type=text].role { width: 150px; background: transparent; color: var(--muted); border: 1px dashed transparent; border-radius: 4px; padding: 3px; font: inherit; font-size: 13px; }
+input[type=text].role:hover, input[type=text].role:focus { border-color: var(--line); }
+input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
+.pts { font-weight: 700; min-width: 48px; display: inline-block; }
+.pts.zero { color: var(--good); } .pts.plus { color: var(--accent); } .pts.minus { color: var(--bad); }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 0; }
+button { background: #3a2d22; color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 6px 12px; font: inherit; cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); color: #1d1712; border-color: var(--accent); font-weight: 700; }
+textarea { width: 100%; min-height: 260px; background: var(--input); color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 8px; font: 12px/1.45 Consolas, monospace; }
+.note { font-size: 12px; color: var(--muted); }
+#copied { color: var(--good); font-size: 13px; margin-left: 6px; }
+</style>
+</head>
+<body>
+<h1>Başlangıç statları ayarı</h1>
+<p class="sub">Yüzde stat yok. Saldırı Hızı bonusu oyundan kaldırıldı (eski değeri "Şimdi" sütununda bilgi için duruyor). Seçili satırlara yeni değer uygulanır, seçili olmayan karakter şimdiki değerlerinde kalır. Değerleri düzenle, en alttaki metni kopyalayıp bana yapıştır.</p>
+
+<div class="box settings">
+  <span>Puan ölçütü: 1 puan =</span>
+  <label><input type="number" id="wHp" value="10" step="1"> Can</label>
+  <label><input type="number" id="wSpd" value="7" step="1"> Hız</label>
+  <label><input type="number" id="wAp" value="1" step="0.5"> SG</label>
+  <span>Taban:</span>
+  <label><input type="number" id="bHp" value="100"> Can</label>
+  <label><input type="number" id="bSpd" value="252"> Hız</label>
+  <label><input type="number" id="bAp" value="12"> SG</label>
+</div>
+
+<div class="box">
+  <div class="wrap">
+    <table>
+      <thead>
+        <tr>
+          <th><input type="checkbox" id="all" title="Hepsini seç"></th>
+          <th style="text-align:left">Karakter</th>
+          <th>Şimdi<br>Can/Hız/SG/AtkHızı%</th>
+          <th>Can</th><th>Hız</th><th>SG</th>
+          <th>Puan</th><th>Rol / not</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+  <div class="btns">
+    <button id="toProposal">Hepsini öneriye döndür</button>
+    <button id="toCurrent">Hepsini şimdikine döndür</button>
+  </div>
+  <p class="note">Puan = (Can−taban)/ölçüt + (Hız−taban)/ölçüt + (SG−taban)/ölçüt. Yeşil 0 = bütçede, turuncu = üstünde, kırmızı = altında. Vampir'in pasifi (1 SG = 1 can) puana dahil değildir; onun −1'i bilinçli. Turuncu çerçeve = şimdikinden farklı değer.</p>
+</div>
+
+<div class="box">
+  <div class="btns" style="margin:0 0 8px">
+    <button class="primary" id="copy">Metni kopyala</button><span id="copied"></span>
+  </div>
+  <textarea id="out" readonly></textarea>
+</div>
+
+<script>
+const DATA = [
+  {id:1,  name:"Talon",         cur:[110,252,16,0],   prop:[110,252,11], role:"dayanıklı dövüşçü"},
+  {id:2,  name:"Oakley",        cur:[100,252,11,0],   prop:[100,252,12], role:"denge"},
+  {id:3,  name:"Matthew",       cur:[90,265,10,0],    prop:[90,266,11],  role:"en hızlı"},
+  {id:4,  name:"Büyücü Kız",    cur:[80,245,12,-10],  prop:[80,245,15],  role:"cam top büyücü"},
+  {id:5,  name:"Assasin Çocuk", cur:[95,260,14,10],   prop:[80,259,13],  role:"hızlı, kırılgan vurucu"},
+  {id:7,  name:"Şovalye Adam",  cur:[150,238,8,0],    prop:[150,245,8],  role:"tank"},
+  {id:8,  name:"Elara",         cur:[85,252,10,10],   prop:[90,259,12],  role:"çevik"},
+  {id:9,  name:"Korsan",        cur:[110,252,12,0],   prop:[110,252,11], role:"sağlam"},
+  {id:10, name:"Melek",         cur:[90,252,12,0],    prop:[90,252,13],  role:"iyileştirici"},
+  {id:11, name:"Necromancer",   cur:[85,248,12,0],    prop:[90,252,13],  role:"çağırıcı"},
+  {id:12, name:"Shaman",        cur:[100,245,11,0],   prop:[100,245,13], role:"yavaş büyücü"},
+  {id:13, name:"Vampir Çocuk",  cur:[80,258,12,0],    prop:[80,259,12],  role:"pasif +1 puan sayılır"},
+  {id:14, name:"Hadime",        cur:[90,245,12,-5],   prop:[90,245,14],  role:"yavaş, sert"},
+  {id:15, name:"Cadı",          cur:[95,258,10,0],    prop:[100,259,11], role:"denge"},
+];
+const KEY = "baslangic_statlari_v1";
+let state = DATA.map(d => ({on:true, v:[...d.prop], role:d.role}));
+try {
+  const saved = JSON.parse(localStorage.getItem(KEY) || "null");
+  if (saved && saved.length === DATA.length) state = saved;
+} catch (e) {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} };
+const $ = id => document.getElementById(id);
+const num = id => parseFloat($(id).value) || 0;
+const fmt = n => (Math.round(n * 100) / 100).toString().replace(".", ",");
+const gd = n => Number.isInteger(n) ? n.toFixed(1) : String(n);
+
+function points(v) {
+  const w = [num("wHp") || 1, num("wSpd") || 1, num("wAp") || 1];
+  const b = [num("bHp"), num("bSpd"), num("bAp")];
+  return (v[0]-b[0])/w[0] + (v[1]-b[1])/w[1] + (v[2]-b[2])/w[2];
+}
+
+function build() {
+  const tb = $("rows");
+  tb.innerHTML = "";
+  DATA.forEach((d, i) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td class="chk"><input type="checkbox" data-i="${i}" class="on"></td>
+      <td class="name">${d.name}</td>
+      <td class="cur">${d.cur[0]} / ${d.cur[1]} / ${d.cur[2]} / ${d.cur[3] > 0 ? "+" : ""}${d.cur[3]}</td>
+      ${[0,1,2].map(k => `<td><input type="number" data-i="${i}" data-k="${k}" step="${k===2?0.5:1}"></td>`).join("")}
+      <td><span class="pts" data-i="${i}"></span></td>
+      <td><input type="text" class="role" data-i="${i}"></td>`;
+    tb.appendChild(tr);
+  });
+  tb.addEventListener("input", e => {
+    const t = e.target, i = +t.dataset.i;
+    if (t.classList.contains("on")) state[i].on = t.checked;
+    else if (t.classList.contains("role")) state[i].role = t.value;
+    else if (t.dataset.k !== undefined) state[i].v[+t.dataset.k] = parseFloat(t.value) || 0;
+    refresh(false);
+  });
+  refresh(true);
+}
+
+function refresh(fillInputs) {
+  const rows = $("rows").children;
+  DATA.forEach((d, i) => {
+    const s = state[i], tr = rows[i];
+    tr.classList.toggle("off", !s.on);
+    tr.querySelector(".on").checked = s.on;
+    tr.querySelectorAll("input[type=number]").forEach(inp => {
+      const k = +inp.dataset.k;
+      if (fillInputs) inp.value = s.v[k];
+      inp.classList.toggle("changed", s.v[k] !== d.cur[k]);
+    });
+    const role = tr.querySelector(".role");
+    if (fillInputs) role.value = s.role;
+    const p = points(s.v), el = tr.querySelector(".pts");
+    el.textContent = (p > 0.005 ? "+" : "") + fmt(p);
+    el.className = "pts " + (Math.abs(p) < 0.05 ? "zero" : p > 0 ? "plus" : "minus");
+  });
+  $("all").checked = state.every(s => s.on);
+  output();
+  save();
+}
+
+function output() {
+  const lines = [];
+  lines.push("Başlangıç statları - seçimim (yüzdesiz; seçili olmayanlar şimdiki değerinde kalsın):");
+  lines.push("");
+  DATA.forEach((d, i) => {
+    const s = state[i];
+    if (s.on) {
+      const ch = s.v.some((x, k) => x !== d.cur[k]);
+      lines.push(`- ${d.name}: ${s.v[0]} / ${s.v[1]} / ${s.v[2]} (puan ${fmt(points(s.v))})${ch ? "" : " [değişmedi]"}${s.role !== d.role ? " - not: " + s.role : ""}`);
+    } else {
+      lines.push(`- ${d.name}: DEĞİŞMESİN (${d.cur.slice(0,3).join(" / ")})`);
+    }
+  });
+  lines.push("");
+  lines.push("## characters.gd BASE_STATS karşılığı:");
+  lines.push("const BASE_STATS := {");
+  DATA.forEach((d, i) => {
+    const s = state[i];
+    const v = s.on ? s.v : d.cur;
+    lines.push(`\t${d.id}: {"hp": ${gd(v[0])}, "speed": ${gd(v[1])}, "ap": ${gd(v[2])}},  ## ${d.name}`);
+  });
+  lines.push("}");
+  $("out").value = lines.join("\n");
+}
+
+$("all").addEventListener("change", e => { state.forEach(s => s.on = e.target.checked); refresh(false); });
+$("toProposal").addEventListener("click", () => { state = DATA.map(d => ({on:true, v:[...d.prop], role:d.role})); refresh(true); });
+$("toCurrent").addEventListener("click", () => { state = DATA.map(d => ({on:true, v:d.cur.slice(0,3), role:d.role})); refresh(true); });
+["wHp","wSpd","wAp","bHp","bSpd","bAp"].forEach(id => $(id).addEventListener("input", () => refresh(false)));
+$("copy").addEventListener("click", async () => {
+  const t = $("out");
+  try { await navigator.clipboard.writeText(t.value); }
+  catch (e) { t.select(); document.execCommand("copy"); }
+  $("copied").textContent = "Kopyalandı";
+  setTimeout(() => $("copied").textContent = "", 1500);
+});
+build();
+</script>
+</body>
+</html>

@@ -28,6 +28,14 @@ const BOB_DAMP := 0.7 ## yürürken salınım %70 azalır
 const BOB_AMPLITUDE := 3.5 ## yerel px (dünya 1,75) - weapon.gd HOVER_BOB_AMPLITUDE buradan
 const BOB_SPEED := 2.2 ## rad/sn - weapon.gd HOVER_BOB_SPEED buradan
 const TURN_RATE := 14.0 ## uç yönü dönüşü (lerp_angle hızı; nişan weapon.gd AIM_EASE_RATE 12)
+## MENZİLLİ NİŞAN dönüş hızı sınırı (madde 549 prototipi, kullanıcı "Kademe 2" seçti 2026-11-10): hedef değişince ikon en çok bu hızla
+## döner (derece/sn); fark küçülünce AIM_EASE_RATE yumuşatması aynen sürer. 140 derecelik savurma ~0,5 sn (eskiden ~0,28). Atış yönü
+## hedefe düz kalır (ikonun dönüşünden bağımsız) - sınır yalnız görünümü yavaşlatır. Kademeler: 480 / 300 (bu) / 180 / 110.
+const AIM_MAX_TURN_DEG := 300.0
+## ATIŞ YÖNÜ (madde 549 ek, kullanıcı: "silahın ucu nereye bakıyorsa oradan ateşlensin, dönerken gerekirse boşa ateş etsin"): menzilli
+## silahın mermisi hedefe DÜZ değil, namlunun BAKTIĞI yönden çıkar; yalnız nişan oturmuşsa ıskalamasın diye hedefe en çok bu kadar derece
+## yaklaştırılır. Savurmada ikon hedeften bu açıdan fazla uzaktaysa mermi boşa gider.
+const AIM_SHOT_TOLERANCE_DEG := 6.0
 
 ## Slot türü: 0 tepe (|x| ~ 0), 1 sağ, 2 sol - itme miktarı, yay hızı ve çıkış/çekilme sırası buradan.
 static func slot_kind(slot_local: Vector2) -> int:
@@ -82,6 +90,31 @@ static func face_rotation(dir: Vector2, forward_rad: float, mirror: bool) -> Arr
 		return [dir.angle() - forward_rad, false]
 	var flip: bool = dir.x < 0.0
 	return [(dir.angle() - PI + forward_rad) if flip else (dir.angle() - forward_rad), flip]
+
+
+## lerp_angle'ın açısal hız SINIRLI hâli: from -> to, adım = fark x t, mutlak değeri en çok max_step (radyan, bu kare). max_step <= 0 =
+## sınırsız (düz lerp_angle). weapon.gd _face_dir + remote_player.gd _wf_face ortak.
+static func turn_angle(from: float, to: float, t: float, max_step: float) -> float:
+	var step: float = angle_difference(from, to) * t
+	if max_step > 0.0:
+		step = clampf(step, -max_step, max_step)
+	return from + step
+
+
+## İkonun şu an BAKTIĞI dünya açısı (face_rotation'ın tersi). Aynalanan ikonda sola bakarken flip_h açıkken dönüş uzayı ters:
+## açı = rotation + PI - forward. Sınırlı dönüşte aynalama sınırı geçerken YÖN kesintisiz kalsın diye dönüş bu dünya açısı üzerinden yürür
+## (eski kural aynalama değişince dönüşü hedefe atlatıyordu, yavaş dönüşte sınırı boşa çıkarırdı). weapon.gd _make_facing_direction_target ile aynı formül.
+static func current_aim(rotation: float, flipped: bool, forward: float) -> float:
+	return (rotation + PI - forward) if flipped else (rotation + forward)
+
+
+## Atış yönü: namlunun baktığı yön `facing`, hedefe doğru yön `to_target`; hedefe en çok `tol` radyan yaklaştırılmış `facing`.
+## Fark <= tol ise tam hedefe (yakalamış nişan ıskalamaz), değilse facing'den tol kadar hedefe doğru sapmış yön (mermi boşa gider).
+static func shot_dir(facing: Vector2, to_target: Vector2, tol: float) -> Vector2:
+	if facing.length_squared() < 0.0001 or to_target.length_squared() < 0.0001:
+		return to_target.normalized()
+	var diff: float = facing.angle_to(to_target)
+	return facing.normalized().rotated(clampf(diff, -tol, tol))
 
 
 ## Hedefsiz silahın bakacağı yön: yürüyor -> gidiş yönü, duruyor + görüşte düşman -> ona (hazır). ZERO = son açısında kal.

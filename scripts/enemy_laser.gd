@@ -19,6 +19,11 @@ const BEAM_TEX := [
 const FLASH_FRAMES := preload("res://assets/fx/enemy_abilities/laser_flash_frames.tres")
 const FxScript := preload("res://scripts/fx_enemy_ability.gd")
 const AbilitiesScript := preload("res://scripts/enemy_abilities.gd")
+const PaladinDome := preload("res://scripts/paladin_dome.gd") ## Şovalye kubbesi alanı (elips)
+## Işın kubbenin kenarında biter (enemy_abilities.gd clip_ray_to_domes: kenardan 4-8 px önce) - bu paydan yakın biten ışın kubbeye çarpmış sayılır.
+const DOME_END_MARGIN := 14.0
+## Röntgen lazeri kalkanları 2 katı yıpratır (player.gd ENEMY_LASER_SHIELD_MULT'in kopyası - test_sovalye_dome_blocks_creature_spells.gd eşitliği denetler).
+const DOME_SHIELD_MULT := 2.0
 const WARN_SCROLL_SPEED := 40.0 ## karo pikseli/sn - çizgi yaratıktan hedefe doğru akar
 const BEAM_FRAME_TIME := 0.05
 const BEAM_HALF_WIDTH := 7.0 ## dünya birimi - isabet toleransı (+ oyuncu gövdesi)
@@ -128,6 +133,11 @@ func _check_hits() -> void:
 	var b: Vector2 = global_position + _dir * _length
 	for p in AbilitiesScript.damageable_players(get_tree()):
 		if p in _hit:
+			continue
+		## Işın bir Şovalye kubbesinin kenarında bitti = kubbe emdi: kubbe sahibi BİR kez (kalkana x2) hasar alır (madde 542).
+		if PaladinDome.node_contains(p, b, DOME_END_MARGIN):
+			_hit.append(p)
+			PaladinDome.absorb_ranged_hit(p, damage * DOME_SHIELD_MULT, source)
 			continue
 		var pos: Vector2 = (p as Node2D).global_position
 		var closest: Vector2 = Geometry2D.get_closest_point_to_segment(pos, a, b)

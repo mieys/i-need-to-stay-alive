@@ -31,7 +31,8 @@ const SLOT_ORDER := ["q", "e", "r", "p", "f"]
 ## kaynak etiketi -> slot. Ayrıntı satırı adları NAMES'te.
 const SLOT := {
 	## Talon
-	"s:talon_dash": "q", "s:talon_spin": "e", "s:talon_ayna": "r", "s:talon_pasif": "p",
+	## DASH yetenekleri E'de (2026-11-12, kullanıcı kararı, KALICI): Talon E = Hamle Vuruşu (talon_dash), Q = Silah Salvosu (talon_spin).
+	"s:talon_dash": "e", "s:talon_spin": "q", "s:talon_ayna": "r", "s:talon_pasif": "p",
 	## Oakley
 	"dot:ari_zehri": "q", "s:oakley_sarmasik": "e", "s:oakley_agac": "r", "s:oakley_cicek": "p",
 	## Matthew
@@ -41,12 +42,14 @@ const SLOT := {
 	"s:buyucu_sekme": "e", "s:buyucu_arcane_patlama": "e", "s:buyucu_kasirga": "e", "s:buyucu_buz_nova": "r", "s:buyucu_meteor": "r",
 	"s:buyucu_degisim": "q", "s:buyucu_pasif": "p",
 	## Assasin
-	"s:assasin_dash2": "q", "s:assasin_gorunmez": "e", "s:assasin_dash": "r", "s:assasin_pasif": "p",
+	## (2026-11-12) Assasin E = Şahin Hamlesi (assasin_dash2), Q = Gölge Adımı (assasin_gorunmez)
+	"s:assasin_dash2": "e", "s:assasin_gorunmez": "q", "s:assasin_dash": "r", "s:assasin_pasif": "p",
 	## Şovalye
 	"s:sovalye_kiskirtma": "q", "s:sovalye_yansitma": "e", "s:sovalye_misilleme": "r",
 	"s:sovalye_bariyer": "e", "s:sovalye_kubbe": "r", "s:sovalye_pasif": "p",
 	## Elara
-	"s:elara_sivisma": "q", "s:elara_gercek_hasar": "e", "s:elara_cift_tetik": "r",
+	## (2026-11-12) Elara E = Sıvışma, Q = Gerçek Hasar
+	"s:elara_sivisma": "e", "s:elara_gercek_hasar": "q", "s:elara_cift_tetik": "r",
 	## Korsan
 	"s:korsan_patlat": "q", "s:korsan_bomba": "e", "s:korsan_bombardiman": "r", "s:korsan_pasif": "p",
 	## Melek (hasarı yok; can/kalkan)
@@ -64,7 +67,7 @@ const SLOT := {
 	"s:cadi_iksir": "r", "s:cadi_kalkan": "r",
 	## Ruhani yetenekler (4. yuva)
 	"s:ruhani_tank": "f", "s:ruhani_can": "f", "s:ruhani_kalkan_bagi": "f",
-	"s:ruhani_para": "f", "s:ruhani_adc": "f", "s:ruhani_taktik": "f", "s:ruhani_dukkan": "f", "s:ruhani_savas_sevki": "f", ## madde 531: sayaçlar (util)
+	"s:ruhani_para": "f", "s:ruhani_adc": "f", "s:ruhani_taktik": "f", "s:ruhani_savas_sevki": "f", "s:ruhani_toplayici": "f", ## madde 531 (+ Toplayıcı madde 625): sayaçlar (util)
 	## Shaman pasifi (totem yakınında yakma) + Hadime pasifi (Ruh Göçü hayaleti) - madde 531
 	"dot:shaman_pasif": "p", "s:hadime_pasif": "p",
 }
@@ -87,11 +90,11 @@ const NAMES := {
 	"s:necro_iskelet": "İskelet", "s:necro_golem": "Golem", "s:necro_kafatasi": "Kafatası", "s:necro_kemik": "Kemik fedası",
 	"s:shaman_totem": "Totem atışı", "s:shaman_totem_alan": "Totem alanı", "s:shaman_kalkan_totemi": "Kalkan totemi", "s:shaman_kalkan_alan": "Totem alanı", "s:shaman_golem_alan": "Golem alanı",
 	"s:vampir_kan_emme": "Kan emme", "s:vampir_yarasa_temas": "Yarasa teması", "s:vampir_yarasa_r": "Yarasalar", "s:vampir_r_patlama": "Patlama", "s:vampir_pasif": "Can emme",
-	"s:hadime_lanet": "Lanet", "s:hadime_lanet_patlama": "Lanet patlaması", "s:hadime_kuyu": "Kara delik", "s:hadime_kabus": "Karabasan",
+	"s:hadime_lanet": "Lanet", "s:hadime_lanet_patlama": "Lanet patlaması", "s:hadime_kuyu": "Lanet çukuru", "s:hadime_kabus": "Karabasan",
 	"s:cadi_duman": "Zehirli duman", "s:cadi_supurge_temas": "Süpürge teması", "s:cadi_supurge": "Süpürge", "s:cadi_patlama": "İksir patlaması",
 	"s:cadi_don": "Don iksiri", "s:cadi_korku": "Korku iksiri", "s:cadi_iksir": "İksir", "s:cadi_kalkan": "Kalkan iksiri",
 	"s:ruhani_tank": "Tank", "s:ruhani_can": "Can", "s:ruhani_kalkan_bagi": "Kalkan bağı",
-	"s:ruhani_para": "Para", "s:ruhani_adc": "Güçlenme", "s:ruhani_taktik": "Taktiksel", "s:ruhani_dukkan": "Dükkan", "s:ruhani_savas_sevki": "Savaş şevki",
+	"s:ruhani_para": "Para", "s:ruhani_adc": "Güçlenme", "s:ruhani_taktik": "Taktiksel", "s:ruhani_savas_sevki": "Savaş şevki", "s:ruhani_toplayici": "Toplayıcı",
 	"dot:shaman_pasif": "Totem aurası yanması", "s:hadime_pasif": "Ruh göçü", "s:evcil_slime": "Minik Cadı büyüsü",
 }
 
@@ -243,6 +246,7 @@ const UTIL_LABELS := {
 	## madde 531: ruhani yetenek / pasif / evcil sayaçları (Para, Savaş Şevki, kullanım sayıları)
 	"uses": "Kullanım", "discount": "Dükkan indirimiyle tasarruf (altın)", "profit": "Toplam kâr (altın)",
 	"ap": "Kazanılan kalıcı saldırı gücü", "execute": "İnfaz edilen düşman",
+	"orbs": "Çekilen XP kristali", "xp_pulled": "Çekilen XP", ## Toplayıcı (madde 625)
 }
 ## Hasar türü ölçüler (hasar renginde yazılır); gerisi sayı/fayda (kalkan renginde).
 const UTIL_DAMAGE := ["during_w", "during"]
@@ -355,7 +359,7 @@ static func tooltip_bbcode(slot: String, ink: Dictionary) -> String:
 
 
 ## Pasifin ŞU ANKİ etkisi (sayaç değil, yerel oyuncunun canlı değeri): Elara saldırı hızı, Matthew hız, Talon yük, Korsan saldırı gücü,
-## Cadı şans. Karakter "skill" id'siyle seçilir (characters.gd: Talon 38, Matthew 43, Elara 12, Korsan 18, Cadı 51).
+## Cadı şans. Karakter "skill" (Q) id'siyle seçilir (characters.gd: Talon 36, Matthew 43, Elara 11, Korsan 18, Cadı 51 - Talon/Elara 2026-11-12'de dash'leri E'ye taşıyınca değişti).
 static func live_lines(slot: String, ink: Dictionary) -> PackedStringArray:
 	var out: PackedStringArray = []
 	if slot == SLOT_F:
@@ -370,12 +374,12 @@ static func live_lines(slot: String, ink: Dictionary) -> PackedStringArray:
 	var lbl := func(label: String, value: String) -> String:
 		return Loc.t("• Şu an: [color=%s][b]%s[/b][/color] %s") % [c_val, Loc.pct(value), Loc.t(label)]
 	match int(Characters.get_def(GameManager.selected_char_id).get("skill", -1)):
-		12: ## Elara: seviye başına %1 saldırı hızı (en fazla %30; player.gd ELARA_PASSIVE_*)
+		11: ## Elara: seviye başına %1 saldırı hızı (en fazla %30; player.gd ELARA_PASSIVE_*)
 			out.append(lbl.call("saldırı hızı", "+%%%d" % int(round(100.0 * minf(float(p.get("level")) * 0.01, 0.3)))))
 		43: ## Matthew: toplam hareket hızı bonusu, her %1'i = %0,5 saldırı hızı
 			var mv: int = int(p.get("_matthew_move_percent"))
 			out.append(lbl.call(Loc.t("hareket hızı (+%%%s saldırı hızı)") % str(snappedf(mv * 0.5, 0.5)), "+%%%d" % mv))
-		38: ## Talon: güç yükleri
+		36: ## Talon: güç yükleri
 			out.append(lbl.call("güç yükü", str(int(p.get("_talon_passive_stacks")))))
 		18: ## Korsan: cüzdandaki her 30 altın = +1 saldırı gücü
 			out.append(lbl.call("saldırı gücü (altından)", "+%d" % int(p.get("_korsan_gold_ap_applied"))))
@@ -396,7 +400,12 @@ static func spirit_live_lines(ink: Dictionary) -> PackedStringArray:
 			var tree: SceneTree = Engine.get_main_loop() as SceneTree
 			var p: Node = tree.get_first_node_in_group("player") if tree != null else null
 			if p != null:
-				out.append(Loc.t(fmt_line) % [c_val, "%d/%d" % [int(p.get("_savas_sevki_stacks")), SpiritualSkillsScript.SAVAS_SEVKI_STACKS_FOR_AP], Loc.t("savaş şevki")])
+				out.append(Loc.t(fmt_line) % [c_val, "%d/%d" % [int(p.get("_savas_sevki_stacks")), SpiritualSkillsScript.savas_sevki_threshold(int(p.get("_savas_sevki_conversions")))], Loc.t("savaş şevki")])
+		SpiritualSkillsScript.TOPLAYICI:
+			var tree2: SceneTree = Engine.get_main_loop() as SceneTree
+			var p2: Node = tree2.get_first_node_in_group("player") if tree2 != null else null
+			if p2 != null and p2.has_method("get_toplayici_time_left"):
+				out.append(Loc.t(fmt_line) % [c_val, Loc.t("%d sn") % int(ceil(float(p2.call("get_toplayici_time_left")))), Loc.t("sonraki çekiş")])
 	return out
 
 

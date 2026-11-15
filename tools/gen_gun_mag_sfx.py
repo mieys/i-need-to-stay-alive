@@ -200,9 +200,8 @@ def snd_shell_tink():
 
 
 def main():
-    save("gun_mag_out.wav", snd_mag_out())
-    save("gun_mag_in.wav", snd_mag_in())
-    save("gun_cock.wav", snd_cock())
+    ## 2026-11-13: doldurma sesleri artık kullanıcının dosyalarından (tools/gen_gun_reload_fx.py, assets/audio/gun/reload/);
+    ## gun_mag_out/in/cock silindi, burada yalnız yere düşen kovan çınlaması üretilir.
     save("shell_tink.wav", snd_shell_tink())
 
 

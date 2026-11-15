@@ -37,6 +37,43 @@ func test_airborne_rules() -> void:
 	walker.free()
 
 
+## Madde 596: suda yürüyen (uçmayan) oyuncunun toplam hareket hızı %25 düşer; karada / havada / ana haritada düşmez.
+func test_wading_slows_total_move_speed_by_quarter() -> void:
+	var player: Node2D = (preload("res://scenes/player.tscn") as PackedScene).instantiate()
+	add_child(player)
+	player.set_process(false)
+	player.set_physics_process(false)
+	var base: float = player.get_effective_move_speed()
+	player.item_speed_percent = 0.20 ## eşya + yetenek çarpanı da "toplam"a girer: çarpan tüm üründen
+	player.skill2_speed_multiplier = 1.5
+	var full: float = player.get_effective_move_speed()
+	assert(full > base)
+	player.wade_slow_active = true
+	assert(is_equal_approx(player.get_effective_move_speed(), full * 0.75), "suda toplam hız x0,75")
+	player.wade_slow_active = false
+	assert(is_equal_approx(player.get_effective_move_speed(), full), "sudan çıkınca hız normale döner")
+	if OS.get_environment("HARITA") == "":
+		GameManager.selected_map = "bataklik"
+		var w: Node = WadeScript.new()
+		add_child(w)
+		var img: Image = (load(str(MapProfiles.current()["su_maskesi"])) as Texture2D).get_image()
+		var deep := Vector2.INF
+		for y in range(0, img.get_height(), 3):
+			for x in range(0, img.get_width(), 3):
+				if deep == Vector2.INF and img.get_pixel(x, y).r > 0.99:
+					deep = Vector2(x * 2 + 1, y * 2 + 1)
+		assert(deep != Vector2.INF)
+		player.global_position = Meta.SPAWN
+		assert(not w.call("is_wading", player), "doğuş karada: yavaşlamaz")
+		player.global_position = deep
+		assert(w.call("is_wading", player), "derin suda yavaşlar")
+		player.set("in_limbo", true) ## ruh hâli = uçan sayılır, suya girmez
+		assert(not w.call("is_wading", player), "uçan / ruh hâli suda yavaşlamaz")
+		w.queue_free()
+		GameManager.selected_map = "ana"
+	player.queue_free()
+
+
 func test_water_walkable_flag_and_mask() -> void:
 	if OS.get_environment("HARITA") != "":
 		return

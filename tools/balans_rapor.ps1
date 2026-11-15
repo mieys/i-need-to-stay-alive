@@ -19,6 +19,9 @@ $dirs = @((Join-Path $env:APPDATA "Godot\app_userdata\Temiz Sürüm\balans"), $g
 
 $all = New-Object System.Collections.ArrayList
 $seen = @{}
+## Madde 623: unvanlar isme döndü - eski kayıtların char_name'i yeni isme çevrilir (aynı karakter iki satıra bölünmesin).
+$eskiAd = @{ "Büyücü Kız" = "Lyra"; "Assasin Çocuk" = "Kestrel"; "Şovalye Adam" = "Aldric"; "Korsan" = "Flint"; "Melek" = "Seraphine";
+	"Necromancer" = "Corvina"; "Shaman" = "Ulric"; "Vampir Çocuk" = "Nox"; "Cadı" = "Hazel" }
 $files = 0
 foreach ($d in $dirs) {
 	if (-not (Test-Path $d)) { continue }
@@ -29,6 +32,7 @@ foreach ($d in $dirs) {
 			try { $r = $line | ConvertFrom-Json } catch { continue }
 			if (-not $r.run_id -or $seen.ContainsKey($r.run_id)) { continue }
 			$seen[$r.run_id] = 1
+			if ($r.char_name -and $eskiAd.ContainsKey([string]$r.char_name)) { $r.char_name = $eskiAd[[string]$r.char_name] } ## madde 623: eski unvanlı kayıtlar yeni isimle gruplanır
 			[void]$all.Add($r)
 		}
 	}
@@ -91,39 +95,55 @@ foreach ($c in ($charRows | Sort-Object Tier -Descending)) {
 P ""
 
 # ---- Silahlar ----
+## 2026-11-14: hasar/sn artik silahin EDINILDIGI andan itibaren hesaplanir (got_weapons; baslangic silahi = 0. sn) ve ayrica saldiri gucune (AP) bolunur.
+## Eski hesap tum koşu suresine bolunuyordu: gec alinan silahlar (pompali ort. 11.8 dk, tufek 12.5 dk) sahte "zayif" cikiyordu. Isaretler (COK GUCLU/zayif) artik
+## "hasar/sn / AP" oranina bakar: yuksek APli karakter (Matthew AP 270) silahi guclu gosteremez. AP = koşu SONU degeri (yaklasik; uzun koşuda AP'yi olduğundan
+## yuksek, oranı dusuk gosterir).
 $wAgg = @{}
 foreach ($r in $runs) {
 	$time = [math]::Max(1.0, [double]$r.time)
+	$ap = [double]$r.stats.ap
+	$acq = @{}
+	foreach ($e in @($r.got_weapons)) { if ($e -and $e.Count -ge 2) { $ek = [string]$e[0]; if (-not $acq.ContainsKey($ek)) { $acq[$ek] = [double]$e[1] } } }
 	$first = $true
 	foreach ($w in @($r.weapons)) {
 		$k = [string]$w.k
 		if ($k -eq "") { continue }
-		if (-not $wAgg.ContainsKey($k)) { $wAgg[$k] = [pscustomobject]@{ K = $k; N = 0; Dmg = 0.0; Time = 0.0; Hits = 0; Crits = 0; Start = 0; StartTier = 0.0 } }
+		if (-not $wAgg.ContainsKey($k)) { $wAgg[$k] = [pscustomobject]@{ K = $k; N = 0; Dmg = 0.0; Dur = 0.0; Hits = 0; Crits = 0; Start = 0; StartTier = 0.0; Ratios = (New-Object System.Collections.ArrayList) } }
 		$a = $wAgg[$k]
+		if ($first) { $a.Start++; $a.StartTier += [double]$r.tier; $first = $false }
+		$t0 = if ($acq.ContainsKey($k)) { $acq[$k] } else { 0.0 }
+		$dur = $time - $t0
+		if ($dur -lt 60.0) { continue } ## son saniyelerde alinan silah: olcum gurultusu
 		$row = $null
 		foreach ($p in (Props $r.by_src)) { if ($p.Name -eq "w:$k") { $row = $p.Value } }
-		$a.N++; $a.Time += $time
-		if ($row) { $a.Dmg += [double]$row[0]; $a.Hits += [int]$row[1]; $a.Crits += [int]$row[2] }
-		if ($first) { $a.Start++; $a.StartTier += [double]$r.tier; $first = $false }
+		$dmg = 0.0
+		if ($row) { $dmg = [double]$row[0]; $a.Hits += [int]$row[1]; $a.Crits += [int]$row[2] }
+		$a.N++; $a.Dmg += $dmg; $a.Dur += $dur
+		if ($ap -gt 0) { [void]$a.Ratios.Add(($dmg / $dur) / $ap) }
 	}
 }
-$wRows = @($wAgg.Values | ForEach-Object { $_ | Add-Member -PassThru -NotePropertyName Dps -NotePropertyValue ($_.Dmg / $_.Time) })
-$medW = Med ($wRows | Where-Object { $_.N -ge $MinKosu } | ForEach-Object { $_.Dps })
+$wRows = @($wAgg.Values | Where-Object { $_.N -gt 0 } | ForEach-Object {
+	$_ | Add-Member -PassThru -NotePropertyName Dps -NotePropertyValue ($_.Dmg / $_.Dur) |
+		Add-Member -PassThru -NotePropertyName DpsAp -NotePropertyValue (Med $_.Ratios)
+})
+$medW = Med ($wRows | Where-Object { $_.N -ge $MinKosu } | ForEach-Object { $_.DpsAp })
 P "## Silahlar"
 P ""
-P "Hasar/sn = silahin o koşularda verdigi etiketli hasar / koşu suresi. **Onyargi:** silahin ne zaman alindigi kayitli degil, sahip olunan tum sure sayilir (gec alinan silah olduğundan dusuk gorunur). Esik yalniz yon gosterir."
+P "Hasar/sn = silahin **edinildigi andan itibaren** verdigi etiketli hasar / sahip olunan sure (baslangic silahi koşu basindan; 60 sn'den kisa sahiplik atlanir). **Hasar/sn ÷ AP** (koşu basina oranlarin MEDYANI: tek aykiri koşu ortalamayi bozmasin) = ayni deger koşu sonu saldiri gucune bolunmus (AP yaklasik: koşu sonu degeri) - yuksek APli karakter silahi guclu gostermesin diye isaretler bu orana bakar. Aralik = koşu basina en dusuk-en yuksek oran: genis aralik = silahtan cok karaktere/eşyaya bagli. Esik yalniz yon gosterir."
 P ""
-P "| Silah | Koşu | Hasar/sn | Medyana oran | Kritik % | Baslangic silahi iken ort. kademe | Not |"
-P "|---|---|---|---|---|---|---|"
-foreach ($w in ($wRows | Sort-Object Dps -Descending)) {
-	$ratio = if ($medW -gt 0) { $w.Dps / $medW } else { 1 }
+P "| Silah | Koşu | Hasar/sn | Hasar/sn ÷ AP | Medyana oran | Aralik (÷AP) | Kritik % | Baslangic silahi iken ort. kademe | Not |"
+P "|---|---|---|---|---|---|---|---|---|"
+foreach ($w in ($wRows | Sort-Object DpsAp -Descending)) {
+	$ratio = if ($medW -gt 0) { $w.DpsAp / $medW } else { 1 }
 	$crit = if ($w.Hits -gt 0) { 100.0 * $w.Crits / $w.Hits } else { 0 }
 	$st = if ($w.Start -gt 0) { F1 ($w.StartTier / $w.Start) } else { "-" }
+	$rng = if ($w.Ratios.Count -gt 0) { "{0}-{1}" -f (F2 (($w.Ratios | Measure-Object -Minimum).Minimum)), (F2 (($w.Ratios | Measure-Object -Maximum).Maximum)) } else { "-" }
 	$note = ""
 	if ($w.N -lt $MinKosu) { $note = "az veri" }
-	elseif ($ratio -ge 1.6) { $note = "COK GUCLU?"; $flags.Add("Silah **$($w.K)**: hasar/sn medyanin x$(F2 $ratio) kati.") }
-	elseif ($ratio -le 0.5) { $note = "zayif?"; $flags.Add("Silah **$($w.K)**: hasar/sn medyanin x$(F2 $ratio) kati (zayif olabilir).") }
-	P ("| {0} | {1} | {2} | x{3} | {4} | {5} | {6} |" -f $w.K, $w.N, (F1 $w.Dps), (F2 $ratio), (F1 $crit), $st, $note)
+	elseif ($ratio -ge 1.6) { $note = "COK GUCLU?"; $flags.Add("Silah **$($w.K)**: hasar/sn÷AP medyanin x$(F2 $ratio) kati.") }
+	elseif ($ratio -le 0.5) { $note = "zayif?"; $flags.Add("Silah **$($w.K)**: hasar/sn÷AP medyanin x$(F2 $ratio) kati (zayif olabilir).") }
+	P ("| {0} | {1} | {2} | {3} | x{4} | {5} | {6} | {7} | {8} |" -f $w.K, $w.N, (F1 $w.Dps), (F2 $w.DpsAp), (F2 $ratio), $rng, (F1 $crit), $st, $note)
 }
 P ""
 
@@ -260,6 +280,17 @@ if ($withPet.Count -eq 0) { P "(Evcil hayvan kayıtlı koşu yok.)" } else {
 	}
 }
 P ""
+$withSpirit = @($runs | Where-Object { $null -ne $_.spirit })
+P "## Ruhani büyü"
+P ""
+if ($withSpirit.Count -eq 0) { P "(Ruhani büyü kayıtlı koşu yok - rev 167 öncesi kayıtlarda alan yok.)" } else {
+	P "| Ruhani | Koşu | Ort. kademe | Ort. hasar/sn |"
+	P "|---|---|---|---|"
+	foreach ($g in ($withSpirit | Group-Object { if ($_.spirit) { $_.spirit } else { "(yok)" } } | Sort-Object Name)) {
+		P ("| {0} | {1} | {2} | {3} |" -f $g.Name, $g.Count, (F1 (Avg ($g.Group | ForEach-Object { [double]$_.tier }))), (F1 (Avg ($g.Group | ForEach-Object { [double]$_.dealt / [math]::Max(1.0, [double]$_.time) }))))
+	}
+}
+P ""
 $gotW = @{}
 foreach ($r in $runs) { foreach ($e in @($r.got_weapons)) { if ($e -and $e.Count -ge 2) { $k = [string]$e[0]; if (-not $gotW.ContainsKey($k)) { $gotW[$k] = New-Object System.Collections.ArrayList }; [void]$gotW[$k].Add([double]$e[1] / 60.0) } } }
 P "## Silah edinme zamanı"
@@ -357,6 +388,53 @@ if ($cRuns.Count -eq 0) { P "(Kart kaydı olan koşu yok.)" } else {
 	foreach ($k in ($cAgg.Keys | Sort-Object { ($cAgg[$_] | Measure-Object -Sum).Sum } -Descending)) {
 		$a = $cAgg[$k]; $sum = ($a | Measure-Object -Sum).Sum
 		P ("| {0} | {1} | {2} | {3} | {4} | {5} | {6} |" -f $k, $sum, (F1 ($sum / [double]$cRuns.Count)), $a[0], $a[1], $a[2], $a[3])
+	}
+}
+P ""
+
+# ---- Haritalar ve bosslar (madde 597, docs/harita_icerik/PLAN.md bolum 5b kalibrasyon) ----
+P "## Haritalar"
+P ""
+$mapRuns = @($runs | Where-Object { $_.map })
+if ($mapRuns.Count -eq 0) {
+	P "(Harita kimligi olan koşu yok: kayit alani BALANCE_REV 151'den sonra eklendi.)"
+} else {
+	P "K5 / K10 = o kademeye ulasan koşu orani; Zafer = zaferle biten koşu orani. Hedefler (PLAN 5b): K5 >= %60, K10 ~%30-40, zafer ~%15-25."
+	P ""
+	P "| Harita | Koşu | K5'e ulasan | K10'a ulasan | Zafer | Ort. sure (dk) |"
+	P "|---|---|---|---|---|---|"
+	foreach ($g in ($mapRuns | Group-Object map)) {
+		$rs = @($g.Group); $n = $rs.Count
+		$k5 = @($rs | Where-Object { [int]$_.tier -ge 5 }).Count
+		$k10 = @($rs | Where-Object { [int]$_.tier -ge 10 }).Count
+		$zf = @($rs | Where-Object { $_.victory }).Count
+		P ("| {0} | {1} | {2} (%{3}) | {4} (%{5}) | {6} (%{7}) | {8} |" -f $g.Name, $n, $k5, [math]::Round(100.0 * $k5 / $n), $k10, [math]::Round(100.0 * $k10 / $n), $zf, [math]::Round(100.0 * $zf / $n), (F1 ((Avg ($rs | ForEach-Object { [double]$_.time })) / 60.0)))
+	}
+}
+P ""
+P "## Bosslar"
+P ""
+$bRuns = @($runs | Where-Object { $_.boss_fights -and (Props $_.boss_fights).Count -gt 0 })
+if ($bRuns.Count -eq 0) {
+	P "(Boss dovusu kaydi olan koşu yok.)"
+} else {
+	P "Deneme = bir boss doguşu. Medyan sure = oldurulen dovuslerin doguştan olume saniyesi. Olumle biten = boss yasarken koşunun KAYBEDILMESI (hedef: K5 en cok ~%25). Coklu oyuncuda her oyuncunun kaydi ayri sayilir."
+	P ""
+	P "| Boss | Deneme | Oldurulen | Medyan sure (sn) | Olumle biten | Takim boyu (ort.) |"
+	P "|---|---|---|---|---|---|"
+	$bAgg = @{}
+	foreach ($r in $bRuns) {
+		foreach ($p in (Props $r.boss_fights)) {
+			if (-not $bAgg.ContainsKey($p.Name)) { $bAgg[$p.Name] = New-Object System.Collections.Generic.List[object] }
+			$vals = @($p.Value)
+			if ($vals.Count -gt 0 -and -not ($vals[0] -is [System.Array])) { $vals = @(,$vals) } ## tek satirlik kayit duzlesmis gelirse sar
+			foreach ($row in $vals) { $bAgg[$p.Name].Add([pscustomobject]@{ Spawn = [double]$row[0]; Death = [double]$row[1]; Team = [double]$row[2]; Lost = ([string]$r.end_reason -eq "lost") }) }
+		}
+	}
+	foreach ($k in ($bAgg.Keys | Sort-Object)) {
+		$rows = $bAgg[$k].ToArray(); $killed = @($rows | Where-Object { $_.Death -ge 0 }); $lost = @($rows | Where-Object { $_.Death -lt 0 -and $_.Lost })
+		$med = if ($killed.Count -gt 0) { F1 (Med ($killed | ForEach-Object { $_.Death - $_.Spawn })) } else { "-" }
+		P ("| {0} | {1} | {2} | {3} | {4} (%{5}) | {6} |" -f $k, $rows.Count, $killed.Count, $med, $lost.Count, [math]::Round(100.0 * $lost.Count / [math]::Max(1, $rows.Count)), (F1 (Avg ($rows | ForEach-Object { $_.Team }))))
 	}
 }
 P ""

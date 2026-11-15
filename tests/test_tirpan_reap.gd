@@ -6,7 +6,7 @@ extends Node
 
 const TirpanReapMath := preload("res://scripts/tirpan_reap_math.gd")
 const EnemyScene: PackedScene = preload("res://scenes/creatures/enemy_agac1.tscn")
-const BLADE_TIP_PX := Vector2(31.0, 30.5) ## tirpan.png bıçak ucu (prototip BLADE_PX son nokta)
+const BLADE_TIP_PX := Vector2(30.0, 15.0) ## tirpan.png bıçak ucu (gen_tirpan_fx.py BLADE_PX son nokta; madde 589 32x32 çizim)
 
 
 func _tip_world(icon: Sprite2D) -> Vector2:
@@ -61,7 +61,7 @@ func test_timeline_and_speed() -> void:
 
 func test_fx_layers() -> void:
 	var plan: Dictionary = TirpanReapMath.make_plan(Vector2(-1.0, 0.0), Vector2(50.0, 80.0), 1.0, TirpanReapMath.REF_OWNER_SCALE)
-	for spec: Array in [[TirpanReapMath.TrailFxScene, 0, 60.0], [TirpanReapMath.TopFxScene, 60, 30.0], [TirpanReapMath.GroundFxScene, -1, 30.0]]:
+	for spec: Array in [[TirpanReapMath.TrailFxScene, 0, 60.0], [TirpanReapMath.TopFxScene, 60, 30.0], [TirpanReapMath.GroundFxScene, 0, 30.0]]:
 		var fx: AnimatedSprite2D = TirpanReapMath.spawn_fx(spec[0], self, plan, 1.5)
 		assert(fx != null, "efekt oluşmalı")
 		assert(fx.global_position.is_equal_approx(plan["origin"]))

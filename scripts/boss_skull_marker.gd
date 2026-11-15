@@ -2,12 +2,13 @@ extends Node2D
 
 ## Boss'un ÜSTÜNDEKİ kafatası işareti (kullanıcı isteği 2026-10-05: "bossların üstündeki can ve kalkan barına gerek yok, arayüze bağlı
 ## bir can/kalkan barı zaten var, sadece kuru kafa sembolü üstlerinde dursun"). Can ve kalkan artık SADECE üst ortadaki boss barında
-## (boss_bar_top.gd) görünür; burada altın kenarlı demir plaka içinde kafatası var (prototip O1'in kafatası parçası).
+## (boss_bar_top.gd) görünür; burada yalnız kafatası var (2026-11-11'den beri kullanıcının kafatası çizimi, scripts/skull_icon.gd; eskiden
+## altın kenarlı demir plaka içinde 9x9 kafatasıydı).
 ##
 ## İşaret kafanın PLATE_GAP üstünde durur ve o anki sprite karesine göre kafayla birlikte hafifçe süzülür (enemy.gd
 ## get_boss_marker_offset, boss_bar_art.gd head_top_local). Boss ölünce gizlenir. enemy.gd'nin eski çubuk arayüzünü
 ## (set_offset/set_health/set_shield) korur: o çağrılar değişmeden çalışır, sadece can/kalkan burada çizilmez.
-## Plaka 15 yerel birim = 30 ekran px (1 yerel birim = 2 ekran px, kamera zoom 2).
+## Kafatası 11x15 yerel birim = 22x30 ekran px (1 doku pikseli = 1 ekran px; 1 yerel birim = 2 ekran px, kamera zoom 2).
 
 const ArtScript: GDScript = preload("res://scripts/boss_bar_art.gd")
 ## Yumuşatma hızı (1/sn): kareden kareye ±1-2 texel'lik kafa oynamasını biraz sönümler, durum geçişlerinde (saldırı kolu) kayar.
@@ -55,4 +56,4 @@ func _process(delta: float) -> void:
 
 @warning_ignore("integer_division")
 func _draw() -> void:
-	ArtScript.skull_plate(self, Vector2(-float(ArtScript.PLATE_SIZE / 2), y_offset), 1.0)
+	ArtScript.skull_plate(self, Vector2(-float(ArtScript.PLATE_SIZE) * 0.5, y_offset), 1.0)

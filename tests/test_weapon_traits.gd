@@ -15,17 +15,18 @@ const WeaponTraitsScript: GDScript = preload("res://scripts/weapon_traits/weapon
 ## Kullanıcının seçtiği silah -> efsun (artifact "Silah Efsunları", 2026-10-08).
 const EXPECTED := {
 	"dagger": "kanayan_kesikler", "pence": "kanli_pence", "topuz": "sismik_dalga", "uzunkilic": "wind_sword",
-	"fire_staff": "ates_nefesi", "lightning_staff": "zincir_yildirim", "tabanca": "seri_parmak", "tuftuf": "bulasici_salgi",
-	"tufek": "delici_mermi", "arcane": "yankilanan_buyu", "yay": "uclu_ok", "crossbow": "zincir_civata",
-	"boomerang": "cifte_donus", "buz_asasi": "kirik_buz", "fisek": "kivilcim_yagmuru",
+	"fire_staff": "ates_nefesi", "lightning_staff": "zincir_yildirim", "tabanca": "seri_parmak", "tuftuf": "sicrayan_zehir", ## madde 592 (Bulaşıcı Salgı yerine)
+	"tufek": "delici_mermi", "arcane": "yankilanan_buyu", "yay": "uclu_ok", "crossbow": "balista", ## madde 553 (Zincir Cıvata yerine, kullanıcı balista görselini seçti)
+	"boomerang": "seken_celik", "buz_asasi": "kirik_buz", "fisek": "kivilcim_yagmuru", ## madde 591 (Çifte Dönüş yerine, öneri onaylandı)
 	"mizrak": "cirit", ## madde 305 (öneri kullanıcıya sunuldu, onaylandı)
 	"gokkusagi": "goz_kamastiran", ## madde 306 (Gökkuşağı Asası, öneri onaylandı)
 	"kalkan": "siper", ## madde 338 (Kalkan, öneri kişisel + sabit kalkanla onaylandı)
 	"yinyang": "denge", ## madde 334 (Yin Yang Kitabı, öneri menzilsiz kalkanla onaylandı)
 	"pompali": "dip_atis", ## madde 448 (Pompalı Tüfek, öneri onaylandı)
+	"makineli": "kizisan_namlu", ## madde 652 (Makineli, kullanıcı tasarımı: hızlanan şarjör)
 }
-const NEW_IDS := ["kanayan_kesikler", "kanli_pence", "zincir_yildirim", "seri_parmak", "bulasici_salgi", "delici_mermi", "yankilanan_buyu",
-	"uclu_ok", "zincir_civata", "cifte_donus", "kirik_buz", "kivilcim_yagmuru", "cirit", "siper", "denge", "dip_atis"]
+const NEW_IDS := ["kanayan_kesikler", "kanli_pence", "zincir_yildirim", "seri_parmak", "sicrayan_zehir", "delici_mermi", "yankilanan_buyu",
+	"uclu_ok", "balista", "seken_celik", "kirik_buz", "kivilcim_yagmuru", "cirit", "siper", "denge", "dip_atis", "kizisan_namlu"]
 const RUN_TIME := 4.0
 const ENEMY_HP := 60000.0
 
@@ -72,6 +73,19 @@ func test_new_definitions_have_four_upgrades_and_a_final() -> void:
 		assert(full == rev, "%s: geliştirme sırası sonucu değiştirmemeli" % id)
 		assert(bool(full["is_final"]) and int(full["up_count"]) == 4, "%s: çözüm durumu" % id)
 		assert(ResourceLoader.exists(WeaponTraitsScript.script_path(id)) or id == "delici_mermi", "%s: davranış scripti yerinde olmalı (delici_mermi tamamen ortak anahtarlarla)" % id)
+
+
+func test_balista_numbers() -> void:
+	## madde 553: temel her 4. atış / %150 SG / 70 birim; 4 geliştirme -> her 3. atış, %200, 91 birim, 0,5 sn sersemlik; final ikinci ok.
+	var base: Dictionary = EnchantDefs.resolve({"id": "balista", "ups": [], "final": false}, "crossbow")
+	assert(int(base["bal_every"]) == 4 and is_equal_approx(float(base["bal_ap"]), 1.5) and is_equal_approx(float(base["bal_radius"]), 70.0), "temel sayılar: %s" % str(base))
+	assert(is_zero_approx(float(base["bal_stun"])) and is_zero_approx(float(base["bal_second"])), "temelde sersemlik/ikinci ok yok")
+	var ups: Dictionary = EnchantDefs.resolve({"id": "balista", "ups": [0, 1, 2, 3], "final": false}, "crossbow")
+	assert(int(ups["bal_every"]) == 3 and is_equal_approx(float(ups["bal_ap"]), 2.0) and is_equal_approx(float(ups["bal_radius"]), 91.0)
+			and is_equal_approx(float(ups["bal_stun"]), 0.5) and is_zero_approx(float(ups["bal_second"])), "4 geliştirme: %s" % str(ups))
+	var full: Dictionary = EnchantDefs.resolve({"id": "balista", "ups": [0, 1, 2, 3], "final": true}, "crossbow")
+	assert(is_equal_approx(float(full["bal_second"]), 1.0), "final ikinci ok ekler")
+	assert(not ResourceLoader.exists("res://scripts/weapon_traits/zincir_civata.gd"), "Zincir Cıvata kaldırıldı")
 
 
 func test_new_weapon_entry_and_ensure_trait() -> void:
@@ -261,7 +275,6 @@ func _run_trait(key: String) -> Dictionary:
 	var any_stun: bool = false
 	var any_frozen: bool = false
 	var any_poison: bool = false
-	var any_plague: bool = false
 	var max_stacks: int = 0
 	var t0: int = Time.get_ticks_msec()
 	while Time.get_ticks_msec() - t0 < int(RUN_TIME * 1000.0):
@@ -275,7 +288,6 @@ func _run_trait(key: String) -> Dictionary:
 				any_stun = any_stun or bool(e.get("is_stunned"))
 				any_frozen = any_frozen or bool(e.get("is_frozen"))
 				any_poison = any_poison or bool(e.call("is_poisoned"))
-				any_plague = any_plague or not (e.get("_plague") as Dictionary).is_empty()
 	var hp1: float = 0.0
 	for e in enemies:
 		if is_instance_valid(e) and e.get("is_dead") != true:
@@ -290,15 +302,18 @@ func _run_trait(key: String) -> Dictionary:
 			if max_dots <= 0:
 				fails.append("kanama yükü hiç birikmedi")
 		"zincir_yildirim":
-			if int(beh.call("chain_bonus")) != 2 or not is_equal_approx(float(beh.call("chain_pct", 0.5)), 0.35) or not is_equal_approx(float(beh.call("chain_range_mult")), 0.75):
-				fails.append("zincir: 2 atlama / %35 / menzil x0,75 olmalı (2026-10-10 denge)")
+			if int(beh.call("chain_bonus")) != 2 or not is_equal_approx(float(beh.call("chain_pct", 0.5)), 0.50) or not is_equal_approx(float(beh.call("chain_range_mult")), 0.75):
+				fails.append("zincir: 2 atlama / %50 / menzil x0,75 olmalı (2026-11-14 denge: %35 -> %50)")
 		"seri_parmak":
 			notes += " yığın=%d" % max_stacks
 			if max_stacks < 1:
 				fails.append("öldürme saldırı hızı yığını vermedi (yığın %d)" % max_stacks)
-		"bulasici_salgi":
-			if not any_poison or not any_plague:
-				fails.append("zehir ya da bulaşma kaydı yok (zehir %s, bulaşma %s)" % [str(any_poison), str(any_plague)])
+		"sicrayan_zehir":
+			## Bu düzende yaratıklar ölmez (60000 can) -> sıçrama ayrı testte (test_sicrayan_zehir_*); burada zehir + asanın kaydı.
+			var tracked: int = (beh.get("_poisoned") as Dictionary).size()
+			notes += " zehirli=%d" % tracked
+			if not any_poison or tracked <= 0:
+				fails.append("zehir ya da asanın zehir kaydı yok (zehir %s, kayıt %d)" % [str(any_poison), tracked])
 		"delici_mermi":
 			if int(beh.call("n", "pierce")) != 2 or not is_equal_approx(float(beh.call("f", "pierce_ramp")), 0.0):
 				fails.append("delme 2 / tabanda artış YOK olmalı (2026-10-10 denge; artış Kinetik Enerji geliştirmesinde)")
@@ -311,14 +326,14 @@ func _run_trait(key: String) -> Dictionary:
 			notes += " ok=%d" % arrows
 			if attacks >= 3 and arrows < attacks + 2:
 				fails.append("yelpaze okları yok: %d ok / %d saldırı" % [arrows, attacks])
-		"zincir_civata":
-			if not any_stun:
-				fails.append("delinen düşman sersemlemedi")
-		"cifte_donus":
-			var booms: int = int(_node_counts.get("res://scenes/boomerang_projectile.tscn", 0))
-			notes += " bumerang=%d" % booms
-			if attacks >= 4 and booms < attacks + 1:
-				fails.append("ikiz bumerang yok: %d bumerang / %d saldırı" % [booms, attacks])
+		"balista":
+			notes += " ok=%d" % int(beh.get("drops"))
+			if attacks >= 4 and int(beh.get("drops")) < 1:
+				fails.append("balista oku hiç düşmedi (%d saldırı)" % attacks)
+		"seken_celik":
+			notes += " sekme=%d" % int(beh.get("bounces"))
+			if attacks >= 2 and int(beh.get("bounces")) < 1:
+				fails.append("çakram hiç sekmedi (%d saldırı, 8 düşman 55-95 birimde)" % attacks)
 		"kirik_buz":
 			if not any_frozen:
 				fails.append("hiçbir düşman donmadı")
@@ -330,7 +345,7 @@ func _run_trait(key: String) -> Dictionary:
 			if attacks >= 1 and int(beh.get("throws")) < 1:
 				fails.append("cirit hiç fırlatılmadı (%d saldırı)" % attacks)
 		"siper":
-			notes += " darbe=%d kalkan=%.0f" % [int(beh.get("bashes")), float(beh.get("gained"))]
+			notes += " darbe=%d" % int(beh.get("bashes"))
 			if attacks >= 1 and int(beh.get("bashes")) < 1:
 				fails.append("kalkan darbesi Siper'e hiç ulaşmadı (%d saldırı)" % attacks)
 		"dip_atis":
@@ -424,6 +439,87 @@ func test_kirik_buz_freezes_every_second_hit_even_when_every_hit_is_a_different_
 	for n in [p] + foes:
 		if is_instance_valid(n):
 			n.free()
+	GameManager.owned_weapons = _saved_weapons
+	if prev_scene != null and is_instance_valid(prev_scene) and prev_scene.get_parent() == get_tree().root:
+		get_tree().current_scene = prev_scene
+
+
+## Madde 592 (2026-11-11, kullanıcı: "çoğu yaratık çabucak ölüyor zaten" -> Sıçrayan Zehir seçildi): sayılar + tanım.
+func test_sicrayan_zehir_numbers() -> void:
+	var base: Dictionary = EnchantDefs.resolve({"id": "sicrayan_zehir", "ups": [], "final": false}, "tuftuf")
+	assert(is_equal_approx(float(base["leap_ap"]), 0.5) and is_equal_approx(float(base["leap_range"]), 110.0), "temel: %50 SG / 110 birim")
+	assert(int(base["leap_hops"]) == 3 and int(base["leap_count"]) == 1, "temel: zincir 3, ölümde 1 damla")
+	assert(is_equal_approx(float(base["poison_dur"]), 6.0) and not base.has("plague_radius"), "zehir 6 sn (2026-11-14: 4 -> 6), eski bulaşma anahtarı yok")
+	var full: Dictionary = EnchantDefs.resolve({"id": "sicrayan_zehir", "ups": [0, 1, 2, 3], "final": true}, "tuftuf")
+	assert(is_equal_approx(float(full["leap_ap"]), 0.7) and int(full["leap_hops"]) == 4 and is_equal_approx(float(full["leap_range"]), 150.0), "geliştirmeler")
+	assert(is_equal_approx(float(full["poison_dur"]), 8.0) and int(full["leap_count"]) == 2, "Uzun Etki 8 sn + Kara Veba 2 damla")
+	assert(not ResourceLoader.exists("res://scripts/weapon_traits/bulasici_salgi.gd"), "Bulaşıcı Salgı kaldırıldı")
+
+
+## Zehirlenen düşman ölünce cesetten en yakın düşmana damla sıçrar (LEAP_TIME sonra hasar + zehir), zincir kısalarak sürer;
+## zehirsiz ölüm sıçratmaz, kalan sıçrama 0 iken sıçramaz, hedef seçimi önce asanın zehirlemediği düşman.
+func test_sicrayan_zehir_leaps_from_poisoned_corpse_and_chains() -> void:
+	var prev_scene: Node = get_tree().current_scene
+	get_tree().current_scene = self
+	NetworkManager.is_multiplayer_active = false
+	GameManager.selected_char_id = 1
+	GameManager.selected_character = int(Characters.DEFS[1]["skill"])
+	_saved_weapons = GameManager.owned_weapons.duplicate(true)
+	GameManager.owned_weapons = [EnchantDefs.new_weapon_entry("tuftuf", 1, 0)]
+	var p: Node2D = PlayerScene.instantiate()
+	add_child(p)
+	for w in p.owned_weapon_nodes.duplicate():
+		if is_instance_valid(w):
+			w.queue_free()
+	p.owned_weapon_nodes.clear()
+	p.global_position = Vector2(1000.0, 1000.0) ## asa menzili 180: yaratıklara ateş etmesin (hasarlar yalnız damladan)
+	assert(p.buy_weapon_copy("tuftuf", 1))
+	var beh: Node = p.owned_weapon_nodes[0].get("enchant_behavior")
+	assert(beh != null and str(beh.get_script().resource_path).ends_with("sicrayan_zehir.gd"), "Zehir Asası doğuştan Sıçrayan Zehir'le gelir")
+	var victim: Node2D = _make_enemy(Vector2(4060.0, 4000.0), ENEMY_HP)
+	var near: Node2D = _make_enemy(Vector2(4120.0, 4000.0), ENEMY_HP)
+	var third: Node2D = _make_enemy(Vector2(4200.0, 4000.0), ENEMY_HP)
+	var far: Node2D = _make_enemy(Vector2(4600.0, 4000.0), ENEMY_HP)
+	var plain: Node2D = _make_enemy(Vector2(4600.0, 4300.0), ENEMY_HP)
+	await get_tree().physics_frame
+	var ap: float = float(beh.call("ap"))
+	var leap_time: float = float(beh.get_script().get_script_constant_map()["LEAP_TIME"])
+	## Zehirsiz ölüm: sıçrama yok.
+	plain.call("die")
+	assert(int(beh.get("leaps")) == 0, "zehirsiz düşmanın ölümü damla sıçratmamalı")
+	## Zehirle + öldür -> yakındakine damla.
+	beh.call("apply_poison_to", victim)
+	assert(int((beh.get("_poisoned") as Dictionary)[victim.get_instance_id()]["hops"]) == 3, "asanın atışı tam zincir (3)")
+	victim.call("die")
+	assert(int(beh.get("leaps")) == 1, "zehirli ölüm tek damla sıçratmalı (leaps %d)" % int(beh.get("leaps")))
+	var drip: Node = get_node_or_null("PoisonDripFx")
+	assert(drip != null and int(drip.call("leap_count")) == 1, "damla görseli uçuyor")
+	assert(is_equal_approx(float(near.health), ENEMY_HP), "damla varmadan hasar yok")
+	await get_tree().create_timer(leap_time + 0.12).timeout
+	assert(float(near.health) <= ENEMY_HP - ap * 0.5 * 0.99, "varışta %%50 SG: %.1f" % float(near.health))
+	assert(bool(near.call("is_poisoned")), "damla hedefi zehirler")
+	assert(int((beh.get("_poisoned") as Dictionary)[near.get_instance_id()]["hops"]) == 2, "zincir 1 kısalır")
+	assert(is_equal_approx(float(third.health), ENEMY_HP) and is_equal_approx(float(far.health), ENEMY_HP), "başkasına dokunulmaz")
+	assert(int(drip.call("leap_count")) == 0, "varan damla görselden düşer (taç sıçraması kalır)")
+	## Zincir: yakındaki ölünce üçüncüye sıçrar (uzaktaki menzil dışı).
+	near.call("die")
+	await get_tree().create_timer(leap_time + 0.12).timeout
+	assert(int(beh.get("leaps")) == 2 and float(third.health) < ENEMY_HP, "zincir ikinci kez sıçramalı")
+	assert(int((beh.get("_poisoned") as Dictionary)[third.get_instance_id()]["hops"]) == 1, "zincir yine kısalır")
+	assert(is_equal_approx(float(far.health), ENEMY_HP), "110 birim dışı sıçramaz")
+	## Kalan sıçrama 0: hiç gönderilmez.
+	beh.call("_leap_from", third.global_position, third, 0)
+	assert(int(beh.get("leaps")) == 2, "kalan sıçrama 0 iken damla yok")
+	## Hedef seçimi: yakın ama asanın zehirlediği yerine uzaktaki zehirsiz düşman.
+	var a: Node2D = _make_enemy(Vector2(4000.0, 4600.0), ENEMY_HP)
+	var b: Node2D = _make_enemy(Vector2(4080.0, 4600.0), ENEMY_HP)
+	await get_tree().physics_frame
+	beh.call("apply_poison_to", a)
+	var picked: Node = beh.call("leap_target", Vector2(4000.0, 4570.0), null)
+	assert(picked == b, "önce asanın zehirlemediği düşman seçilmeli")
+	for nd in [p, victim, near, third, far, plain, a, b]:
+		if is_instance_valid(nd):
+			nd.free()
 	GameManager.owned_weapons = _saved_weapons
 	if prev_scene != null and is_instance_valid(prev_scene) and prev_scene.get_parent() == get_tree().root:
 		get_tree().current_scene = prev_scene
@@ -623,6 +719,8 @@ func test_fire_staff_spray_buff_numbers_and_catalog_text_agree() -> void:
 	assert(absf(per_sec - 1.08) < 0.001, "püskürtme tabanı 0,27 / 0,25 sn = 1,08: %.3f" % per_sec)
 	## 2026-10-20: tik aralığı `_effective_fire_wait` ile ölçeklenir (ates_nefesi.gd _interval), o da WEAPON_ATTACK_SPEED_MULT'a (0,7) bölünür -> gerçek saniyelik oran 1,08 x 0,7 = %76.
 	assert(absf(per_sec * GameManager.WEAPON_ATTACK_SPEED_MULT - 0.756) < 0.001, "gerçek püskürtme saniyede %%76")
-	assert(float(base["spray_range"]) == 140.0 and float(base["elem_ap"]) == 0.14, "menzil 140, yanma %14")
+	## 2026-11-13 (madde 639): menzil = flamethrower alevinin boyu (177 sanat px x 0,903 = 160).
+	var flame_len: float = float(preload("res://scripts/weapon_traits/flamethrower_shape.gd").LENGTH) * 0.903
+	assert(float(base["spray_range"]) == 160.0 and absf(flame_len - 160.0) < 1.0 and float(base["elem_ap"]) == 0.14, "menzil 160 (alev boyu %.1f), yanma %%14" % flame_len)
 	var text: String = str(WeaponCatalogScript.DESCRIPTIONS["fire_staff"])
-	assert(text.contains("%76") and text.contains("140"), "katalog metni sayılarla aynı (%76 = 1,08 x 0,7; 2026-10-20'de %108 bayattı): " + text)
+	assert(text.contains("%76") and text.contains("160"), "katalog metni sayılarla aynı (%76 = 1,08 x 0,7; 2026-10-20'de %108 bayattı): " + text)

@@ -10,7 +10,8 @@ func test_every_character_has_base_stats() -> void:
 	for id in Characters.DEFS.keys():
 		assert(Characters.BASE_STATS.has(id), "BASE_STATS'ta eksik karakter: %s" % str(id))
 		var b: Dictionary = Characters.get_base_stats(int(id))
-		for k in ["hp", "speed", "ap", "atk"]:
+		for k in ["hp", "speed", "ap"]:
+			assert(not b.has("atk"), "karakter başına Saldırı Hızı bonusu kaldırıldı (id %s)" % str(id))
 			assert(b.has(k), "%s alanı eksik (id %s)" % [k, str(id)])
 
 
@@ -32,8 +33,8 @@ func test_player_starts_with_character_base_stats() -> void:
 		assert(is_equal_approx(p.damage_bonus, float(b["ap"])), "Saldırı Gücü yanlış (id %s): %s" % [str(id), p.damage_bonus])
 		var want_speed: float = scene_speed * float(b["speed"]) / Characters.BASE_MOVE_SPEED * EntityScale.SPEED
 		assert(absf(p.speed - want_speed) < 0.01, "Hız yanlış (id %s): %s vs %s" % [str(id), p.speed, want_speed])
-		## fire_rate_mult = ham taban (Elara/Matthew pasifleri ayrı çarpan, get_attack_speed_bonus_percent'e onlar da girer).
-		var want_mult: float = 1.0 / (1.0 + float(b["atk"]) / 100.0)
+		## fire_rate_mult = ham taban 1,0: karakter başına Saldırı Hızı bonusu yok (2026-11-14; Elara/Matthew pasifleri ayrı çarpan).
+		var want_mult: float = 1.0 - Characters.signature_value(int(id), "atk_speed") ## Elara'nın özel statı (madde 677)
 		assert(absf(p.fire_rate_mult - want_mult) < 0.001, "Saldırı Hızı yanlış (id %s): %s vs %s" % [str(id), p.fire_rate_mult, want_mult])
 		p.queue_free()
 	GameManager.selected_char_id = saved_id
@@ -41,8 +42,7 @@ func test_player_starts_with_character_base_stats() -> void:
 
 func test_menu_stat_text_matches_table() -> void:
 	assert(MenuKit.base_stat_text(7, "hp") == "150", "Şovalye Can 150 olmalı")
-	assert(MenuKit.base_stat_text(4, "atk") == "0,9/sn", "Büyücü Kız -%10 -> 0,9/sn: %s" % MenuKit.base_stat_text(4, "atk"))
-	assert(MenuKit.base_stat_text(5, "atk") == "1,1/sn", "Assasin +%10 -> 1,1/sn")
+	assert(MenuKit.STAT_ROWS.size() == 3, "seçim ekranında Saldırı Hızı satırı olmamalı")
 	var box: Control = MenuKit.make_stats_grid(1)
 	add_child(box)
 	var labels: Array = box.get_meta("stat_labels")

@@ -90,6 +90,10 @@ var main_scene_path: String = MAIN_SCENE_PATH
 ## ayak hizası her klibin ilk karesindeki en alt dolu satır (_foot_offset). Varışta parti durur (idle_right), yazı "OYUN BAŞLIYOR":
 ## ardından gelen sahne kurulumu donması duran bir karede geçer.
 ## Yerleşim ekran ortasına göre (1920x1080 taban), ipucu satırı alt kenara bağlı.
+## 2026-11-13 (madde 660, kullanıcı: "potpourri başlığı ... oyun yükleme ekranında da gösterilsin"): yukarıdaki "başlık YOK" kuralı değişti -
+## partinin üstünde ortalı POTPOURRI logosu (ana menüyle aynı potpourri_logo.gd, harfler hafifçe dalgalanır).
+const PotpourriLogo := preload("res://scripts/potpourri_logo.gd")
+const LOGO_TOP := -360.0 ## logo kontrolünün üstü, ekran ortasına göre (harf dalgası payı dahil)
 const HudTheme := preload("res://scripts/hud_theme.gd")
 const ShopsFlag := preload("res://scripts/shops_flag.gd")
 const FONT_TEXT: Font = preload("res://assets/fonts/m5x7.ttf")
@@ -193,6 +197,12 @@ func _build_scene() -> void:
 	_stage.set_anchors_preset(Control.PRESET_CENTER)
 	holder.add_child(_stage)
 	_build_party()
+
+	var logo: Control = PotpourriLogo.new()
+	logo.name = "Logo"
+	holder.add_child(logo)
+	var lsz: Vector2 = logo.custom_minimum_size
+	_center_anchor(logo, Rect2(-roundf(lsz.x * 0.5), LOGO_TOP, lsz.x, lsz.y))
 
 	## Çubuk: kuyu (WIN_INSET + 3 px WIN_LINE) + dolgu; dolgunun 6 px saydam kenarı kuyuyu gösterir (3 px boşluk).
 	var trough := StyleBoxFlat.new()

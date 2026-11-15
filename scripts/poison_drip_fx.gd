@@ -41,9 +41,17 @@ const H_BLEND := 150.0
 ## isabet
 const SPLASH_N := 6
 const SPLASH_BODY := 10.0 ## isabet noktası ayak hizasındaysa (kaster mermiyi yaratığın konumuna ışınlar) gövdenin bu kadar üstünden
+## Sıçrayan Zehir (madde 592): cesetten hedefe yay çizen damla = asanın mermi gövdesi (aynı doku/piksel), uçuş yönüne döner, varınca
+## normal isabetin taç sıçraması. Gövde hizasından kalkar/iner (SPLASH_BODY), tepe yüksekliği mesafeyle (LEAP_ARC_*).
+const LEAP_BODY := preload("res://assets/weapons/mermi/zehir_govde.png")
+const LEAP_ARC_K := 0.3
+const LEAP_ARC_MIN := 10.0
+const LEAP_ARC_MAX := 28.0
+const MAX_LEAPS := 24
 
 var _drops: Array = [] ## {g: Vector2, z, vz, vx, k}
 var _puddles: Array = [] ## {p: Vector2, t, life, k}
+var _leaps: Array = [] ## {a: Vector2, b: Vector2, t, dur, arc}
 var _ground: Node2D = null
 
 
@@ -95,6 +103,24 @@ static func splash(tree: SceneTree, origin: Vector2, feet_y: float) -> void:
 	m.call("_add_puddle", Vector2(o.x, feet_y + 1.0), K_PUDDLE_BIG, PUDDLE_LIFE_BIG)
 
 
+## Sıçrayan Zehir damlası: from = ceset (ayak hizası), to = hedef (ayak hizası), dur = uçuş süresi (behavior LEAP_TIME ile aynı).
+static func leap(tree: SceneTree, from: Vector2, to: Vector2, dur: float) -> void:
+	var m := _mgr(tree)
+	if m == null:
+		return
+	m.call("_add_leap", from, to, maxf(0.05, dur))
+
+
+## Yaydaki konum (çizim noktası) ve teğet: u = 0..1. Test edilebilsin diye statik.
+static func leap_point(a: Vector2, b: Vector2, arc: float, u: float) -> Vector2:
+	var g: Vector2 = a.lerp(b, u)
+	return Vector2(g.x, g.y - SPLASH_BODY - arc * 4.0 * u * (1.0 - u))
+
+
+static func leap_arc(a: Vector2, b: Vector2) -> float:
+	return clampf(a.distance_to(b) * LEAP_ARC_K, LEAP_ARC_MIN, LEAP_ARC_MAX)
+
+
 static func _mgr(tree: SceneTree) -> Node2D:
 	if tree == null or tree.current_scene == null:
 		return null
@@ -140,6 +166,13 @@ func _add_puddle(p: Vector2, k: int, life: float) -> void:
 	set_process(true)
 
 
+func _add_leap(a: Vector2, b: Vector2, dur: float) -> void:
+	if _leaps.size() >= MAX_LEAPS:
+		_leaps.pop_front()
+	_leaps.append({"a": a, "b": b, "t": 0.0, "dur": dur, "arc": leap_arc(a, b)})
+	set_process(true)
+
+
 func _process(delta: float) -> void:
 	var i: int = 0
 	while i < _drops.size():
@@ -158,6 +191,16 @@ func _process(delta: float) -> void:
 		d["g"] = g
 		i += 1
 	i = 0
+	while i < _leaps.size():
+		var l: Dictionary = _leaps[i]
+		l["t"] = float(l["t"]) + delta
+		if float(l["t"]) >= float(l["dur"]):
+			_leaps.remove_at(i)
+			var b: Vector2 = l["b"]
+			splash(get_tree(), b, b.y) ## varış = normal isabetin taç sıçraması (ek düğüm yok)
+			continue
+		i += 1
+	i = 0
 	while i < _puddles.size():
 		var p: Dictionary = _puddles[i]
 		p["t"] = float(p["t"]) + delta
@@ -168,7 +211,7 @@ func _process(delta: float) -> void:
 	queue_redraw()
 	if is_instance_valid(_ground):
 		_ground.queue_redraw()
-	if _drops.is_empty() and _puddles.is_empty():
+	if _drops.is_empty() and _puddles.is_empty() and _leaps.is_empty():
 		set_process(false)
 
 
@@ -179,6 +222,19 @@ func _draw() -> void:
 			k = K_FAST
 		var g: Vector2 = d["g"]
 		_blit(self, Vector2(g.x, g.y - float(d["z"])), k, 1.0)
+	if _leaps.is_empty():
+		return
+	var sz: Vector2 = LEAP_BODY.get_size() * WORLD_PX
+	for l in _leaps:
+		var a: Vector2 = l["a"]
+		var b: Vector2 = l["b"]
+		var arc: float = float(l["arc"])
+		var u: float = clampf(float(l["t"]) / float(l["dur"]), 0.0, 1.0)
+		var at: Vector2 = leap_point(a, b, arc, u)
+		var tangent: Vector2 = (b - a) + Vector2(0.0, -arc * 4.0 * (1.0 - 2.0 * u))
+		draw_set_transform((at * 2.0).round() * 0.5, tangent.angle() if tangent.length_squared() > 0.01 else 0.0, Vector2.ONE)
+		draw_texture_rect(LEAP_BODY, Rect2(-sz * 0.5, sz), false)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 func _draw_puddles(layer: CanvasItem) -> void:
@@ -205,3 +261,7 @@ func drop_count() -> int:
 
 func puddle_count() -> int:
 	return _puddles.size()
+
+
+func leap_count() -> int:
+	return _leaps.size()

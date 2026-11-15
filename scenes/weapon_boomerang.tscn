@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" path="res://scripts/weapon.gd" id="1"]
 [ext_resource type="PackedScene" path="res://scenes/boomerang_projectile.tscn" id="2"]
-[ext_resource type="Texture2D" path="res://assets/weapons/boomerang/icon.png" id="3"]
+[ext_resource type="Texture2D" path="res://assets/weapons/yeni/chakram.png" id="3"]
 
 [node name="WeaponBoomerang" type="Node2D"]
 script = ExtResource("1")

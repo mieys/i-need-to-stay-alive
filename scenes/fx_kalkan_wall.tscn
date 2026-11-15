@@ -5,7 +5,6 @@
 
 [node name="FxKalkanWall" type="AnimatedSprite2D"]
 texture_filter = 1
-z_index = -1
 sprite_frames = ExtResource("2")
 animation = &"play"
 script = ExtResource("1")

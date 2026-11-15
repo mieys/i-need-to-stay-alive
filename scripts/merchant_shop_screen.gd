@@ -65,15 +65,15 @@ const BAG_TILE := 48.0
 
 ## Stat satırlarının simgeleri (Items.STAT_LABELS anahtarı -> doku).
 const STAT_ICONS := {
-	"damage_bonus": "res://assets/ui/stat_mini/damage.png", "item_fire_rate_percent": "res://assets/ui/stat_mini/fire_rate.png",
-	"crit_chance_bonus": "res://assets/ui/stat_mini/crit_chance.png", "item_crit_damage_bonus": "res://assets/ui/stat_mini/crit_damage.png", "max_health": "res://assets/ui/level_up_icons/stat_max_health.png",
-	"item_health_regen": "res://assets/ui/stat_mini/health_regen.png", "lifesteal_percent": "res://assets/ui/stat_mini/lifesteal.png",
-	"item_shield_power_flat": "res://assets/ui/stat_mini/shield_amount.png", "item_shield_regen_flat": "res://assets/ui/stat_mini/shield_regen.png",
-	"item_shield_regen_percent": "res://assets/ui/stat_mini/shield_regen.png", "shield_pen_percent": "res://assets/ui/stat_mini/shield_pen_percent.png",
-	"cooldown_reduction_percent": "res://assets/ui/stat_mini/cooldown_reduction.png", "item_speed_percent": "res://assets/ui/stat_mini/speed.png",
-	"dodge_chance": "res://assets/ui/stat_mini/dodge.png", "heal_shield_power": "res://assets/ui/stat_mini/heal_power.png",
-	"luck": "res://assets/ui/stat_mini/luck.png", "exp_gain_percent": "res://assets/ui/level_up_icons/stat_exp_gain.png",
-	"shield_protection_bonus": "res://assets/ui/stat_mini/shield_protection.png",
+	"damage_bonus": "res://assets/ui/stat_icons/damage.png", "item_fire_rate_percent": "res://assets/ui/stat_icons/fire_rate.png",
+	"crit_chance_bonus": "res://assets/ui/stat_icons/crit_chance.png", "item_crit_damage_bonus": "res://assets/ui/stat_icons/crit_damage.png", "max_health": "res://assets/ui/stat_icons/max_health.png",
+	"item_health_regen": "res://assets/ui/stat_icons/health_regen.png", "lifesteal_percent": "res://assets/ui/stat_icons/lifesteal.png",
+	"item_shield_power_flat": "res://assets/ui/stat_icons/shield_amount.png", "item_shield_regen_flat": "res://assets/ui/stat_icons/shield_regen.png",
+	"item_shield_regen_percent": "res://assets/ui/stat_icons/shield_regen.png", "shield_pen_percent": "res://assets/ui/stat_icons/shield_pen_percent.png",
+	"cooldown_reduction_percent": "res://assets/ui/stat_icons/cooldown_reduction.png", "item_speed_percent": "res://assets/ui/stat_icons/speed.png",
+	"dodge_chance": "res://assets/ui/stat_icons/dodge.png", "heal_shield_power": "res://assets/ui/stat_icons/heal_power.png",
+	"luck": "res://assets/ui/stat_icons/luck.png", "exp_gain_percent": "res://assets/ui/stat_icons/exp_gain.png",
+	"shield_protection_bonus": "res://assets/ui/stat_icons/shield_protection.png",
 }
 
 var _k = DarkKit.new(DarkKit.PAL_SLATE)
@@ -1062,7 +1062,7 @@ static func reroll_cost(rerolls_done: int) -> int:
 	var tier: int = clampi(1 + int(GameManager.game_time / MERCHANT_PRICE_TIER_DURATION), 1, 15)
 	var price_scale: float = (MERCHANT_PRICE_EARLY_SCALE + float(tier - 1) * MERCHANT_PRICE_PER_TIER_GROWTH) / MERCHANT_PRICE_EARLY_SCALE
 	var base: int = maxi(1, int(round(REROLL_BASE_COST * price_scale)))
-	return base * (1 + maxi(0, rerolls_done))
+	return GameManager.apply_shop_discount(base * (1 + maxi(0, rerolls_done))) ## Para ruhanisi / kalıcı indirim karıştırmaya da işler (2026-11-09)
 
 
 ## Ruhani "Para" pasifi indirimi (GameManager.apply_shop_discount) tek seferde, en sonda.

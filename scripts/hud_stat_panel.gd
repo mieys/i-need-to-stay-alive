@@ -17,7 +17,7 @@ const StatsPanelScript := preload("res://scripts/stats_panel.gd")
 ## STİL REHBERİ (madde 403, 2026-11-06): pürüzsüz Nunito kalktı -> can/kalkan çubuğunun sayı fontu PixeloidSans Bold,
 ## yerel boyutunun (9) tam katlarında (18 / 9) - oyunda ikinci ve son font ailesi bu (yazı m5x7, sayı Pixeloid).
 const BASE_FONT: Font = preload("res://assets/fonts/PixeloidSans-Bold.ttf")
-const ICON_DIR := "res://assets/ui/stat_mini_lol/" ## <id>.png, 48x48, 24 px çizilir
+const ICON_DIR := "res://assets/ui/stat_icons/" ## <id>.png, 48x48 (Raven 16x16 x3), 24 px çizilir; StatIcon ile aynı klasör
 const FONT_PX := 18
 const TAB_FONT_PX := 9
 const EMBOLDEN := 0.0 ## Pixeloid zaten kalın (Nunito SemiBold için 0,35'ti)
@@ -283,7 +283,7 @@ static func values_for(p: Node) -> Dictionary:
 	var regen: float = float(p.get("heal_regen_card_bonus") if "heal_regen_card_bonus" in p else 0.0) \
 		+ float(p.get("item_health_regen") if "item_health_regen" in p else 0.0)
 	return {
-		"damage": str(int(w.damage)) if w else "0",
+		"damage": str(int(round(float(p.call("get_displayed_attack_power"))))) if w and p.has_method("get_displayed_attack_power") else (str(int(w.damage)) if w else "0"),
 		"fire_rate": "%%%d" % int(round(float(p.call("get_attack_speed_bonus_percent")))) if p.has_method("get_attack_speed_bonus_percent") else "-",
 		"crit_chance": _pct(float(w.crit_chance)) if w else "-",
 		"crit_damage": _pct(float(w.crit_damage)) if w else "-",

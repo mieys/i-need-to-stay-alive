@@ -277,14 +277,15 @@ func test_pseudo_env_off_by_default() -> void:
 func test_definition_tables_localized_at_source() -> void:
 	_begin()
 	L.apply("tr")
-	assert(str(Characters.get_def(9).get("name")) == "Korsan" and Characters.get_def(9) == Characters.DEFS[9], "tr: tablo olduğu gibi")
+	assert(str(Characters.get_def(9).get("name")) == "Flint" and Characters.get_def(9) == Characters.DEFS[9], "tr: tablo olduğu gibi")
 	L.apply("en")
 	var d: Dictionary = Characters.get_def(9) ## Korsan
-	assert(str(d.get("name")) == "Pirate", "karakter adı çevrilmeli: %s" % d.get("name"))
+	assert(str(d.get("name")) == "Flint", "isim çevrilmez (madde 623): %s" % d.get("name"))
+	assert(str(d.get("title_name")) == "Black Fuse", "lakap çevrilmeli: %s" % d.get("title_name"))
 	assert(str(d.get("skill2_name")) == "Time Bomb")
 	assert(str(d.get("skill_desc")).begins_with("ABILITY:"), "açıklama çevrilmeli")
 	assert(d.get("skill") == Characters.DEFS[9].get("skill"), "mantık alanı aynı")
-	assert(str(Characters.get_def_raw(9).get("name")) == "Korsan", "ham tablo Türkçe kalır (balans kaydı)")
+	assert(str(Characters.get_def_raw(9).get("name")) == "Flint", "ham tablo Türkçe kalır (balans kaydı)")
 	assert(is_same(Characters.get_def(9), d), "dil başına önbellek")
 	var desc: String = Items.describe("kiyamet_bicagi") if Items.DEFS.has("kiyamet_bicagi") else ""
 	if desc != "":
@@ -296,5 +297,5 @@ func test_definition_tables_localized_at_source() -> void:
 			break
 	assert(not any_trait.contains("saldırı gücü"), "silah özelliği İngilizce: %s" % any_trait)
 	L.apply("tr")
-	assert(str(Characters.get_def(9).get("name")) == "Korsan", "tr'ye dönünce Türkçe")
+	assert(str(Characters.get_def(9).get("name")) == "Flint", "tr'ye dönünce Türkçe")
 	_end()

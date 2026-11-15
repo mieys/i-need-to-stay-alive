@@ -117,6 +117,9 @@ private:
 	std::vector<int32_t> view_frame; // Sprite2D'ye en son yazılan kare
 	// tahrik
 	std::vector<uint64_t> taunt_id; // kışkırtanın instance id'si (aday kimliği)
+	// Çalıda GİZLİ Şovalye'nin kubbesine odaklanan yaratığın odak sahibi kimliği (0 = yok): sahip yaratıktan saklı olsa da içindeki
+	// GÖRÜNÜR oyuncuya giden yaratık kubbeye vurur (apply_overrides doldurur, concealed_ai muaf tutar).
+	std::vector<uint64_t> zone_focus_id;
 	std::vector<float> taunt_t;
 	// korku
 	std::vector<float> fear_x, fear_y, fear_wdx, fear_wdy, fear_retarget;
@@ -272,6 +275,10 @@ private:
 		}
 		const auto it = stealth.find(t_id[t]);
 		return it != stealth.end() && !std::binary_search(it->second.begin(), it->second.end(), node_id[i]);
+	}
+	// concealed_from + hedef, yaratığın bu kare kubbe odağı olarak seçtiği gizli sahipse gizli sayılmaz (zone_focus_id).
+	inline bool concealed_ai(int32_t i, int32_t t) const {
+		return concealed_from(i, t) && !(t >= 0 && t < (int32_t)t_id.size() && zone_focus_id[i] != 0 && zone_focus_id[i] == t_id[t]);
 	}
 	int32_t apply_overrides(int32_t i, int32_t t);
 	bool has_los(int32_t i, int32_t t);

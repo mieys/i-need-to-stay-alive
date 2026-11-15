@@ -51,7 +51,7 @@ func test_progress_saves_bests_and_only_reports_broken_ones() -> void:
 func test_records_survive_a_fresh_load() -> void:
 	_begin()
 	RunRecordsScript.note_progress(_run(900.0, 8, 400, 0))
-	RunRecordsScript.record_victory({"time": 1500.0, "tier": 16, "kills": 900, "layer": 0, "solo": true, "char_id": 4})
+	RunRecordsScript.record_victory({"time": 1500.0, "tier": 10, "kills": 900, "layer": 0, "solo": true, "char_id": 4})
 	var d: Dictionary = RunRecordsScript.load_all() ## dosyadan sıfırdan okunur
 	assert(int(d["victories"]) == 1 and (d["victory_chars"] as Array) == [4], "zafer + karakter kalıcı")
 	assert(float(d["best_victory_time"]) == 1500.0)
@@ -72,15 +72,15 @@ func test_achievement_unlocks_once_and_stacks_in_order() -> void:
 
 func test_victory_unlocks_victory_achievements_and_best_time() -> void:
 	_begin()
-	var s := {"time": 1700.0, "tier": 16, "kills": 600, "layer": 0, "solo": true, "char_id": 7}
+	var s := {"time": 1700.0, "tier": 10, "kills": 600, "layer": 0, "solo": true, "char_id": 7}
 	var r: Dictionary = RunRecordsScript.record_victory(s)
-	for id in ["victory", "victory_solo", "final", "tier_15", "kills_500", "time_15"]:
+	for id in ["victory", "victory_solo", "tier_10", "kills_500", "time_15"]:
 		assert((r["achievements"] as Array).has(id), "zaferde '%s' açılmalı: %s" % [id, str(r["achievements"])])
 	assert(not (r["achievements"] as Array).has("victory_coop"), "tek oyunculu zaferde takım başarımı açılmamalı")
 	assert((r["records"] as Array).has("victory_time"), "ilk zafer = en hızlı zafer")
-	var faster: Dictionary = RunRecordsScript.record_victory({"time": 1600.0, "tier": 16, "kills": 600, "solo": true, "char_id": 7})
+	var faster: Dictionary = RunRecordsScript.record_victory({"time": 1600.0, "tier": 10, "kills": 600, "solo": true, "char_id": 7})
 	assert((faster["records"] as Array).has("victory_time"), "daha hızlı zafer rekor kırmalı")
-	var slower: Dictionary = RunRecordsScript.record_victory({"time": 1900.0, "tier": 16, "kills": 600, "solo": true, "char_id": 7})
+	var slower: Dictionary = RunRecordsScript.record_victory({"time": 1900.0, "tier": 10, "kills": 600, "solo": true, "char_id": 7})
 	assert(not (slower["records"] as Array).has("victory_time"), "daha yavaş zafer rekor kırmamalı")
 	var d: Dictionary = RunRecordsScript.load_all()
 	assert(int(d["victories"]) == 3 and float(d["best_victory_time"]) == 1600.0, "3 zafer, en hızlısı 1600")
@@ -89,7 +89,7 @@ func test_victory_unlocks_victory_achievements_and_best_time() -> void:
 
 func test_coop_victory_gives_team_achievement_not_solo() -> void:
 	_begin()
-	var r: Dictionary = RunRecordsScript.record_victory({"time": 1700.0, "tier": 16, "kills": 100, "solo": false, "char_id": 2})
+	var r: Dictionary = RunRecordsScript.record_victory({"time": 1700.0, "tier": 10, "kills": 100, "solo": false, "char_id": 2})
 	assert((r["achievements"] as Array).has("victory_coop"), "çok oyunculu zafer: Takım Ruhu")
 	assert(not (r["achievements"] as Array).has("victory_solo"))
 	_end()
@@ -99,7 +99,7 @@ func test_three_different_heroes_unlock_versatile_once() -> void:
 	_begin()
 	var got: Array = []
 	for cid in [1, 2, 2, 3]:
-		var r: Dictionary = RunRecordsScript.record_victory({"time": 1500.0, "tier": 16, "kills": 10, "solo": true, "char_id": cid})
+		var r: Dictionary = RunRecordsScript.record_victory({"time": 1500.0, "tier": 10, "kills": 10, "solo": true, "char_id": cid})
 		got.append((r["achievements"] as Array).has("victory_heroes_3"))
 	assert(got == [false, false, false, true], "3. FARKLI karakterde açılmalı (tekrar eden karakter saymaz): %s" % str(got))
 	assert((RunRecordsScript.load_all()["victory_chars"] as Array).size() == 3)
@@ -121,7 +121,7 @@ func test_run_end_accumulates_totals_and_cumulative_achievements() -> void:
 
 func test_endless_layer_record_and_achievements() -> void:
 	_begin()
-	var r: Dictionary = RunRecordsScript.note_progress(_run(2500.0, 16, 100, 10))
+	var r: Dictionary = RunRecordsScript.note_progress(_run(2500.0, 10, 100, 10))
 	assert((r["records"] as Array).has("layer"), "sonsuz kat rekoru")
 	assert((r["achievements"] as Array).has("layer_3") and (r["achievements"] as Array).has("layer_10"), "Kat 10: Kat 3 + Kat 10 başarımları")
 	assert(not (r["achievements"] as Array).has("layer_25"))
@@ -158,8 +158,8 @@ func test_last_run_records_marks_only_latest_run() -> void:
 	assert(second == ["kills"], "ikinci koşu sadece öldürmeyi kırdı: %s" % str(second))
 	RunRecordsScript.record_run_end(_run(100.0, 2, 10))
 	assert(RunRecordsScript.last_run_records(RunRecordsScript.load_all()).is_empty(), "rekorsuz koşudan sonra yeni yok")
-	RunRecordsScript.record_victory({"time": 1500.0, "tier": 16, "kills": 50, "solo": true, "char_id": 2})
-	RunRecordsScript.record_run_end({"time": 1500.0, "tier": 16, "kills": 50, "victory": true, "solo": true})
+	RunRecordsScript.record_victory({"time": 1500.0, "tier": 10, "kills": 50, "solo": true, "char_id": 2})
+	RunRecordsScript.record_run_end({"time": 1500.0, "tier": 10, "kills": 50, "victory": true, "solo": true})
 	var won: Array = RunRecordsScript.last_run_records(RunRecordsScript.load_all())
 	assert(won.has("victory_time") and won.has("tier") and won.has("time") and not won.has("kills"), "zafer koşusu: %s" % str(won))
 	_end()

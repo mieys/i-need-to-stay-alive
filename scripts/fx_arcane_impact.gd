@@ -8,6 +8,7 @@ class_name FxArcaneImpact
 ## Her sekme %12 büyür (hop), Efsunlu Büyü ölçeği fx_scale.
 
 const BuyucuFxScript := preload("res://scripts/buyucu_fx.gd")
+const GroundSlotScript := preload("res://scripts/ground_slot.gd")
 const BounceScript := preload("res://scripts/fx_arcane_skull_bounce.gd")
 const FPS := 20.0
 const THREAD_LIFE := 8.0 / FPS
@@ -17,6 +18,8 @@ const BRAND_DROP := 8.0
 var p0: Vector2 = Vector2.ZERO ## sekmenin kalkış noktası (lanet ipi buradan)
 var hop: int = 0
 var fx_scale: float = 1.0
+## E1 "Arcane Patlama" varken lanet_burst çizilmez (aynı noktada Yıldız Tozu patlıyor - iki patlama üst üste okunmuyordu, madde 563).
+var blast: bool = false
 var elapsed: float = 0.0
 var _n: Vector2 = Vector2.UP
 var _amp: float = 0.0
@@ -37,8 +40,10 @@ func _spawn_sheets(size: float) -> void:
 	if not is_inside_tree():
 		return
 	var tree: SceneTree = get_tree()
-	BuyucuFxScript.spawn_world(tree, "lanet_burst", global_position, 50, FPS, size)
-	BuyucuFxScript.spawn_world(tree, "lanet_brand", global_position + Vector2(0.0, BRAND_DROP * BuyucuFxScript.PX * size), 0, FPS, size)
+	if not blast:
+		BuyucuFxScript.spawn_world(tree, "lanet_burst", global_position, 50, FPS, size)
+	var brand: Sprite2D = BuyucuFxScript.spawn_world(tree, "lanet_brand", global_position + Vector2(0.0, BRAND_DROP * BuyucuFxScript.PX * size), 0, FPS, size)
+	GroundSlotScript.place(brand) ## yaratıkların altı (eskiden sonradan eklenen z 0 olarak yaratığın ayağının ÜSTÜNDE çiziliyordu)
 	var b: Array = BounceScript.bulge(p0, global_position)
 	_n = b[0]
 	_amp = b[1]

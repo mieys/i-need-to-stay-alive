@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Şarjör Doldurma</title>
+<style>
+:root{--bg:#1b1a17;--panel:#25231e;--line:#3a362e;--ink:#efe6d2;--mut:#a89f8a;--acc:#f8b844;--grass:#3f5a33}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,"Segoe UI",sans-serif;padding:16px}
+h1{font-size:20px;margin:0 0 4px}
+p.sub{margin:0 0 14px;color:var(--mut);max-width:980px}
+.bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+button{background:#302d26;color:var(--ink);border:1px solid var(--line);padding:6px 12px;border-radius:4px;font:inherit;cursor:pointer}
+button.on{border-color:var(--acc);color:var(--acc)}
+button.play{background:#4a3a14;border-color:var(--acc);color:#ffe2a0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px;margin-bottom:14px;max-width:1000px}
+.card h2{font-size:17px;margin:0 0 2px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.card .steps{color:var(--mut);font-size:13.5px;margin:4px 0 10px}
+.views{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start}
+.view{display:flex;flex-direction:column;gap:4px}
+.view span{font-size:12px;color:var(--mut)}
+canvas{background:var(--grass);border:1px solid #000;image-rendering:pixelated;max-width:100%}
+.timeline{font:12px/1.3 ui-monospace,Consolas,monospace;color:var(--mut);margin-top:8px;white-space:pre-wrap}
+</style>
+</head>
+<body>
+<h1>Şarjör doldurma prototipi</h1>
+<p class="sub">Sesler masaüstündeki 3 dosyadan parça parça kesildi; her parça animasyondaki anına oturur (doldurma süresi saldırı hızıyla kısalınca parçalar da öne çekilir, ses bozulmaz). Sol: büyütülmüş silah. Sağ: 1080p ekranda oyundaki gerçek boyut (silah karakterin üstünde süzülür, düşen şarjör/kovan yere iner).</p>
+<div class="bar">Hız:
+  <button data-k="1" class="on">Temel</button>
+  <button data-k="0.625">Saldırı hızı +%60</button>
+  <button data-k="2.5">Yavaş çekim (sessiz)</button>
+</div>
+<div id="cards"></div>
+
+<script src="assets.js"></script>
+<script>
+const A = window.SARJOR_ASSETS;
+
+// ---------------------------------------------------------------- palet (silahların kendi renkleri + kovan sanatı)
+const PAL = {a:'#000000',b:'#262626',c:'#191919',d:'#575757',e:'#3a3a3a',Y:'#f8b844',y:'#9a7432',z:'#574018',
+  W:'#7c4f3d',w:'#573326',S:'#1f1f1f',T:'#2e2e2e',R:'#a8282a',r:'#7a1a1e',H:'#f07660',o:'#360e10',
+  X:'#fff7d6',O:'#e8742c',P:'#ffd36b',F:'#0a0a0a',D:'#151515'};
+function mk(w,h){const c=document.createElement('canvas');c.width=w;c.height=h;return c;}
+function grid(rows,shift){ // shift(r) -> x kaydırma (eğik şarjör)
+  const sh=shift||(()=>0); let minS=0,maxW=0;
+  rows.forEach((r,i)=>{minS=Math.min(minS,sh(i));});
+  rows.forEach((r,i)=>{maxW=Math.max(maxW,r.length+sh(i)-minS);});
+  const c=mk(maxW,rows.length),g=c.getContext('2d');
+  rows.forEach((r,y)=>[...r].forEach((ch,x)=>{if(PAL[ch]){g.fillStyle=PAL[ch];g.fillRect(x+sh(y)-minS,y,1,1);}}));
+  c.ox=minS; return c;
+}
+function crop(img,x,y,w,h,keep){const c=mk(w,h),g=c.getContext('2d');g.drawImage(img,x,y,w,h,0,0,w,h);
+  if(keep){const d=g.getImageData(0,0,w,h);for(let i=0;i<w*h;i++){const p=d.data.subarray(i*4,i*4+4);if(p[3]&&!keep(p[0],p[1],p[2]))p[3]=0;}g.putImageData(d,0,0);}return c;}
+function variant(img,edits){const c=mk(img.width,img.height),g=c.getContext('2d');g.drawImage(img,0,0);
+  for(const [x0,x1,y,col] of edits){for(let x=x0;x<=x1;x++){if(col){g.fillStyle=col;g.fillRect(x,y,1,1);}else g.clearRect(x,y,1,1);}}return c;}
+
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const ease=u=>{u=clamp(u,0,1);return u*u*(3-2*u);};
+const pulse=(u,at,dur)=>{if(u<at||dur<=0)return 0;const q=(u-at)/dur;return q>=1?0:(1-q)*(1-q);};
+const backEase=u=>{const c=1.70158;u=clamp(u,0,1);return 1+(c+1)*Math.pow(u-1,3)+c*Math.pow(u-1,2);};
+const rnd=(a,b)=>a+Math.random()*(b-a);
+
+// ---------------------------------------------------------------- silahlar (zaman = TEMEL doldurma saniyesi; hız çarpanı k ile ölçeklenir)
+// clip: [kaynakta başlangıç, bitiş, "anahtar an" ofseti] -> anahtar an animasyondaki olaya oturur
+const GUNS = {
+ tabanca:{name:'Tabanca (Luger)', img:'tabanca', w:32,h:32, wpx:0.8625, Z:10, D:1.89, tilt:0.62, shotGap:0.55,
+   muzzle:[29.5,10.5], port:[11,8], src:'s_tabanca', fire:'f_tabanca',
+   steps:'Namlu kalkar → mandal: boş şarjör kabzadan eğik kayıp düşer → yeni şarjör aşağıdan kayıp oturur (kıvılcım) → Luger kolu yukarı kalkıp geri çakılır → nişana döner, parıltı.',
+   clips:{out:[0.37,1.03,0.065], in:[1.37,1.96,0.235], rack:[2.55,3.20,0.445]},
+   sounds:[['out',0.22],['in',0.86],['rack',1.545]]},
+ tufek:{name:'Tüfek (dürbünlü)', img:'tufek', w:64,h:32, wpx:0.4945, Z:14, D:2.34, tilt:0.42, shotGap:0.62,
+   muzzle:[61.5,14], port:[23,13], src:'s_tufek', fire:'f_tufek',
+   steps:'Namlu kalkar → mandal tıkı → kutu şarjör aşağı kayıp düşer → yeni şarjör alttan oturur (kıvılcım) → sürgü kalkar/geri çekilir (yatakta pirinç mermi görünür) → ileri itilir → nişana döner.',
+   clips:{out:[0.04,0.57,0.32], in:[1.15,1.60,0.35], bolt:[1.96,2.42,0.355]},
+   sounds:[['out',0.46],['in',1.33],['bolt',1.955]]},
+ pompali:{name:'Pompalı Tüfek', img:'pompali', w:64,h:64, wpx:0.4485, Z:15, D:2.34, tilt:0.34, shotGap:0.62,
+   muzzle:[61.5,26.5], port:[33,28], src:'s_pompali', fire:'f_pompali',
+   steps:'Namlu hafif kalkar → 5 kırmızı fişek alttaki yuvaya tek tek sürülür (her biri kendi "tık"ıyla; yarım şarjörde sadece eksik fişek kadar) → kundak geri çekilip ileri itilir (pompa) → nişana döner.',
+   clips:{shell:[1.665,2.04,0.07], pump:[3.33,3.74,0.285]},
+   sounds:[]},
+};
+const SHELL_KEYS=[0.32,0.65,0.98,1.31,1.64];
+GUNS.pompali.sounds = SHELL_KEYS.map(k=>['shell',k]).concat([['pump',2.065]]);
+
+const FEET_GAP = 77; // dünya px: silah yuvası (player.gd WEAPON_ICON_SLOTS[0] = -125 yerel) ile ayak arası
+const GRAV = 560;
+
+function buildSprites(G){
+  const img=G.image;
+  if(G.img==='tabanca'){
+    // eğik şarjör (kabza eğimi: 2 satırda 1 px sola)
+    G.mag = grid(['.aa.','aYya','adea','adea','adea','adea','adea','aWwa','.aa.'], r=>-Math.floor(r/2));
+    G.magAt=[9+G.mag.ox,13]; // oturmuş hâl: 0. satır x=9
+    G.toggle = crop(img,4,8,12,3);
+    G.toggleOpen = variant(img,[[6,14,9,PAL.c],[6,14,10,PAL.c]]);
+    G.casing = grid(['zYy','zyz']);
+  } else if(G.img==='tufek'){
+    G.noMag = variant(img,[[30,35,19,null],[30,35,20,null],[30,35,21,null]]);
+    G.mag = grid(['.aYya.','aSSSSa','aSTSSa','aSSSSa','aSSSaa','aaaa..']);
+    G.magAt=[30,16];
+    G.round = grid(['zYYYy','zyyyz']);
+    G.boltOpen = variant(img,[[20,23,13,PAL.c],[21,22,14,PAL.c]]);
+    G.casing = grid(['zYYy','zyyz']);
+  } else {
+    G.noFore = variant(img,[[41,48,28,PAL.F],[41,48,29,PAL.D],[41,48,30,PAL.a],[41,48,31,null]]);
+    G.fore = crop(img,41,28,8,4);
+    G.shell = grid(['zoooo.','YHRRRo','yrRRro','zoooo.']);
+    G.casing = G.shell;
+  }
+  G.flash1 = grid(['..O....','.OYYO..','OYXXYYO','.OYYO..','..O....']);
+  G.flash2 = grid(['.O.','OXP','.O.']);
+  G.glint = grid(['..X..','..P..','XPXPX','..P..','..X..']);
+}
+
+// ---------------------------------------------------------------- doldurma durumu (u = doldurma başından beri TEMEL saniye)
+function reloadState(G,u){
+  const s={tilt:0,lift:0,kick:0,sx:1,sy:1,tex:G.image,back:[],front:[],sparks:[]};
+  const D=G.D, up=0.12*D, down=D-0.14*D;
+  if(u<0||u>D){return s;}
+  if(u<up) s.tilt=G.tilt*backEase(u/up);
+  else if(u<down) s.tilt=G.tilt+Math.sin((u-up)*9)*0.03;
+  else s.tilt=G.tilt*(1-ease((u-down)/(D-down)));
+  const seat = G.img==='tabanca'?0.86:G.img==='tufek'?1.33:-1;
+  const out  = G.img==='tabanca'?0.22:G.img==='tufek'?0.46:-1;
+  if(out>0) s.lift += 2.6*pulse(u,out,0.09);
+  if(seat>0){ s.lift -= 2.4*pulse(u,seat,0.10); const sl=pulse(u,seat,0.08); s.sx=1+0.07*sl; s.sy=1-0.12*sl; s.tilt-=0.14*pulse(u,seat,0.10);
+    if(u>=seat&&u<seat+0.13){const q=(u-seat)/0.13; const p=G.img==='tabanca'?[6.5,23]:[32.5,22];
+      for(const [dx,dy,c] of [[-1,0.9,'X'],[0.2,1.3,'P'],[1.1,0.8,'X']]) s.sparks.push([p[0]+dx*4*q,p[1]+dy*4*q,c,1-q]);}}
+  if(G.img==='tabanca'){
+    if(u>=0.22&&u<0.32){const q=(u-0.22)/0.10; const sv=11*q*q; s.back.push([G.mag,G.magAt[0]-sv/2,G.magAt[1]+sv,1]);}
+    if(u>=0.60&&u<0.88){const a=clamp((u-0.60)/0.06,0,1); const q=ease((u-0.62)/0.24); const sv=13*(1-q); s.back.push([G.mag,G.magAt[0]-sv/2,G.magAt[1]+sv,a]);}
+    let ly=0,bx=0; // Luger kolu
+    if(u>=1.24&&u<1.27) ly=1; else if(u>=1.27&&u<1.50){ly=2;bx=u>=1.30?1:0;} else if(u>=1.50&&u<1.545) ly=1;
+    if(ly>0){ s.tex=G.toggleOpen; s.front.push([G.toggle,4-bx,8-ly,1]); }
+    s.kick += 3.0*kickShape(u-1.545) + 1.2*kickShape((u-1.30)*1.6);
+  } else if(G.img==='tufek'){
+    if(u>=0.23&&u<0.52){ s.tex=G.noMag; let dy=(u<0.46)?(u<0.26?(u-0.23)/0.03:1):1+5*Math.pow((u-0.46)/0.06,2); s.back.push([G.mag,30,16+Math.round(dy*2)/2,1]); }
+    if(u>=0.52&&u<1.33) s.tex=G.noMag;
+    if(u>=1.05&&u<1.33){ const a=clamp((u-1.05)/0.05,0,1); const q=ease((u-1.08)/0.25); s.back.push([G.mag,30,16+7*(1-q),a]); }
+    if(u>=1.64&&u<1.955){ s.tex=G.boltOpen; if(u>=1.70) s.front.push([G.round,22,13,1]); }
+    s.kick += 1.6*kickShape(u-1.735) + 3.0*kickShape(u-1.955);
+    s.tilt += 0.05*pulse(u,1.64,0.08);
+  } else {
+    SHELL_KEYS.forEach(k=>{
+      if(u>=k-0.16&&u<k+0.05){ const a=clamp((u-(k-0.16))/0.04,0,1); let y=33,x=30;
+        if(u>=k-0.14) y=33-5*ease((u-(k-0.14))/0.12); if(u>=k) {y=28;x=30+6*(u-k)/0.05;}
+        s.back.push([G.shell,x,y,a]); }
+      s.tilt -= 0.035*pulse(u,k,0.07);
+    });
+    const fx = foreDx(u,1.84,1.93,2.02,2.065);
+    if(fx!==0){ s.tex=G.noFore; s.front.push([G.fore,41+fx,28,1]); }
+    s.kick += 1.4*kickShape(u-1.93) + 2.6*kickShape(u-2.065);
+  }
+  return s;
+}
+function kickShape(x){ if(x<0||x>0.12) return 0; const k=x/0.12; return k<0.3?k/0.3:(1-(k-0.3)/0.7)**2; }
+function foreDx(u,b0,b1,f0,f1){ if(u<b0||u>=f1) return 0; if(u<b1) return -Math.round(5*ease((u-b0)/(b1-b0))); if(u<f0) return -5; return -Math.round(5*(1-ease((u-f0)/(f1-f0)))); }
+
+// ---------------------------------------------------------------- ses
+let AC=null; const BUF={}; const PEAK={};
+async function initAudio(){
+  if(AC) return; AC=new (window.AudioContext||window.webkitAudioContext)();
+  for(const [k,b64] of Object.entries(A.snd)){
+    const bin=Uint8Array.from(atob(b64),c=>c.charCodeAt(0)).buffer;
+    BUF[k]=await AC.decodeAudioData(bin);
+  }
+}
+function clipPeak(buf,a,b){ const d=buf.getChannelData(0),sr=buf.sampleRate; let m=0; for(let i=Math.floor(a*sr);i<Math.min(d.length,b*sr);i++){const v=Math.abs(d[i]);if(v>m)m=v;} return m||1; }
+function playClip(key,a,b,when,rate,target){
+  const buf=BUF[key]; if(!buf) return;
+  const pk=PEAK[key+a]||(PEAK[key+a]=clipPeak(buf,a,b));
+  const src=AC.createBufferSource(); src.buffer=buf; src.playbackRate.value=rate;
+  const g=AC.createGain(); const dur=(b-a)/rate; const t0=Math.max(when,AC.currentTime);
+  const lv=target/pk; g.gain.setValueAtTime(0,t0); g.gain.linearRampToValueAtTime(lv,t0+0.006); g.gain.setValueAtTime(lv,t0+dur-0.03); g.gain.linearRampToValueAtTime(0,t0+dur);
+  src.connect(g).connect(AC.destination); src.start(t0,a+(t0-when)*rate,Math.max(0.01,b-a-(t0-when)*rate));
+}
+
+// ---------------------------------------------------------------- döngü (atış x3 -> doldurma -> bekleme)
+let K=1;
+const now=()=>AC?AC.currentTime:performance.now()/1000;
+function loopPlan(G){ const shots=[0,G.shotGap,2*G.shotGap]; const R0=shots[2]+0.08; return {shots,R0,len:R0+G.D+1.0}; }
+
+function startLoop(G,withSound){
+  G.loopStart=now(); G.k=K; G.events=[]; G.ei=0; const P=loopPlan(G); G.plan=P;
+  for(const s of P.shots){ G.events.push([s,'shot']); if(G.img==='pompali') G.events.push([s+0.26,'hull']); }
+  if(G.img==='tabanca') G.events.push([P.R0+0.32,'dropmag']);
+  if(G.img==='tufek') G.events.push([P.R0+0.52,'dropmag']);
+  G.events.sort((a,b)=>a[0]-b[0]);
+  if(withSound&&AC&&K<=1.01){
+    const r=clamp(1/K,1,1.25), t0=G.loopStart;
+    for(const s of P.shots){ playClip(G.fire,0,Math.min(1.2,BUF[G.fire].duration),t0+s*K,1,0.42);
+      if(G.img==='pompali') playClip('f_pompa',0,BUF.f_pompa.duration,t0+(s+0.2)*K,1,0.34); }
+    for(const [name,at] of G.sounds){ const [a,b,key]=G.clips[name]; playClip(G.src,a,b,t0+(P.R0+at)*K-key/r,r,0.5); }
+  }
+}
+
+function gunPose(G,u){ // u: döngü başından TEMEL saniye
+  const P=G.plan; const rs=reloadState(G,u-P.R0);
+  let rec=0,recRot=0, flash=0, pumpDx=0;
+  for(const s of P.shots){ const d=u-s; if(d>=0&&d<0.14){ const q=d/0.14; rec+=2.4*(1-q)*(1-q); recRot+=0.16*(1-q)*(1-q); if(d<0.035)flash=1; else if(d<0.07)flash=2; }
+    if(G.img==='pompali'){ const fx=foreDx(d,0.20,0.27,0.29,0.36); if(fx!==0) pumpDx=fx; } }
+  if(pumpDx!==0&&rs.tex===G.image){ rs.tex=G.noFore; rs.front.push([G.fore,41+pumpDx,28,1]); }
+  // geri tepme tween'i doldurma başında sönüyor (oyundaki TAKEOVER gibi)
+  return {rot:-(rs.tilt)-recRot, kick:rs.kick+rec, lift:rs.lift, sx:rs.sx, sy:rs.sy, rs, flash,
+    glint: (u-P.R0>=G.D&&u-P.R0<G.D+0.18)?1-(u-P.R0-G.D)/0.18:0};
+}
+
+// dünya: ayak (0,0), silah tabanı (14, -FEET_GAP)
+function gunBase(G){return [G.img==='tabanca'?10:4,-FEET_GAP];}
+function gunMatrix(G,pz){ const [bx,by]=gunBase(G); const c=Math.cos(pz.rot),s=Math.sin(pz.rot);
+  const px=bx - c*pz.kick, py=by - s*pz.kick - pz.lift;
+  return {px,py,c,s,sx:G.wpx*pz.sx,sy:G.wpx*pz.sy,ox:G.w/2,oy:G.h/2}; }
+function artToWorld(M,ax,ay){ const lx=(ax-M.ox)*M.sx, ly=(ay-M.oy)*M.sy; return [M.px+lx*M.c-ly*M.s, M.py+lx*M.s+ly*M.c]; }
+
+function spawn(G,kind,M,pz){
+  const back=-1; // namlu sağa: kovan geriye (sola) fırlar
+  if(kind==='shot'&&G.img!=='pompali') addDrop(G,G.casing,M,G.port[0],G.port[1],{vx:back*rnd(28,52),vy:rnd(-14,14),vz:rnd(80,115),spin:back*rnd(16,26)});
+  if(kind==='hull') addDrop(G,G.casing,M,G.port[0],G.port[1]+1,{vx:back*rnd(24,40),vy:rnd(-10,10),vz:rnd(70,100),spin:back*rnd(12,20)});
+  if(kind==='dropmag'){ const [mx,my]=G.img==='tabanca'?[G.magAt[0]-5.5+G.mag.width/2,G.magAt[1]+11+4.5]:[33,16+6+3];
+    const v=G.img==='tabanca'?[-0.45,1]:[0,1]; const sp=60; const dirx=v[0]*M.c-v[1]*M.s, diry=v[0]*M.s+v[1]*M.c;
+    addDrop(G,G.mag,M,mx,my,{vx:dirx*sp*0.5+rnd(-6,6),vy:rnd(-4,4),vz:-diry*sp,spin:rnd(-3,3),rot:Math.atan2(M.s,M.c),mag:true}); }
+}
+function addDrop(G,spr,M,ax,ay,o){ const [wx,wy]=artToWorld(M,ax,ay); const gy=rnd(-3,4);
+  G.drops.push({spr,x:wx,g:gy,z:gy-wy,vz:o.vz,vx:o.vx,vy:o.vy,rot:o.rot||Math.atan2(M.s,M.c),spin:o.spin,st:0,t:0,b:0,mag:!!o.mag}); }
+function stepDrops(G,dt){
+  for(const d of G.drops){
+    if(d.st===0){ d.x+=d.vx*dt; d.g+=d.vy*dt; d.vz-=GRAV*dt; d.z+=d.vz*dt; d.rot+=d.spin*dt;
+      if(d.z<=0){ d.z=0; if(d.b<1&&d.vz<-40){ d.vz=-d.vz*(d.mag?0.18:0.32); d.b++; d.spin*=0.4; d.vx*=0.5; d.vy*=0.5; }
+        else { d.st=1; d.t=0; d.rot=Math.round(d.rot/(Math.PI/2))*(Math.PI/2); } } }
+    else { d.t+=dt; }
+  }
+  G.drops=G.drops.filter(d=>!(d.st===1&&d.t>2.1));
+}
+
+// ---------------------------------------------------------------- çizim
+function drawView(G,cv,Z,cam,showChar){
+  const g=cv.getContext('2d'); const dpr=cv._dpr; g.setTransform(1,0,0,1,0,0); g.imageSmoothingEnabled=false;
+  g.fillStyle='#3f5a33'; g.fillRect(0,0,cv.width,cv.height);
+  const W2S=(x,y)=>[(x-cam[0])*Z*dpr+cv.width/2,(y-cam[1])*Z*dpr+cv.height/2];
+  // zemin benekleri (dünya ızgarası)
+  if(showChar){ g.fillStyle='#456238'; for(let i=0;i<60;i++){const x=((i*37)%90)-45,y=((i*53)%120)-100;const [sx,sy]=W2S(x,y);g.fillRect(Math.round(sx),Math.round(sy),Z*dpr,Z*dpr);} }
+  const drawSpr=(spr,wx,wy,rot,scale,alpha)=>{ const [sx,sy]=W2S(wx,wy); g.save(); g.globalAlpha=alpha; g.translate(sx,sy); g.rotate(rot); g.scale(scale*Z*dpr,scale*Z*dpr); g.drawImage(spr,-spr.width/2,-spr.height/2); g.restore(); };
+  // yerdeki parçalar
+  for(const d of G.drops){ const a=d.st===1&&d.t>1.6?1-(d.t-1.6)/0.5:1; if(d.z<=0.01) drawSpr(d.spr,d.x,d.g,d.rot,G.wpx,a); }
+  if(showChar&&A.img.char){ const ch=IMG.char; const s=0.638; const [sx,sy]=W2S(-24*s,-44*s); g.drawImage(ch,0,0,48,48,Math.round(sx),Math.round(sy),Math.round(48*s*Z*dpr),Math.round(48*s*Z*dpr)); }
+  for(const d of G.drops){ const a=d.st===1&&d.t>1.6?1-(d.t-1.6)/0.5:1; if(d.z>0.01) drawSpr(d.spr,d.x,d.g-d.z,d.rot,G.wpx,a); }
+  // silah
+  const pz=G.pz, M=G.M; const [sx,sy]=W2S(M.px,M.py);
+  g.save(); g.translate(sx,sy); g.rotate(pz.rot); g.scale(M.sx*Z*dpr,M.sy*Z*dpr); g.translate(-M.ox,-M.oy);
+  for(const [spr,x,y,a] of pz.rs.back){ g.globalAlpha=a; g.drawImage(spr,Math.round(x*2)/2,Math.round(y*2)/2); }
+  g.globalAlpha=1; g.drawImage(pz.rs.tex,0,0);
+  for(const [spr,x,y,a] of pz.rs.front){ g.globalAlpha=a; g.drawImage(spr,x,y); }
+  for(const [x,y,c,a] of pz.rs.sparks){ g.globalAlpha=a; g.fillStyle=PAL[c]; g.fillRect(Math.round(x),Math.round(y),1,1); }
+  g.globalAlpha=1;
+  if(pz.flash===1) g.drawImage(G.flash1,G.muzzle[0],G.muzzle[1]-2.5);
+  if(pz.flash===2) g.drawImage(G.flash2,G.muzzle[0],G.muzzle[1]-1.5);
+  if(pz.glint>0){ const s=pz.glint; g.translate(G.muzzle[0]-2,G.muzzle[1]); g.scale(s,s); g.drawImage(G.glint,-2.5,-2.5); }
+  g.restore();
+}
+
+// hata ayıklama: kilit kareler tablosu (window.debugSheet())
+window.debugGun=function(key,Z,times,cx,cy){
+  const G=GUNS[key]; const cw=340,chh=200,per=3; const n=times.length; const sh=document.createElement('canvas'); sh.width=cw*per; sh.height=chh*Math.ceil(n/per); const sg=sh.getContext('2d');
+  times.forEach((t,i)=>{ const c=mk(cw,chh); c._dpr=1; const keep=G.drops; G.drops=[];
+    G.pz=gunPose(G,G.plan.R0+t); G.M=gunMatrix(G,G.pz); const [bx,by]=gunBase(G);
+    drawView(G,c,Z,[bx+(cx||0),by+(cy||1)],false); G.drops=keep; const X=(i%per)*cw,Y=Math.floor(i/per)*chh;
+    sg.drawImage(c,X,Y); sg.fillStyle='#fff'; sg.font='12px monospace'; sg.fillText(t.toFixed(2),X+3,Y+12); sg.strokeStyle='#000'; sg.strokeRect(X+0.5,Y+0.5,cw-1,chh-1); });
+  const old=document.getElementById('dbg'); if(old) old.remove();
+  sh.id='dbg'; sh.style.cssText='position:fixed;left:0;top:0;z-index:9;width:'+(cw*per)+'px'; document.body.append(sh);
+};
+window.debugSheet=function(){
+  const T={tabanca:[0.05,0.25,0.30,0.64,0.80,0.87,1.26,1.35,1.52,1.60],
+           tufek:[0.10,0.25,0.49,0.51,1.10,1.28,1.34,1.70,1.85,1.97],
+           pompali:[0.10,0.20,0.27,0.31,0.33,1.00,1.88,1.95,2.04,2.10]};
+  const cw=160,chh=100,per=5; const sh=document.createElement('canvas'); sh.width=cw*per; sh.height=chh*6; const sg=sh.getContext('2d'); sg.imageSmoothingEnabled=false;
+  let row=0;
+  for(const G of Object.values(GUNS)){
+    T[G.img].forEach((t,i)=>{ const c=mk(cw,chh); c._dpr=1; const keep=G.drops; G.drops=[];
+      G.pz=gunPose(G,G.plan.R0+t); G.M=gunMatrix(G,G.pz); const [bx,by]=gunBase(G);
+      drawView(G,c,G.img==='tabanca'?4.2:4.4,[bx+1,by+2],false); G.drops=keep;
+      const X=(i%per)*cw, Y=(row+Math.floor(i/per))*chh;
+      sg.drawImage(c,X,Y); sg.fillStyle='#fff'; sg.font='11px monospace'; sg.fillText(t.toFixed(2),X+3,Y+11);
+      sg.strokeStyle='#000'; sg.strokeRect(X+0.5,Y+0.5,cw-1,chh-1); });
+    row+=2;
+  }
+  sh.id='dbg'; sh.style.cssText='position:fixed;left:0;top:0;z-index:9;width:'+(cw*per)+'px'; document.body.append(sh);
+};
+
+// ---------------------------------------------------------------- kurulum
+const IMG={};
+function loadImg(src){return new Promise(r=>{const i=new Image();i.onload=()=>r(i);i.src='data:image/png;base64,'+src;});}
+function makeCanvas(w,h){const c=document.createElement('canvas');const dpr=window.devicePixelRatio||1;c.width=Math.round(w*dpr);c.height=Math.round(h*dpr);c.style.width=w+'px';c.style.height=h+'px';c._dpr=dpr;return c;}
+
+(async function(){
+  for(const [k,v] of Object.entries(A.img)) IMG[k]=await loadImg(v);
+  const root=document.getElementById('cards');
+  for(const G of Object.values(GUNS)){
+    G.image=IMG[G.img]; buildSprites(G); G.drops=[];
+    const card=document.createElement('div'); card.className='card';
+    card.innerHTML=`<h2>${G.name} <button class="play">▶ Sesli oynat</button></h2><div class="steps">${G.steps}</div><div class="views"></div>`;
+    const views=card.querySelector('.views');
+    const v1=document.createElement('div'); v1.className='view'; G.cvBig=makeCanvas(600,300); v1.append(G.cvBig); const l1=document.createElement('span'); l1.textContent='büyütülmüş'; v1.append(l1);
+    const v2=document.createElement('div'); v2.className='view'; G.cvReal=makeCanvas(200,300); v2.append(G.cvReal); const l2=document.createElement('span'); l2.textContent='oyundaki boyut (1080p)'; v2.append(l2);
+    views.append(v1,v2); root.append(card);
+    card.querySelector('.play').onclick=async()=>{ await initAudio(); if(AC.state!=='running') await AC.resume(); for(const H of Object.values(GUNS)){ H.drops=[]; startLoop(H,H===G); } };
+    startLoop(G,false);
+  }
+  document.querySelectorAll('.bar button').forEach(b=>b.onclick=()=>{ document.querySelectorAll('.bar button').forEach(x=>x.classList.remove('on')); b.classList.add('on'); K=parseFloat(b.dataset.k); for(const G of Object.values(GUNS)){G.drops=[];startLoop(G,false);} });
+  let last=now();
+  function frame(){
+    const t=now(); const dt=clamp(t-last,0,0.05); last=t;
+    for(const G of Object.values(GUNS)){
+      let u=(t-G.loopStart)/G.k;
+      if(u>G.plan.len){ startLoop(G,false); u=0; }
+      G.pz=gunPose(G,u); G.M=gunMatrix(G,G.pz);
+      while(G.ei<G.events.length&&G.events[G.ei][0]<=u){ spawn(G,G.events[G.ei][1],G.M,G.pz); G.ei++; }
+      stepDrops(G,dt/G.k);
+      const [bx,by]=gunBase(G);
+      drawView(G,G.cvBig,G.Z,[bx+ (G.img==='tabanca'?2:4),by+4],false);
+      drawView(G,G.cvReal,2,[0,-48],true);
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

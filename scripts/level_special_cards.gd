@@ -256,8 +256,11 @@ static func available_ids(player: Node) -> Array:
 	var out: Array = []
 	for id: String in ORDER:
 		var need: String = str((DEFS[id] as Dictionary).get("needs", ""))
-		if need != "" and int(cls.get(need, 0)) <= 0:
-			continue
+		## Silah türü kartı yalnız TAM yakın dövüş / TAM menzilli kurguda çıkar: en az 1 silah o türden, diğer türden hiç silah yok.
+		if need != "":
+			var other: String = "ranged" if need == "melee" else "melee"
+			if int(cls.get(need, 0)) <= 0 or int(cls.get(other, 0)) > 0:
+				continue
 		if not can_pay(id, player):
 			continue
 		if gain_is_capped(id, player):

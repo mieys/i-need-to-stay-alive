@@ -3,7 +3,7 @@ extends Node2D
 ## EVCİL HAYVAN "MİNİK CADI" (iyi slime; kullanıcı isteği 2026-11-09, madde 509): "%5 saldırı gücü kazandırır ve ultini kullandığında pembe
 ## kulakları parıldayarak sana büyü yapar; canın, hasarın, boyutun, menzilin 8 saniye boyunca %15 artar (karakterin menzili ince bir çizgi
 ## olarak görünür). 120 saniye bekleme."
-##  - +%5 saldırı gücü: player.gd pet_ap_percent (_refresh_item_ap_percent havuzu) - kurulumda player.gd _setup_pet yazar.
+##  - +%8 saldırı gücü: player.gd pet_ap_percent (_refresh_item_ap_percent havuzu) - kurulumda player.gd _setup_pet yazar.
 ##  - Ulti kancası: player.gd _pet_on_ult_used (R'nin dört yolu: standart _activate_skill3, Büyücü R çeşitlemesi, Vampir yarasa açılışı,
 ##    Cadı iksir atışı) -> on_owner_ult(). Bekleme dolmamışsa / güvenli alandaysa / sahip yerde-ölüyse hiçbir şey olmaz.
 ##  - Büyü: cast_<yön> klibi (kulaklar parlar, kare 4'te büyü çıkar = CAST_RELEASE) -> fx_slime_spell.gd (kulaklardan sahibe pembe taneler,

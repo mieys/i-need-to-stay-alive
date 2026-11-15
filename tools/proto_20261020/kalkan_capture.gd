@@ -70,7 +70,7 @@ func _run() -> void:
 	var w: Node = (_player.get("owned_weapon_nodes") as Array)[0]
 	if w.has_method("set_enchant_glow_tier"):
 		w.call("set_enchant_glow_tier", 3)
-	w.call("_apply_tier_art", 3)
+	w.call("_apply_fixed_art") ## madde 402: _apply_tier_art kaldırıldı, sanat sabit
 	var beh: Node = w.get("enchant_behavior")
 	if beh:
 		(beh.get("stats") as Dictionary)["siper_wall"] = 2 ## gösterim: her 2. darbe Yıkılmaz Duvar (oyunda 5., finalde)

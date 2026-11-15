@@ -181,3 +181,55 @@ func test_game_over_title_and_balance_reason() -> void:
 	GameManager.is_game_over = true
 	assert(BalanceLogScript._end_reason({}) == "surrender", "balans kaydı teslimi ayırmalı")
 	_cleanup()
+
+
+## Kumanda (madde 548, denetim 547): düğmeler odaksız + oy yalnız F1/F2 idi -> kumandayla oy verilemiyordu. Artık A = EVET, B = HAYIR (yalnız
+## oy verilmemişken ve başka pencere açık değilken); düğme yazıları girdi türüne göre A/B - F1/F2.
+func _pad_btn(idx: int) -> InputEventJoypadButton:
+	var e := InputEventJoypadButton.new()
+	e.device = 0
+	e.button_index = idx
+	e.pressed = true
+	return e
+
+
+func test_pad_a_votes_yes_b_votes_no_and_labels_follow_mode() -> void:
+	var gp: Node = GameManager.get_node("GamepadUi")
+	_host_room([1, 77, 88])
+	var panel: CanvasLayer = PanelScript.new()
+	add_child(panel)
+	NetworkManager._host_start_surrender_vote(77)
+	var yes_btn: Button = panel.find_child("YesButton", true, false) as Button
+	var no_btn: Button = panel.find_child("NoButton", true, false) as Button
+	gp.set("joypad_active", false)
+	panel._process(0.0)
+	assert(yes_btn.text == "F1  EVET" and no_btn.text == "F2  HAYIR", "klavyede F1 / F2: %s" % yes_btn.text)
+	gp.set("joypad_active", true)
+	panel._process(0.0)
+	assert(yes_btn.text == "A  EVET" and no_btn.text == "B  HAYIR", "kumandada A / B: %s" % yes_btn.text)
+	## başka pencere açıkken menü onayı oy olmasın
+	var other := Control.new()
+	other.add_to_group(&"gamepad_modal")
+	add_child(other)
+	panel._input(_pad_btn(JOY_BUTTON_A))
+	assert(NetworkManager.my_surrender_vote() < 0, "başka pencere açıkken A oy vermez")
+	other.free()
+	## Start (ui_cancel) oy vermez
+	panel._input(_pad_btn(JOY_BUTTON_START))
+	assert(NetworkManager.my_surrender_vote() < 0, "Start oy vermez")
+	panel._input(_pad_btn(JOY_BUTTON_A))
+	assert(NetworkManager.my_surrender_vote() == 1, "A = EVET: %s" % str(NetworkManager.my_surrender_vote()))
+	assert(not (panel.find_child("Buttons", true, false) as Control).visible, "oy verince düğmeler gizlenir")
+	panel._input(_pad_btn(JOY_BUTTON_B))
+	assert(NetworkManager.my_surrender_vote() == 1, "ikinci basış oyu değiştirmez")
+	panel.queue_free()
+	## B = HAYIR oylamayı düşürür
+	_host_room([1, 77, 88])
+	var panel2: CanvasLayer = PanelScript.new()
+	add_child(panel2)
+	NetworkManager._host_start_surrender_vote(77)
+	panel2._input(_pad_btn(JOY_BUTTON_B))
+	assert(not NetworkManager.surrender_vote_active and not GameManager.is_game_over, "B = HAYIR oylamayı düşürür")
+	gp.set("joypad_active", false)
+	panel2.queue_free()
+	_cleanup()

@@ -37,7 +37,7 @@ func test_combat_and_fx_rpcs_use_their_own_channels() -> void:
 	for m in ["broadcast_enemy_vfx", "broadcast_enemy_ability_fx"]:
 		assert(_rpc_channel(sc, m) == nm.CH_ENEMY_FX, "%s yaratık görsel kanalında" % m)
 	## sıra bağımlı eşler varsayılan kanalda kalır (doğ/sil, ödül)
-	for m in ["broadcast_drop", "remove_drop", "remove_drops_batch", "grant_kill_gold", "broadcast_player_vfx_reliable", "broadcast_player_fx_stop"]:
+	for m in ["broadcast_drop", "remove_drop", "remove_drops_batch", "grant_team_gold", "broadcast_player_vfx_reliable", "broadcast_player_fx_stop"]:
 		assert(_rpc_channel(sc, m) == 0, "%s varsayılan kanalda" % m)
 	assert(nm.CH_COMBAT != nm.CH_ENEMY_FX and nm.CH_ENEMY_FX != nm.CH_STATE and nm.CH_COMBAT != nm.CH_STATE, "kanallar ayrı")
 

@@ -37,6 +37,8 @@ static func nearest_priority_target(tree: SceneTree, origin: Vector2, max_range:
 			var e := n as Node2D
 			if e == null or not is_instance_valid(e) or e.get("is_dead") == true or not e.is_in_group("enemies"):
 				continue
+			if e.is_in_group("pvp_targets"):
+				continue ## rakip oyuncu vekili (madde 615): öncelikli hedef değil, normal en yakın hedef adayı (plan K5)
 			if can_target.is_valid() and not bool(can_target.call(e)):
 				continue
 			var d: float = origin.distance_to(e.global_position)

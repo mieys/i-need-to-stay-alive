@@ -312,7 +312,7 @@ func test_regular_creature_health_and_shield_are_ten_percent_lower() -> void:
 	## 2026-10-06: Kademe 3+ ayrıca can/kalkan x0.9 (late_durability_mult).
 	var late: float = SpawnerScript.late_durability_mult(6)
 	## 2026-10-10: sıradan yaratığın canı/kalkanı ayrıca x1,5 (CREATURE_STAT_BOOST).
-	var boost: float = SpawnerScript.CREATURE_STAT_BOOST
+	var boost: float = SpawnerScript.CREATURE_STAT_BOOST * SpawnerScript.tier_toughness_mult(6) ## 2026-11-15: + kademeyle artan dayanıklılık (K6 x1,22)
 	assert(absf(float(enemy.max_health) - old_health * 0.9 * 0.85 * SpawnerScript.DURABILITY_CUT_2026_09_26 * late * boost) < 0.01, "Normal yaratığın canı eskisinin %%90'ı (x0.85) x1,5 olmalı: %s (eski %s)" % [enemy.max_health, old_health])
 	assert(absf(float(enemy.item_shield_max) - old_health * 0.9 * 0.85 * SpawnerScript.DURABILITY_CUT_2026_09_26 * late * boost) < 0.01, "Normal yaratığın kalkanı eskisinin %%90'ı (x0.85) x1,5 olmalı: %s" % enemy.item_shield_max)
 	_cleanup()
@@ -335,8 +335,9 @@ func test_first_two_tiers_are_twenty_percent_weaker() -> void:
 		sp._apply_global_buff(enemy)
 		results[tier] = [float(enemy.max_health), float(enemy.item_shield_max)]
 	## Kademe 6 değeri Kademe 3+ x0.9'u (late_durability_mult) içerir; 1-2'nin x0.8'i o çarpan HARİÇ Kademe 6'ya göre.
-	var late6: float = SpawnerScript.late_durability_mult(6)
+	var late6: float = SpawnerScript.late_durability_mult(6) * SpawnerScript.tier_toughness_mult(6) ## 2026-11-15: K6'nın dayanıklılık artışı da ayıklanır
 	for tier in [1, 2]:
+		results[tier] = [results[tier][0] / SpawnerScript.tier_toughness_mult(tier), results[tier][1] / SpawnerScript.tier_toughness_mult(tier)]
 		assert(absf(results[tier][0] - results[6][0] / late6 * 0.8) < 0.01, "Kademe %d canı Kademe 6'nın %%80'i olmalı: %s" % [tier, results[tier]])
 		assert(absf(results[tier][1] - results[6][1] / late6 * 0.8) < 0.01, "Kademe %d kalkanı Kademe 6'nın %%80'i olmalı: %s" % [tier, results[tier]])
 	_cleanup()

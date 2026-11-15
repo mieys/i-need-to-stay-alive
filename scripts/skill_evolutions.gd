@@ -28,6 +28,8 @@ const SLOTS := ["skill", "skill2", "skill3"]
 const SLOT_KEYS := {"skill": "Q", "skill2": "E", "skill3": "R"}
 
 ## roster id -> yuva -> [ {id, name, desc, final?} ... ] (final her zaman listenin sonunda)
+## DASH YETENEKLERİ E'DE (2026-11-12, kullanıcı kararı, KALICI): Talon E = Hamle Vuruşu, Elara E = Sıvışma, Assasin E = Şahin Hamlesi.
+## Bu üç karakterde "E yeteneğini güçlendir" = DASH yeteneğini güçlendir. Kimlikler yuvayla eşleşir (talon_e* / elara_e* / assasin_e* = dash).
 const DEFS := {
 	## ---------------------------------------------------------------- Cadı (2026-10-13; sayılar scripts/cadi_math.gd EVO_*)
 	15: {
@@ -61,11 +63,11 @@ const DEFS := {
 			{"id": "hadime_qf", "name": "Çifte Lanet", "desc": "Her seferinde gönderdiğin lanet sayısı 2 katına çıkar (3 yerine 6).", "final": true},
 		],
 		"skill2": [
-			{"id": "hadime_e1", "name": "Genişleyen Boşluk", "desc": "Kara deliğin boyutu %50 artar."},
-			{"id": "hadime_e2", "name": "Gezgin Delik", "desc": "Kara delik kalabalık yaratıklara doğru ilerler ve içine çektiklerini kendisiyle sürükler."},
-			{"id": "hadime_e3", "name": "Kalkan Emici", "desc": "Kara delik verdiği hasarın %20'si kadar mana kalkanını yeniler."},
-			{"id": "hadime_e4", "name": "Hızlı Çöküş", "desc": "Kara deliğin bekleme süresi %30 azalır."},
-			{"id": "hadime_ef", "name": "Süpernova", "desc": "Kara delik ömrünün sonunda patlar ve içindeki yaratıklara saldırı gücünün %150'si kadar hasar verir.", "final": true},
+			{"id": "hadime_e1", "name": "Genişleyen Çukur", "desc": "Çukurun boyutu %50 artar."},
+			{"id": "hadime_e2", "name": "Gezgin Çukur", "desc": "Çukur kalabalık yaratıklara doğru ilerler ve içine çektiklerini kendisiyle sürükler."},
+			{"id": "hadime_e3", "name": "Kalkan Emici", "desc": "Çukur verdiği hasarın %20'si kadar mana kalkanını yeniler."},
+			{"id": "hadime_e4", "name": "Hızlı Çöküş", "desc": "Çukurun bekleme süresi %30 azalır."},
+			{"id": "hadime_ef", "name": "Yer Yarılması", "desc": "Çukur ömrünün sonunda patlar ve içindeki yaratıklara saldırı gücünün %150'si kadar hasar verir.", "final": true},
 		],
 		"skill3": [
 			{"id": "hadime_r1", "name": "Uzun Kabus", "desc": "Karabasan formunun süresi 5 saniye artar."},
@@ -137,29 +139,29 @@ const DEFS := {
 			{"id": "oakley_ef", "name": "Kök Hapishanesi", "desc": "Sarmaşıklarla sabitlenen (bosslarda yavaşlatılan) yaratıklar bu süre boyunca tüm kaynaklardan %25 fazla hasar alır.", "final": true},
 		],
 		"skill3": [
-			{"id": "oakley_r1", "name": "Kadim Gövde", "desc": "Hayat Ağacı 12 yerine 16 saniye ayakta kalır ve gölge alanı %25 büyür."},
-			{"id": "oakley_r2", "name": "Bereketli Meyve", "desc": "Ağacın meyvelerinin verdiği can ve mana kalkanı %40 artar; ağaç solarken 3 yerine 6 çiçek bırakır."},
+			{"id": "oakley_r1", "name": "Kadim Gövde", "desc": "Hayat Ağacı 20 yerine 24 saniye ayakta kalır ve gölge alanı %25 büyür."},
+			{"id": "oakley_r2", "name": "Bereketli Meyve", "desc": "Ağacın verdiği can ve mana kalkanı %40 artar; ağaç solarken 3 yerine 6 çiçek bırakır."},
 			{"id": "oakley_rf", "name": "Kadim Diriliş", "desc": "Ağacın gölgesinde yere düşen bir dost anında %50 canla ayağa kalkar (her ağaçta bir kez).", "final": true},
 		],
 	},
 	## ---------------------------------------------------------------- Talon
 	1: {
 		"skill": [
-			{"id": "talon_q1", "name": "Kalkan Hamlesi", "desc": "Hamleyle hasar verdiğin her yaratık için eksik mana kalkanının %5'i yenilenir."},
-			{"id": "talon_q2", "name": "Çevik Hamle", "desc": "Hamle Vuruşu'nun bekleme süresi %30 azalır."},
-			{"id": "talon_q3", "name": "Sert Duruş", "desc": "Hamleden sonra 3 saniye boyunca %15 mana kalkanı soğurma kazanırsın."},
-			{"id": "talon_q4", "name": "Sarsıcı Hamle", "desc": "Hamle isabet ettiği yaratıkları 2 saniye sersemletir ve vuruş alanı %30 artar."},
-			{"id": "talon_qf", "name": "Hayalet Hamle", "desc": "Hamle sırasında %100 sıvışma kazanırsın (sıvışma sınırını aşar).", "final": true},
+			{"id": "talon_q1", "name": "Ateş Seli", "desc": "Silah Salvosu'nun saldırı hızı bonusu %400'den %500'e çıkar."},
+			{"id": "talon_q2", "name": "Uzun Girdap", "desc": "Silahların dönüş hızı %20 artar ve salvo 2 saniye daha uzun sürer."},
+			{"id": "talon_q3", "name": "Keskin Çember", "desc": "Dönen silahlar çarptıkları yaratıklara isabet başına saldırı gücünün %50'si kadar hasar verir."},
+			{"id": "talon_q4", "name": "Koşan Salvo", "desc": "Salvo sürerken hareket hızın %20 artar."},
+			{"id": "talon_qf", "name": "Kalkan Çemberi", "desc": "Salvo sürerken silahların çizdiği çember sana gelen tüm yaratık atışlarını ve yetenek mermilerini yok eder.", "final": true},
 		],
 		"skill2": [
-			{"id": "talon_e1", "name": "Ateş Seli", "desc": "Silah Salvosu'nun saldırı hızı bonusu %400'den %500'e çıkar."},
-			{"id": "talon_e2", "name": "Uzun Girdap", "desc": "Silahların dönüş hızı %20 artar ve salvo 2 saniye daha uzun sürer."},
-			{"id": "talon_e3", "name": "Keskin Çember", "desc": "Dönen silahlar çarptıkları yaratıklara isabet başına saldırı gücünün %50'si kadar hasar verir."},
-			{"id": "talon_e4", "name": "Koşan Salvo", "desc": "Salvo sürerken hareket hızın %20 artar."},
-			{"id": "talon_ef", "name": "Kalkan Çemberi", "desc": "Salvo sürerken silahların çizdiği çember sana gelen tüm yaratık atışlarını ve yetenek mermilerini yok eder.", "final": true},
+			{"id": "talon_e1", "name": "Kalkan Hamlesi", "desc": "Hamleyle hasar verdiğin her yaratık için eksik mana kalkanının %5'i yenilenir."},
+			{"id": "talon_e2", "name": "Çevik Hamle", "desc": "Hamle Vuruşu'nun bekleme süresi %30 azalır."},
+			{"id": "talon_e3", "name": "Sert Duruş", "desc": "Hamleden sonra 3 saniye boyunca %15 mana kalkanı soğurma kazanırsın."},
+			{"id": "talon_e4", "name": "Sarsıcı Hamle", "desc": "Hamle isabet ettiği yaratıkları 2 saniye sersemletir ve vuruş alanı %30 artar."},
+			{"id": "talon_ef", "name": "Hayalet Hamle", "desc": "Hamle sırasında %100 sıvışma kazanırsın (sıvışma sınırını aşar).", "final": true},
 		],
 		"skill3": [
-			{"id": "talon_r1", "name": "Yansıyan Hız", "desc": "Ayna Formu'nu kullandığında Silah Salvosu'nun (E) bekleme süresi sıfırlanır."},
+			{"id": "talon_r1", "name": "Yansıyan Hız", "desc": "Ayna Formu'nu kullandığında Silah Salvosu'nun (Q) bekleme süresi sıfırlanır."},
 			{"id": "talon_r2", "name": "Uzun Yansıma", "desc": "Ayna Formu 4 saniye daha uzun sürer."},
 			{"id": "talon_rf", "name": "Kan Aynası", "desc": "Ayna Formu'nun kopyaladığı silahlar %20 can çalma kazanır.", "final": true},
 		],
@@ -167,18 +169,18 @@ const DEFS := {
 	## ---------------------------------------------------------------- Elara
 	8: {
 		"skill": [
-			{"id": "elara_q1", "name": "Rüzgar Adımı", "desc": "Sıvışma aktifken %50 sıvışma kazanırsın (sıvışma sınırını aşabilir)."},
-			{"id": "elara_q2", "name": "Rüzgar Koşusu", "desc": "Sıvışma'nın hareket hızı bonusu %60'a çıkar."},
-			{"id": "elara_q3", "name": "Akışta Kal", "desc": "Bir yaratığa hasar verdiğinde (saniyede en çok 4 kez) Sıvışma'nın kalan bekleme süresi %2 azalır."},
-			{"id": "elara_q4", "name": "Atılım", "desc": "Sıvışma'yı kullandığında kısa bir mesafe ileri atılırsın."},
-			{"id": "elara_qf", "name": "Kaybolan Gölge", "desc": "Sıvışma'yı her kullandığında 1,5 saniyeliğine görünmez olursun.", "final": true},
+			{"id": "elara_q1", "name": "Delici Oklar", "desc": "Yetenek aktifken saldırıların fazladan %15 gerçek hasar verir (kalkanı yok sayar)."},
+			{"id": "elara_q2", "name": "Kan Oku", "desc": "Yetenek aktifken %10 can çalma kazanırsın."},
+			{"id": "elara_q3", "name": "Ağır Atış", "desc": "Yetenek aktifken saldırıların yaratıkları kısa bir mesafe geri iter."},
+			{"id": "elara_q4", "name": "Uzun Odak", "desc": "Yeteneğin etki süresi 2 saniye uzar."},
+			{"id": "elara_qf", "name": "Tam Odak", "desc": "Saldırı hızı bonusu TOPLAM saldırı hızına uygulanır.", "final": true},
 		],
 		"skill2": [
-			{"id": "elara_e1", "name": "Delici Oklar", "desc": "Yetenek aktifken saldırıların fazladan %15 gerçek hasar verir (kalkanı yok sayar)."},
-			{"id": "elara_e2", "name": "Kan Oku", "desc": "Yetenek aktifken %10 can çalma kazanırsın."},
-			{"id": "elara_e3", "name": "Ağır Atış", "desc": "Yetenek aktifken saldırıların yaratıkları kısa bir mesafe geri iter."},
-			{"id": "elara_e4", "name": "Uzun Odak", "desc": "Yeteneğin etki süresi 2 saniye uzar."},
-			{"id": "elara_ef", "name": "Tam Odak", "desc": "Saldırı hızı bonusu TOPLAM saldırı hızına uygulanır.", "final": true},
+			{"id": "elara_e1", "name": "Rüzgar Adımı", "desc": "Sıvışma aktifken %50 sıvışma kazanırsın (sıvışma sınırını aşabilir)."},
+			{"id": "elara_e2", "name": "Rüzgar Koşusu", "desc": "Sıvışma'nın hareket hızı bonusu %60'a çıkar."},
+			{"id": "elara_e3", "name": "Akışta Kal", "desc": "Bir yaratığa hasar verdiğinde (saniyede en çok 4 kez) Sıvışma'nın kalan bekleme süresi %2 azalır."},
+			{"id": "elara_e4", "name": "Atılım", "desc": "Sıvışma'yı kullandığında kısa bir mesafe ileri atılırsın."},
+			{"id": "elara_ef", "name": "Kaybolan Gölge", "desc": "Sıvışma'yı her kullandığında 1,5 saniyeliğine görünmez olursun.", "final": true},
 		],
 		"skill3": [
 			{"id": "elara_r1", "name": "Çabuk Tetik", "desc": "Çift Tetik'in bekleme süresi %20 azalır."},
@@ -226,7 +228,7 @@ const DEFS := {
 		],
 		"skill3": [
 			{"id": "sovalye_r1", "name": "Sarsıcı Patlama", "desc": "Kalkan patladığında yaratıkları çok uzağa iter."},
-			{"id": "sovalye_r2", "name": "Yansıtan Kubbe", "desc": "Yetenek aktifken mana kalkanına vuran yaratıklar, Şovalye Adam'ın azami mana kalkanının %10'u kadar hasar alır."},
+			{"id": "sovalye_r2", "name": "Yansıtan Kubbe", "desc": "Yetenek aktifken mana kalkanına vuran yaratıklar, Aldric'in azami mana kalkanının %10'u kadar hasar alır."},
 			{"id": "sovalye_rf", "name": "Yürüyen Kale", "desc": "Yetenek aktifken hareket hızının %30'uyla mana kalkanıyla birlikte yürüyebilirsin.", "final": true},
 		],
 	},
@@ -255,25 +257,24 @@ const DEFS := {
 		],
 	},
 	## ---------------------------------------------------------------- Assasin Çocuk (kullanıcı isteği 2026-09-30)
-	## Temel kesintiler "çünkü geliştirmelere eklenecek": Gölge Adımı artık saldırı gücü vermez (E2'de), Şahin Hamlesi 3 yerine
-	## 2 yük (Q1'de), Gölge Hücumu'nun tempusu saldırı hızıyla artmaz (R1'de). Aynı gün Q ile E yer değiştirdi (kullanıcı: "E
-	## yeteneği artık Q, Q yeteneği de artık E olsun") - evrimler yetenekleriyle birlikte taşındı, id'ler yeni yuvaya göre
-	## (assasin_q* = Şahin Hamlesi, assasin_e* = Gölge Adımı). Kullanıcının ilk metnindeki "Q yeteneğin fazladan 1 yüke sahip
-	## olur" (hamle listesindeydi) bu değişimle birebir doğru hale geldi.
+	## Temel kesintiler "çünkü geliştirmelere eklenecek": Gölge Adımı artık saldırı gücü vermez (Q2'de), Şahin Hamlesi 3 yerine
+	## 2 yük (E1'de), Gölge Hücumu'nun tempusu saldırı hızıyla artmaz (R1'de). Yuva geçmişi: 2026-09-30'da Q ile E yer değiştirdi,
+	## 2026-11-12'de DASH YETENEKLERİ E'YE taşındı (kullanıcı kararı, KALICI) - evrimler yetenekleriyle birlikte taşındı, kimlikler HER ZAMAN
+	## yeni yuvaya göre: assasin_e* = Şahin Hamlesi (E, dash), assasin_q* = Gölge Adımı (Q).
 	5: {
 		"skill": [
-			{"id": "assasin_q1", "name": "Üçüncü Hamle", "desc": "Şahin Hamlesi fazladan 1 yüke sahip olur (2 yerine 3 yük)."},
-			{"id": "assasin_q2", "name": "Av Zinciri", "desc": "Bu yetenekle öldürdüğün her yaratık, dolmakta olan yükün bekleme süresini 0,2 saniye azaltır."},
-			{"id": "assasin_q3", "name": "Keskin Pençe", "desc": "Şahin Hamlesi'nin hasar oranı %30 artar."},
-			{"id": "assasin_q4", "name": "Rüzgar Gibi", "desc": "Hamle attığında 0,75 saniye boyunca %100 sıvışma kazanırsın (sıvışma sınırını aşar)."},
-			{"id": "assasin_qf", "name": "Kunai Yağmuru", "desc": "Hamle attığında çevrene 6 kunai fırlatırsın; her kunai isabet ettiği yaratıkları delip geçerek saldırı gücünün %50'si kadar hasar verir.", "final": true},
+			{"id": "assasin_q1", "name": "Uzun Gölge", "desc": "Görünmezliğin süresi 2 saniye uzar."},
+			{"id": "assasin_q2", "name": "Pusu", "desc": "Gölge Adımı aktifken %25 saldırı gücü kazanırsın."},
+			{"id": "assasin_q3", "name": "Gölge Nefesi", "desc": "Görünmezlik aktifleştiğinde mana kalkanı yenilenmesinin bekleme süresi sıfırlanır; mana kalkanın hemen dolmaya başlar."},
+			{"id": "assasin_q4", "name": "Sessiz Adımlar", "desc": "Görünmezken %20 hareket hızı kazanırsın."},
+			{"id": "assasin_qf", "name": "Gölge Kopyası", "desc": "Görünmezliği aktifleştirdiğinde bulunduğun yere bir gölge kopyanı bırakırsın; görünmezlik sürerken Q'ya tekrar basmak seni kopyana geri ışınlar.", "final": true},
 		],
 		"skill2": [
-			{"id": "assasin_e1", "name": "Uzun Gölge", "desc": "Görünmezliğin süresi 2 saniye uzar."},
-			{"id": "assasin_e2", "name": "Pusu", "desc": "Gölge Adımı aktifken %25 saldırı gücü kazanırsın."},
-			{"id": "assasin_e3", "name": "Gölge Nefesi", "desc": "Görünmezlik aktifleştiğinde mana kalkanı yenilenmesinin bekleme süresi sıfırlanır; mana kalkanın hemen dolmaya başlar."},
-			{"id": "assasin_e4", "name": "Sessiz Adımlar", "desc": "Görünmezken %20 hareket hızı kazanırsın."},
-			{"id": "assasin_ef", "name": "Gölge Kopyası", "desc": "Görünmezliği aktifleştirdiğinde bulunduğun yere bir gölge kopyanı bırakırsın; görünmezlik sürerken E'ye tekrar basmak seni kopyana geri ışınlar.", "final": true},
+			{"id": "assasin_e1", "name": "Üçüncü Hamle", "desc": "Şahin Hamlesi fazladan 1 yüke sahip olur (2 yerine 3 yük)."},
+			{"id": "assasin_e2", "name": "Av Zinciri", "desc": "Bu yetenekle öldürdüğün her yaratık, dolmakta olan yükün bekleme süresini 0,2 saniye azaltır."},
+			{"id": "assasin_e3", "name": "Keskin Pençe", "desc": "Şahin Hamlesi'nin hasar oranı %30 artar."},
+			{"id": "assasin_e4", "name": "Rüzgar Gibi", "desc": "Hamle attığında 0,75 saniye boyunca %100 sıvışma kazanırsın (sıvışma sınırını aşar)."},
+			{"id": "assasin_ef", "name": "Kunai Yağmuru", "desc": "Hamle attığında çevrene 6 kunai fırlatırsın; her kunai isabet ettiği yaratıkları delip geçerek saldırı gücünün %50'si kadar hasar verir.", "final": true},
 		],
 		"skill3": [
 			{"id": "assasin_r1", "name": "Hızlanan Hücum", "desc": "Gölge Hücumu'nun saldırı sıklığı saldırı hızına bağlı olarak artar."},

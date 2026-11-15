@@ -65,3 +65,32 @@ func test_plays_only_while_a_boss_is_alive() -> void:
 		m._process(0.3)
 	assert(not m.playing, "boss ölünce müzik sönüp durmalı")
 	_cleanup()
+
+
+## 2026-11-15: Zehirli Gonca'nın özel parçası (Tikopia); yaşadığı sürece o çalar, başka boss varsayılanı çalar.
+func test_gonca_plays_its_own_track() -> void:
+	var m := _music()
+	var default_stream: AudioStream = m.stream
+	var b := _boss()
+	b.set_meta(&"boss_id", "gonca1")
+	m._process(0.3)
+	assert(m.playing, "gonca yaşarken çalmalı")
+	assert(m.stream is AudioStreamMP3 and (m.stream as AudioStreamMP3).loop, "gonca parçası döngülü MP3 olmalı: %s" % str(m.stream))
+	b.is_dead = true
+	var b2 := _boss()
+	b2.set_meta(&"boss_id", "minotaur1")
+	for i in range(3):
+		m._process(0.3)
+	assert(m.stream == default_stream, "başka boss varsayılan parçayı çalmalı")
+	_cleanup()
+
+
+## Üç Kardeş'in ortak parçası (In a Heartbeat): kardeşlerden biri yaşadıkça çalar.
+func test_kardes_plays_its_own_track() -> void:
+	var m := _music()
+	var b := _boss()
+	b.set_meta(&"boss_id", "kardes_ok1")
+	m._process(0.3)
+	assert(m.playing and m.stream is AudioStreamMP3 and (m.stream as AudioStreamMP3).loop, "kardeş parçası döngülü MP3 olmalı")
+	assert(m.stream.resource_path.ends_with("boss_music_in_a_heartbeat.mp3"), "parça: %s" % m.stream.resource_path)
+	_cleanup()

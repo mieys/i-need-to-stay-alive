@@ -29,9 +29,22 @@ extends Node2D
 ## GERİ ALINDI (kullanıcı isteği 2026-09-24, aynı gün: "yanma efektini değiştirmeni istemiştim beğenmedim yenisini eski
 ## haline döndür") - ateş yine fx_burn_fire_v2 (FIRE_ONLY_SCALE 0.5 ile). Minimal sürüm (assets/fx/burn/fire_min_*,
 ## tools/gen_burn_fire_fx.py) dosyaları duruyor ama kullanılmıyor.
-const FIRE_VARIANTS := [
-	preload("res://assets/generated/fx_burn_fire_v2_frames.tres"),
-]
+## GÜNCELLEME (madde 551, 2026-11-10; kullanıcı Ateş Asası prototiplerinden C'nin yer alevini ekran görüntüsüyle gösterdi: "D yi oyuna al, C deki
+## yerdeki ateşler de yaratıkların yanarkenki çıkardığı ateş efekti ile değiştir (sadece 1 tane yer ateşi yeterli)" + "yanmadan kastım ... prototipin
+## C yer ateşi parçalarından biriydi bunlar değil"): ATEŞ katmanı artık o YER ALEVİ - tek küçük alev, yaratığın AYAK DİBİNDE (görünen bedenin
+## alt-ortası, `_place_flame`), karakter pikselinde (yaratık/efekt ölçeği ne olursa olsun 1 sanat px = FLAME_WORLD_PX dünya birimi), parlatma yok
+## (renkler Ateş Asası damlalarıyla aynı palet). Önce 2 karelik tutuşma ("ignite"), sonra 5 karelik döngü ("burn"). Sayfa: tools/gen_yer_alevi_fx.py.
+## DUMAN aynen: konumu / ölçeği / opaklığı bugünkü gibi (hizası eski ateş karesinin boyundan, OLD_FIRE_FRAME_H). fx_burn_fire_v2 dosyaları duruyor, kullanılmıyor.
+## GÜNCELLEME (2026-11-13, kullanıcı yeni yanma GIF'i gönderdi, "rotasyonu bozuk, yanma efekti dikey olmalı"): ateş katmanı artık
+## tools/fx_kaynak/yanma_alevi_yan.gif'in saat yönünde 90 derece döndürülmüş hali (tools/gen_gif_fire_fx.py -> yanma_gif_*; 13x28 kare,
+## 10 kare / 60 ms). Yer alevi (yer_alevi_*) dosyaları duruyor, kullanılmıyor. Konum / piksel ölçeği / duman aynen.
+const FIRE_FRAMES := preload("res://assets/fx/burn/yanma_gif_frames.tres")
+const IceFreeze := preload("res://scripts/fx_ice_freeze_status.gd") ## body_rect: yaratığın görünen bedeni (sprite satırının opak sınırı)
+const FLAME_WORLD_PX := 0.903
+const FLAME_ANCHOR_OFFSET := Vector2(0.0, -14.0) ## kare 13x28, tutunma noktası taban ortası -> ortalı sprite ofseti
+const FLAME_FOOT_LIFT := 2.0 ## dünya birimi: alevin tabanı bedenin en alt pikselinin (sprite'a gömülü gölge) bu kadar üstünde
+const FLAME_FALLBACK_FOOT := Vector2(0.0, 10.0) ## beden okunamazsa (headless / dokusuz) yaratık yerelinde ayak noktası
+const OLD_FIRE_FRAME_H := 124.0 ## eski fx_burn_fire_v2 karesinin boyu - duman tabanı buna göre hizalı kalır
 const SMOKE_VARIANTS := [
 	preload("res://assets/generated/fx_burn_smoke_a_frames.tres"),
 	preload("res://assets/generated/fx_burn_smoke_b_frames.tres"),
@@ -150,12 +163,13 @@ func _ready() -> void:
 	_smoke.sprite_frames = SMOKE_VARIANTS[randi() % SMOKE_VARIANTS.size()]
 	_smoke.modulate.a = SMOKE_OPACITY
 	_smoke.play("burn")
-	_fire.sprite_frames = FIRE_VARIANTS[randi() % FIRE_VARIANTS.size()]
-	## "biraz daha parlasın" (2026-09-25): alevler 1'in üstünde modulate ile hafifçe parlatılır (gece ışığı da güçlendi,
-	## bkz. night_glow_catalog.gd).
-	_fire.modulate = Color(FIRE_BRIGHTNESS, FIRE_BRIGHTNESS, FIRE_BRIGHTNESS * 0.92, FIRE_OPACITY)
-	_fire.play("burn")
-	_fire.scale = Vector2(FIRE_ONLY_SCALE, FIRE_ONLY_SCALE)
+	## Yer alevi (madde 551): parlatma / ölçek çarpanı yok - sayfa oyundaki boyda çizildi (FIRE_BRIGHTNESS / FIRE_ONLY_SCALE artık yalnız eski ateşin kaydı).
+	_fire.sprite_frames = FIRE_FRAMES
+	_fire.modulate = Color.WHITE
+	_fire.offset = FLAME_ANCHOR_OFFSET
+	_fire.animation_finished.connect(_on_fire_anim_finished)
+	_fire.play("ignite")
+	_place_flame()
 	_smoke.scale = Vector2(SMOKE_ONLY_SCALE, SMOKE_ONLY_SCALE)
 
 	## Alt kenarları hizala (ikisi de centered=true varsayılanıyla merkezden
@@ -164,9 +178,28 @@ func _ready() -> void:
 	## fire_h/smoke_h artık kendi yerel ölçekleriyle (FIRE_ONLY_SCALE/
 	## SMOKE_ONLY_SCALE) çarpılıyor - ikisinin KÜÇÜLMÜŞ gerçek render
 	## yüksekliğine göre hizalanmazsa taban hizası bozulurdu.
+	## Madde 551: ateş artık ayak dibindeki küçük alev, duman ise ESKİ yerinde kalsın diye hiza eski ateş karesinin boyundan hesaplanır.
 	var smoke_tex: Texture2D = _smoke.sprite_frames.get_frame_texture("burn", 0)
-	var fire_tex: Texture2D = _fire.sprite_frames.get_frame_texture("burn", 0)
-	if smoke_tex and fire_tex:
+	if smoke_tex:
 		var smoke_h: float = smoke_tex.get_size().y * SMOKE_ONLY_SCALE
-		var fire_h: float = fire_tex.get_size().y * FIRE_ONLY_SCALE
+		var fire_h: float = OLD_FIRE_FRAME_H * FIRE_ONLY_SCALE
 		_smoke.position.y = (fire_h - smoke_h) * 0.5
+
+
+func _on_fire_anim_finished() -> void:
+	if _fire.animation == &"ignite" and _flame_on:
+		_fire.play("burn")
+
+
+## Alevi yaratığın ayak dibine koyar ve dünya pikselini sabitler. Kök (konum VERTICAL_OFFSET, ölçek EFFECT_SCALE) dumanla ortak olduğu için
+## alevin yerel konumu/ölçeği kökün dönüşümünü geri alır: hedef yaratık yerelinde, boy dünya biriminde.
+func _place_flame() -> void:
+	var gs: Vector2 = global_scale
+	_fire.scale = Vector2(FLAME_WORLD_PX / maxf(absf(gs.x), 0.001), FLAME_WORLD_PX / maxf(absf(gs.y), 0.001))
+	var host: Node2D = get_parent() as Node2D
+	var foot: Vector2 = FLAME_FALLBACK_FOOT
+	if host != null:
+		var body: Rect2 = IceFreeze.body_rect(host)
+		if body.size.x > 1.0 and body.size.y > 1.0:
+			foot = Vector2(body.get_center().x, body.end.y - FLAME_FOOT_LIFT / maxf(absf(host.global_scale.y), 0.001))
+	_fire.position = (foot - position) / scale

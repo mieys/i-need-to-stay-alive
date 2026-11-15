@@ -380,6 +380,19 @@ static func upgrade_effect_text(index: int) -> String:
 	return "\n".join(parts)
 
 
+## upgrade_effect_text satırlarıyla aynı sırada stat ikonu (stat_icon.gd ICON_PATHS anahtarı; level pazarı açıklaması).
+static func upgrade_effect_icons(index: int) -> Array:
+	var lines: Array = upgrade_lines()
+	if index < 0 or index >= lines.size():
+		return []
+	var up: Dictionary = lines[index]
+	var out: Array = []
+	for pair in [["power", "shield_amount"], ["regen", "shield_regen"], ["absorption", "shield_protection"], ["delay", "cooldown_reduction"]]:
+		if float(up.get(pair[0], 0.0)) != 0.0:
+			out.append(pair[1])
+	return out
+
+
 ## Kalkan türünün tek satırlık özeti (kart alt yazısı): "160 kalkan · %60 soğurma · 4/sn".
 static func shield_summary(key: String) -> String:
 	var d: Dictionary = ShieldEnchantDefs.TYPES.get(key, {})

@@ -70,6 +70,6 @@ WARNING: Camera2D overridden to physics process mode due to use of physics inter
    at: _update_process_callback (scene/2d/camera_2d.cpp:88)
    GDScript backtrace (most recent call first):
        [0] opt_in (res://scripts/physics_interp.gd:34)
-       [1] _ready (res://scripts/player.gd:1231)
+       [1] _ready (res://scripts/player.gd:1238)
 [Yaratık sistemi] C++ EnemyWorld
-GOLGE esya yazildi evcil=kirpi pets_grubu=false
+GOLGE esya yazildi evcil= pets_grubu=false

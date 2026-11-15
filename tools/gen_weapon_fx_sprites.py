@@ -23,12 +23,7 @@ Cikti:
 
 Sadece kilic savurusu + isabeti: python tools/gen_weapon_fx_sprites.py sweep
 Sadece tufek isabeti: python tools/gen_weapon_fx_sprites.py tufek
-  assets/weapons/boomerang/art48.png                              (48x48 kaynak cizim)
-  assets/weapons/boomerang/icon.png                               (200x200 - art48 x4, ortali)
-  assets/weapons/boomerang/rot_sheet.png                          (12 x 48x48 onceden dondurulmus - artik kullanilmiyor)
-  assets/weapons/boomerang/rot24_sheet.png + rot24_frames.tres    (24 x 48x48, 15 derece - gen_boomerang_rot24)
-  assets/fx/boomerang/whoosh_sheet.png + whoosh_frames.tres       ("loop")
-  assets/fx/boomerang/catch_sheet.png + catch_frames.tres         ("play" tek sefer)
+  (Bumerang ciktilari madde 589'te silindi - bumerang artik cakram, tools/gen_chakram_fx.py)
 """
 import math
 import os
@@ -372,186 +367,14 @@ def gen_tufek_hit():
                         [("play", (0, 0), 8, False, 30.0)])
 
 
-# ------------------------------------------------------------------------------------------------ bumerang
-WOOD =[rgba(0.86, 0.62, 0.36), rgba(0.66, 0.42, 0.22), rgba(0.45, 0.27, 0.13)]  # acik, orta, koyu
-OUTLINE = rgba(0.16, 0.08, 0.05)
-PAINT_A = rgba(0.95, 0.9, 0.76)  # krem serit
-PAINT_B = rgba(0.78, 0.2, 0.14)  # kirmizi serit
-
-
-def boomerang_art():
-    """48x48: klasik V bicimli bumerang, dirsek ustte-ortada, iki kol asagi-disa acilir, hafif kavisli. Isik sol-ustten:
-    ust kenar acik, alt kenar koyu, 1 px koyu kontur, her kolun ucuna yakin krem+kirmizi boyali serit."""
-    N = 48
-    big = 8  # alt ornekleme icin once 8x cozunurlukte maske
-    M = Image.new("L", (N * big, N * big), 0)
-    d = ImageDraw.Draw(M)
-    # kavisli kol: iki cubic benzeri egriyi kalin cizgiyle ciz
-    def arm(p0, p1, p2, w0, w1):
-        pts = []
-        for i in range(41):
-            t = i / 40
-            x = (1 - t) ** 2 * p0[0] + 2 * (1 - t) * t * p1[0] + t * t * p2[0]
-            y = (1 - t) ** 2 * p0[1] + 2 * (1 - t) * t * p1[1] + t * t * p2[1]
-            w = w0 + (w1 - w0) * t
-            pts.append((x, y, w))
-        for x, y, w in pts:
-            r = w * big / 2
-            d.ellipse([x * big - r, y * big - r, x * big + r, y * big + r], fill=255)
-    elbow = (24, 12)
-    arm(elbow, (14, 16), (5, 33), 9.0, 6.5)
-    arm(elbow, (34, 16), (43, 33), 9.0, 6.5)
-    mask = M.resize((N, N), Image.BOX).point(lambda v: 255 if v >= 128 else 0)
-    im = Image.new("RGBA", (N, N), (0, 0, 0, 0))
-    mp = mask.load()
-    inside = lambda x, y: 0 <= x < N and 0 <= y < N and mp[x, y] > 0
-    for y in range(N):
-        for x in range(N):
-            if not inside(x, y):
-                continue
-            edge_up = not inside(x, y - 1) or not inside(x - 1, y - 1)
-            edge_dn = not inside(x, y + 1) or not inside(x + 1, y + 1)
-            col = WOOD[0] if edge_up else (WOOD[2] if edge_dn else WOOD[1])
-            im.putpixel((x, y), col)
-    # boyali seritler (kol uclarina yakin, kola dik)
-    for side in (-1, 1):
-        for t, pc in ((0.62, PAINT_A), (0.7, PAINT_B), (0.78, PAINT_A)):
-            # kol ekseni uzerindeki nokta
-            p0, p1, p2 = elbow, (24 + side * 10, 16), (24 + side * 19, 33)
-            x = (1 - t) ** 2 * p0[0] + 2 * (1 - t) * t * p1[0] + t * t * p2[0]
-            y = (1 - t) ** 2 * p0[1] + 2 * (1 - t) * t * p1[1] + t * t * p2[1]
-            tx = 2 * (1 - t) * (p1[0] - p0[0]) + 2 * t * (p2[0] - p1[0])
-            ty = 2 * (1 - t) * (p1[1] - p0[1]) + 2 * t * (p2[1] - p1[1])
-            ln = math.hypot(tx, ty)
-            nx, ny = -ty / ln, tx / ln
-            for s in range(-6, 7):
-                px_, py_ = int(round(x + nx * s * 0.5)), int(round(y + ny * s * 0.5))
-                if inside(px_, py_):
-                    im.putpixel((px_, py_), pc)
-    # dirsekte kucuk parlak nokta (cila)
-    for px_, py_ in ((23, 11), (24, 11), (22, 12)):
-        if inside(px_, py_):
-            im.putpixel((px_, py_), rgba(0.97, 0.8, 0.55))
-    # 1 px dis kontur
-    out = im.copy()
-    for y in range(N):
-        for x in range(N):
-            if inside(x, y):
-                continue
-            if any(inside(x + dx, y + dy) for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
-                out.putpixel((x, y), OUTLINE)
-    return out
-
-
-def epx(im):
-    """Scale2x/EPX: kenarlari yumusatan 2x buyutme (RotSprite'in ilk adimi)."""
-    w, h = im.size
-    src = im.load()
-    out = Image.new("RGBA", (w * 2, h * 2))
-    o = out.load()
-    g = lambda x, y: src[min(max(x, 0), w - 1), min(max(y, 0), h - 1)]
-    for y in range(h):
-        for x in range(w):
-            P = g(x, y)
-            A, B, C, D = g(x, y - 1), g(x + 1, y), g(x - 1, y), g(x, y + 1)
-            e0 = A if (C == A and C != D and A != B) else P
-            e1 = B if (A == B and A != C and B != D) else P
-            e2 = C if (D == C and D != B and C != A) else P
-            e3 = D if (B == D and B != A and D != C) else P
-            o[2 * x, 2 * y] = e0
-            o[2 * x + 1, 2 * y] = e1
-            o[2 * x, 2 * y + 1] = e2
-            o[2 * x + 1, 2 * y + 1] = e3
-    return out
-
-
-def rotsprite(im, deg):
-    up = epx(epx(im))  # 4x
-    rot = up.rotate(-deg, resample=Image.NEAREST, center=(up.width / 2, up.height / 2))
-    w, h = im.size
-    out = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    r = rot.load()
-    for y in range(h):
-        for x in range(w):
-            out.putpixel((x, y), r[x * 4 + 2, y * 4 + 2])
-    return out
-
-
-def gen_boomerang():
-    wdir = os.path.join(ROOT, "assets", "weapons", "boomerang")
-    fxdir = os.path.join(ROOT, "assets", "fx", "boomerang")
-    art = boomerang_art()
-    os.makedirs(wdir, exist_ok=True)
-    art.save(os.path.join(wdir, "art48.png"))
-    icon = Image.new("RGBA", (200, 200), (0, 0, 0, 0))
-    icon.paste(art.resize((192, 192), Image.NEAREST), (4, 4))
-    icon.save(os.path.join(wdir, "icon.png"))
-    print("wrote icon.png (art48 x4)")
-    rots = [rotsprite(art, k * 30) for k in range(12)]
-    cell = save_sheet(rots, os.path.join(wdir, "rot_sheet.png"))
-    ## "spin": kare = donus acisi (boomerang_projectile.gd kareyi aciya gore SECER, oynatmaz - hiz 0).
-    write_sprite_frames(os.path.join(wdir, "rot_frames.tres"), res(os.path.join(wdir, "rot_sheet.png")), cell[0], cell[1],
-                        [("spin", (0, 0), 12, True, 0.0)])
-
-    # hava cizgileri: donen bumerangin etrafinda 3 kavisli beyaz cizgi, kare basina donerek kayar (4 kare dongu)
-    S = 64
-    c = S // 2
-    wh = []
-    for fi in range(4):
-        im = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-        for k in range(3):
-            base = k * math.tau / 3 + fi * (math.tau / 12)
-            for i in range(22):
-                a = base + i * 0.045
-                rr = 25 + (k % 2)
-                al = 0.75 * (1 - i / 22)
-                put(im, c + math.cos(a) * rr, c + math.sin(a) * rr, rgba(1, 1, 1, al))
-        wh.append(im)
-    cell = save_sheet(wh, os.path.join(fxdir, "whoosh_sheet.png"))
-    write_sprite_frames(os.path.join(fxdir, "whoosh_frames.tres"), res(os.path.join(fxdir, "whoosh_sheet.png")), cell[0], cell[1],
-                        [("loop", (0, 0), 4, True, 20.0)])
-
-    # yakalanma pariltisi: 4 kollu yildiz + halka, 6 kare
-    S = 32
-    c = S // 2
-    ct = []
-    for fi in range(6):
-        t = fi / 5
-        im = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-        ln = int(3 + t * 9)
-        al = 1.0 - t * 0.85
-        for i in range(ln):
-            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-                put(im, c + dx * i, c + dy * i, rgba(1, 0.95, 0.75, al * (1 - i / (ln + 1))))
-        rr = 2 + t * 11
-        for i in range(int(math.tau * rr)):
-            a = i / (math.tau * rr) * math.tau
-            if i % 3 == 0:
-                put(im, c + math.cos(a) * rr, c + math.sin(a) * rr, rgba(0.95, 0.75, 0.45, al * 0.8))
-        ct.append(im)
-    cell = save_sheet(ct, os.path.join(fxdir, "catch_sheet.png"))
-    write_sprite_frames(os.path.join(fxdir, "catch_frames.tres"), res(os.path.join(fxdir, "catch_sheet.png")), cell[0], cell[1],
-                        [("play", (0, 0), 6, False, 24.0)])
-
-
-def gen_boomerang_rot24():
-    """Kullanici bildirimi (2026-09-26): "boomerangin gidip gelme animasyonu cok goz yoruyor". 12 karelik (30 derece)
-    donus sayfasi hizli donuste titriyordu - AYNI 48x48 cizimin 24 karelik (15 derece) RotSprite sayfasi. Mevcut
-    rot_sheet.png/rot_frames.tres'e dokunmaz (ayri dosya); boomerang_projectile.gd bunu kullanir."""
-    wdir = os.path.join(ROOT, "assets", "weapons", "boomerang")
-    art = boomerang_art()
-    rots = [rotsprite(art, k * 15) for k in range(24)]
-    cell = save_sheet(rots, os.path.join(wdir, "rot24_sheet.png"))
-    write_sprite_frames(os.path.join(wdir, "rot24_frames.tres"), res(os.path.join(wdir, "rot24_sheet.png")), cell[0], cell[1],
-                        [("spin", (0, 0), 24, True, 0.0)])
+# ---- bumerang (madde 589, 2026-11-11): Bumerang artik CAKRAM - eski 48x48 bumerang cizimi, donus kareleri, whoosh/catch
+# efektleri ve uretici fonksiyonlari SILINDI; yeni sanat + efekt tools/gen_chakram_fx.py.
 
 
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "sweep":
         gen_sword_sweep()
         gen_sword_hit()
-    elif len(sys.argv) > 1 and sys.argv[1] == "rot24":
-        gen_boomerang_rot24()
     elif len(sys.argv) > 1 and sys.argv[1] == "tufek":
         gen_tufek_hit()
     else:
@@ -559,5 +382,3 @@ if __name__ == "__main__":
         gen_sword_arc()
         gen_sword_sweep()
         gen_sword_hit()
-        gen_boomerang()
-        gen_boomerang_rot24()

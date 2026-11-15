@@ -76,7 +76,12 @@ def patch_scene(path):
 
 
 def main():
-    only = sys.argv[1:] or list(TOTEMS)  # ornek: python tools/gen_shaman_totems_v4.py attack
+    # EMEKLI (madde 557, 2026-11-11): totemler artik kullanicinin RUN TASLARI (tools/gen_shaman_rune_stones.py); bu betik
+    # totem sahnelerini eski AnimatedSprite2D duzenine yamar + yetenek ikonlarini v4 madalyonuyla ezer. Bilerek calistirmak icin --eski.
+    if "--eski" not in sys.argv:
+        raise SystemExit("gen_shaman_totems_v4.py emekli (madde 557): run taslari icin tools/gen_shaman_rune_stones.py; zorlamak icin --eski")
+    sys.argv = [a for a in sys.argv if a != "--eski"]
+    only = sys.argv[1:] or list(TOTEMS)  # ornek: python tools/gen_shaman_totems_v4.py attack --eski
     for name, (kind, icon_name, scene) in TOTEMS.items():
         if name not in only:
             continue

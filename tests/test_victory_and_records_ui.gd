@@ -9,7 +9,7 @@ const RunSummaryUIScript: GDScript = preload("res://scripts/run_summary_ui.gd")
 const RunRecordsScript: GDScript = preload("res://scripts/run_records.gd")
 const AchievementsScript: GDScript = preload("res://scripts/achievements.gd")
 
-const SUMMARY := {"time": 1520.0, "tier": 16, "kills": 842, "layer": 0, "victory": true, "solo": true, "char_id": 3}
+const SUMMARY := {"time": 1520.0, "tier": 10, "kills": 842, "layer": 0, "victory": true, "solo": true, "char_id": 3}
 
 var _continue_count: int = 0
 var _menu_count: int = 0
@@ -96,7 +96,7 @@ func test_solo_text_and_summary_row() -> void:
 
 
 func test_summary_row_shows_endless_layer_only_when_in_endless() -> void:
-	var row: Control = RunSummaryUIScript.summary_row({"time": 60.0, "tier": 16, "kills": 5, "layer": 7})
+	var row: Control = RunSummaryUIScript.summary_row({"time": 60.0, "tier": 10, "kills": 5, "layer": 7})
 	add_child(row)
 	assert(_has_text(row, "SONSUZ KAT") and _has_text(row, "7"), "sonsuz kat sütunu")
 	row.free()
@@ -124,7 +124,7 @@ func test_results_list_new_records_and_achievements_and_clear_on_refresh() -> vo
 	var ov: CanvasLayer = _overlay(true, true)
 	ov.call("set_results", {"records": ["victory_time", "tier"], "achievements": ["victory"]})
 	assert(_has_text(ov, "YENİ REKOR: En hızlı zafer - 25:20"), "rekor satırı değerle: %s" % str(_labels(ov)))
-	assert(_has_text(ov, "YENİ REKOR: En yüksek kademe - Kademe XVI"))
+	assert(_has_text(ov, "YENİ REKOR: En yüksek kademe - Kademe X"))
 	assert(_has_text(ov, "BAŞARIM: Hayatta Kaldım!"), "başarım satırı")
 	ov.call("set_results", {"records": [], "achievements": []})
 	await get_tree().process_frame
@@ -140,7 +140,7 @@ func test_victory_window_fits_the_screen_in_the_worst_case() -> void:
 		stats[i + 1] = {"name": "Oyuncu %d" % (i + 1), "dealt": 1000.0 * (i + 1), "taken": 10.0, "kills": 100}
 	ov.call("refresh_stats", stats)
 	ov.call("set_results", {"records": ["time", "tier", "kills", "layer", "victory_time"],
-			"achievements": ["victory", "victory_coop", "final", "tier_15"]})
+			"achievements": ["victory", "victory_coop", "tier_10"]})
 	await get_tree().process_frame
 	await get_tree().process_frame
 	var win: PanelContainer = ov.get_node("Window")
@@ -185,7 +185,7 @@ func test_extras_box_is_null_when_nothing_new() -> void:
 func test_records_screen_lists_every_achievement_with_state() -> void:
 	_tmp = "user://test_records_ui_%d.cfg" % Time.get_ticks_usec()
 	RunRecordsScript.set_path_override(_tmp)
-	RunRecordsScript.record_victory({"time": 1520.0, "tier": 16, "kills": 842, "solo": true, "char_id": 3})
+	RunRecordsScript.record_victory({"time": 1520.0, "tier": 10, "kills": 842, "solo": true, "char_id": 3})
 	var screen := _screen()
 	var unlocked: int = (RunRecordsScript.load_all()["achievements"] as Dictionary).size()
 	assert(_has_text(screen, "%d / %d açıldı" % [unlocked, AchievementsScript.DEFS.size()]), "sayaç: %s" % str(_labels(screen)))

@@ -6,6 +6,9 @@ extends SceneTree
 ## Zemin shader karşılaştırması: CAP_SHADERS="su_an=;A=C:/.../zemin_A.gdshader" -> her noktada her shader zemin katmanlarına (Zemin /
 ## Zemin ayrıntı / Zemin desen / Zemin süsü) takılıp <ad>_<shader>.png; boş yol = materyalsiz. zemin_maske (R duvar, G su) DungeonData'dan.
 ## CAP_TAM=1: görüntü küçültülmez (1920x1080, piksel ayrıntısı için).
+## CAP_HAVA=<0..3>: hava (2 yağmurlu - kış haritasında kar), şiddet beklemeden hedefte.
+
+const AtmosphereMath := preload("res://scripts/atmosphere_math.gd")
 
 var _gm: Node = null
 var _out: String = OS.get_environment("CAP_OUT")
@@ -114,6 +117,14 @@ func _run() -> void:
 		var atmo: Node = main.get_node_or_null("Atmosphere")
 		if atmo:
 			atmo.set("cycle_time", float(OS.get_environment("CAP_SAAT")))
+	## CAP_HAVA=<0..3>: hava (0 açık, 1 rüzgârlı, 2 yağmurlu - kış haritasında kar, 3 sağanak); geçiş beklenmez, şiddet hemen hedefte
+	if OS.get_environment("CAP_HAVA") != "":
+		var atmo2: Node = main.get_node_or_null("Atmosphere")
+		if atmo2:
+			atmo2.call("debug_set_weather", int(OS.get_environment("CAP_HAVA")))
+			var hedef: Vector3 = AtmosphereMath.weather_targets(int(atmo2.get("weather")))
+			atmo2.set("rain_intensity", hedef.x)
+			atmo2.set("wind_intensity", hedef.y)
 	var p: Node2D = main.get_node("Player")
 	var reps: int = maxi(1, int(OS.get_environment("CAP_TEKRAR")))
 	var mats: Array = _floor_materials(main)

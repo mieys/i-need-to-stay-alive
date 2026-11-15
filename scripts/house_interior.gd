@@ -851,10 +851,14 @@ func _create_exit_trigger() -> void:
 	_exit_area.body_entered.connect(_on_exit_body_entered)
 
 
+const UiHideScript := preload("res://scripts/ui_hide.gd") ## F3 arayüzü gizle (madde 612): ev ipucu + ev canı çubuğu katmanları kayıtlı
+
+
 func _create_prompt_ui() -> void:
 	var layer := CanvasLayer.new()
 	layer.name = "HouseInteriorPromptLayer"
 	layer.layer = 50
+	UiHideScript.mark_layer(layer)
 	add_child(layer)
 	_prompt_layer = layer
 	## Madde 421: ipucu katmanı (50) seviye/kart/pazar ekranının (katman 1) ÜSTÜNDE çiziliyordu ("Eve girmek için BOŞLUK tuşuna bas" pazar
@@ -935,14 +939,14 @@ func _process(_delta: float) -> void:
 		_prompt_label.remove_from_group(&"interact_prompt")
 		_prompt_label.visible = true
 	elif not indoors and _near_entrance and _player.get("is_dead") != true:
-		_prompt_label.text = Loc.t("Eve girmek için %s tuşuna bas") % GameManager.get_action_key_label("interact")
+		_prompt_label.text = Loc.t("Eve girmek için %s tuşuna bas") % GameManager.get_action_hint_label("interact")
 		_prompt_label.add_to_group(&"interact_prompt") ## telefonda ETKİLEŞİM düğmesi bu uyarı görünürken çıkar (touch_controls.gd)
 		_prompt_label.visible = true
 		if f_just_pressed:
 			_enter_house()
 	elif indoors and _player.get("is_dead") != true and is_instance_valid(_babaanne) and _babaanne.can_talk(_player):
 		## Babaanne (madde 310): yakındaki oyuncuya konuşma ipucu, etkileşim tuşu bir cümle söyletir.
-		_prompt_label.text = Loc.t("Babaanneyle konuşmak için %s") % GameManager.get_action_key_label("interact")
+		_prompt_label.text = Loc.t("Babaanneyle konuşmak için %s") % GameManager.get_action_hint_label("interact")
 		_prompt_label.add_to_group(&"interact_prompt")
 		_prompt_label.visible = true
 		if f_just_pressed:
@@ -1263,6 +1267,7 @@ func _setup_siege() -> void:
 	var hp_layer := CanvasLayer.new()
 	hp_layer.name = "HouseHpLayer"
 	hp_layer.layer = 38 ## boss barıyla aynı katman (main.gd BossBarLayer)
+	UiHideScript.mark_layer(hp_layer)
 	add_child(hp_layer)
 	_hp_bar = HouseHpBarScript.new()
 	_hp_bar.name = "HouseHpBar"

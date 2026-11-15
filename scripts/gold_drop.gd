@@ -177,14 +177,19 @@ func _on_body_entered(body: Node) -> void:
 	## Boss altını: çok oyunculuda tüm katılımcılar arasında eşit bölünür, her pay sahibine doğru uçar.
 	var shared: bool = is_boss_gold and NetworkManager.is_multiplayer_active and NetworkManager.host_share_boss_gold(amount, global_position, body)
 	var played_sound: bool = false
+	## 2026-11-15: sıradan yaratık altını da bölünür - toplayana biraz fazla, kalanı takım arkadaşlarına (KillGold.PICKER_SHARE_WEIGHT);
+	## keep = toplayanın payı (tek oyunculu / tek katılımcıda tamamı). Diğer paylar NetworkManager'da birikip toplu gider.
+	var keep: int = amount
+	if not shared and not is_boss_gold and NetworkManager.is_multiplayer_active:
+		keep = NetworkManager.host_split_creature_gold(amount, global_position, body)
 	if shared:
 		pass
 	elif body.is_in_group("player"):
 		## 2026-10-24: toplanınca karakterin üstünde simgeli "+N" + altın sesi (KillGold.credit; ses orada çalar, ayrıca PickupSound yok).
-		KillGold.credit(get_tree(), amount, body.global_position)
-		played_sound = true
-	elif body.has_method("collect_gold"):
-		body.collect_gold(amount)
+		KillGold.credit(get_tree(), keep, body.global_position)
+		played_sound = keep > 0
+	elif body.has_method("collect_gold") and keep > 0:
+		body.collect_gold(keep)
 
 	if NetworkManager.is_multiplayer_active:
 		var drop_id: int = int(get_meta("drop_network_id", 0))

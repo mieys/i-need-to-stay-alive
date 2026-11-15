@@ -191,11 +191,22 @@ func _on_bubble_animation_finished() -> void:
 
 
 func _process(delta: float) -> void:
-	if _flash <= 0.0 or not visible:
+	if (_flash <= 0.0 and _pour <= 0.0) or not visible:
 		return
 	_flash = max(0.0, _flash - delta * 2.5)
+	_pour = max(0.0, _pour - delta / POUR_TIME)
 	_apply_flare()
 	queue_redraw()
+
+
+## Madde 565: Melek E bağının dalga paketi baloncuğa VARINCA (melek_bond_fx.gd _arrive) baloncuk bağın açık mavisine parlar ve
+## yarı saydamlığı bir an koyulaşır (prototip B/C "dolan baloncuk"; self_modulate alfa > 1). Hasar parlamasıyla birlikte toplanır.
+const POUR_TIME := 0.38
+var _pour: float = 0.0
+
+func pour() -> void:
+	_pour = 1.0
+	_apply_flare()
 
 
 ## Kullanıcı isteği (2026-09-22): "kalkan hasar alınca hafif çatlama ve BARİYER BALONCUĞU efekti çıkmalıydı" - gerçek baloncuk sprite'ı
@@ -204,7 +215,8 @@ func _apply_flare() -> void:
 	if not bubble:
 		return
 	var f: float = _flash * _flash
-	bubble.self_modulate = Color(1.0 + 0.7 * f, 1.0 + 0.9 * f, 1.0 + 1.3 * f, 1.0)
+	var p: float = _pour * _pour
+	bubble.self_modulate = Color(1.0 + 0.7 * f + 0.55 * p, 1.0 + 0.9 * f + 0.75 * p, 1.0 + 1.3 * f + 1.7 * p, 1.0 + 1.1 * p)
 
 
 ## angle: hasarın geldiği yön (radyan, player.gd take_damage()'da hesaplanır) -

@@ -10,7 +10,7 @@ extends Control
 const ChestArt := preload("res://scripts/chest_art.gd")
 const SHEET := ChestArt.NORMAL_SHEET
 const SFX_LAND := preload("res://Sound FX Starter Pack Vol. 1/Motions and Impacts/Impact Redwood.wav")
-const FRAME := ChestArt.FRAME_PX * 2.0 ## ekranda 64 px kare: paket sandığı (32 px) x2 tam kat (madde 409; eskisi 48 px)
+const FRAME := ChestArt.FRAME_PX * 2.0 ## ekranda 64 px kare: sandık (32 px) x2 tam kat (madde 409; eskisi 48 px)
 const LAYER_NAME := "ChestPassLayer"
 const LAYER_INDEX := 100 ## menülerin (bekleme katmanı 90, grup paneli 96) üstünde
 const POP_TIME := 0.18
@@ -97,7 +97,7 @@ func _start(from_pos: Vector2, to_pos: Vector2) -> void:
 
 	var atlas := AtlasTexture.new()
 	atlas.atlas = SHEET
-	atlas.region = Rect2(0, 0, ChestArt.FRAME_PX, ChestArt.FRAME_PX) ## kapalı sandık karesi
+	atlas.region = Rect2(ChestArt.FRAME_CLOSED * ChestArt.FRAME_PX, 0, ChestArt.FRAME_PX, ChestArt.FRAME_PX) ## kapalı sandık karesi
 	_icon = TextureRect.new()
 	_icon.texture = atlas
 	_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST

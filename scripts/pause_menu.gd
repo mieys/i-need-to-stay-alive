@@ -52,7 +52,7 @@ class PhTeam extends Control:
 		var me: Node = get_tree().get_first_node_in_group("player")
 		if me:
 			out.append([me, "Sen", GameManager.selected_char_id])
-		for a: Node in get_tree().get_nodes_in_group("remote_players"):
+		for a: Node in get_tree().get_nodes_in_group("remote_allies"):
 			if is_instance_valid(a) and int(a.get("peer_id")) > 0:
 				out.append([a, str(a.get("player_name")), int(a.get("char_id"))])
 		return out
@@ -497,9 +497,10 @@ func _on_restart() -> void:
 		_set_item_selected(_restart_btn, false)
 		_resume_btn.grab_focus()
 		return
+	## Tek oyunculu: aynı karakterle doğrudan yeniden başlamak yerine karakter seçimine döner (ana menü "Tek Oyunculu" ile aynı akış).
 	_unlock_local_input()
 	GameManager.reset()
-	get_tree().change_scene_to_file("res://scenes/main.tscn")
+	get_tree().change_scene_to_file("res://scenes/character_select.tscn")
 
 
 ## Host ise close_room() ile TÜM peer'lere "oda kapandı" bildirilip bağlantı düzgünce kesilir, client sadece kendi bağlantısını

@@ -13,6 +13,7 @@ const PATHS: Array[String] = [
 	"res://assets/audio/events/merchant_arrive.wav",
 	"res://assets/audio/events/mission_start.wav",
 	"res://assets/audio/events/mission_warn.wav",
+	"res://assets/audio/fire_staff_spray_loop.wav",
 	"res://assets/audio/matthew_fox_impact.wav",
 	"res://assets/audio/oakley/oakley_bees.wav",
 	"res://assets/audio/shaman/shaman_area_pulse.wav",
@@ -25,8 +26,8 @@ const PATHS: Array[String] = [
 	"res://assets/audio/skills/buyucu_don_nova.wav",
 	"res://assets/audio/skills/elara_evasion.wav",
 	"res://assets/audio/skills/hadime_blackhole.wav",
-	"res://assets/audio/skills/hadime_kara_delik.wav",
 	"res://assets/audio/skills/hadime_curse.wav",
+	"res://assets/audio/skills/hadime_kara_delik.wav",
 	"res://assets/audio/skills/hadime_nightmare.wav",
 	"res://assets/audio/skills/hadime_q.wav",
 	"res://assets/audio/skills/hadime_q_spell.wav",
@@ -37,8 +38,8 @@ const PATHS: Array[String] = [
 	"res://assets/audio/skills/necro_skull.wav",
 	"res://assets/audio/skills/oakley_bond.wav",
 	"res://assets/audio/skills/oakley_vines.wav",
-	"res://assets/audio/skills/shaman_golem_form.wav",
 	"res://assets/audio/skills/shaman_golem_e.wav",
+	"res://assets/audio/skills/shaman_golem_form.wav",
 	"res://assets/audio/skills/shaman_golem_oto.wav",
 	"res://assets/audio/skills/shaman_golem_q.wav",
 	"res://assets/audio/skills/sovalye_barrier.wav",
@@ -52,7 +53,11 @@ const PATHS: Array[String] = [
 	"res://assets/characters/vampir/mini_bat_1.png",
 	"res://assets/characters/vampir/mini_bat_2.png",
 	"res://assets/characters/vampir/mini_bat_3.png",
-	"res://assets/food/carrot.png",
+	"res://assets/food/apple.png",
+	"res://assets/food/bread.png",
+	"res://assets/food/drumstick.png",
+	"res://assets/food/platter.png",
+	"res://assets/food/soup.png",
 	"res://assets/fx/buyucu/hortum_cast.png",
 	"res://assets/fx/buyucu/hortum_hit.png",
 	"res://assets/fx/buyucu/hortum_in.png",
@@ -109,8 +114,30 @@ const PATHS: Array[String] = [
 	"res://assets/fx/elara/r_wisp_back_loop.png",
 	"res://assets/fx/elara/r_wisp_front_in.png",
 	"res://assets/fx/elara/r_wisp_front_loop.png",
-	"res://assets/fx/hadime/black_hole_frames.tres",
-	"res://assets/fx/hadime/black_hole_sheet.png",
+	"res://assets/fx/enchant/flame_shower_fire_big_frames.tres", ## elle (madde 550): toplayıcı Ejderha Nefesi'ni (final) vermez
+	"res://assets/fx/enchant/flame_shower_fire_big_sheet.png", ## elle (madde 550)
+	"res://assets/fx/enchant/flame_shower_fire_frames.tres",
+	"res://assets/fx/enchant/flame_shower_fire_sheet.png",
+	"res://assets/fx/enchant/flamethrower_fire_frames.tres", ## elle (madde 639): Ateş Asası alevi
+	"res://assets/fx/enchant/flamethrower_fire_sheet.png", ## elle (madde 639)
+	"res://assets/fx/gonca/seed_end.png", ## elle (madde 682): boss efekti / durum ikonu - toplayıcı bossları çağırmaz
+	"res://assets/fx/gonca/seed_loop.png", ## elle (madde 682): boss efekti / durum ikonu - toplayıcı bossları çağırmaz
+	"res://assets/fx/hadime/cukur/cukur_buyuk_on.tres",
+	"res://assets/fx/hadime/cukur/cukur_buyuk_on_cikis.png",
+	"res://assets/fx/hadime/cukur/cukur_buyuk_on_dongu.png",
+	"res://assets/fx/hadime/cukur/cukur_buyuk_on_giris.png",
+	"res://assets/fx/hadime/cukur/cukur_buyuk_zemin.tres",
+	"res://assets/fx/hadime/cukur/cukur_buyuk_zemin_cikis.png",
+	"res://assets/fx/hadime/cukur/cukur_buyuk_zemin_dongu.png",
+	"res://assets/fx/hadime/cukur/cukur_buyuk_zemin_giris.png",
+	"res://assets/fx/hadime/cukur/cukur_on.tres",
+	"res://assets/fx/hadime/cukur/cukur_on_cikis.png",
+	"res://assets/fx/hadime/cukur/cukur_on_dongu.png",
+	"res://assets/fx/hadime/cukur/cukur_on_giris.png",
+	"res://assets/fx/hadime/cukur/cukur_zemin.tres",
+	"res://assets/fx/hadime/cukur/cukur_zemin_cikis.png",
+	"res://assets/fx/hadime/cukur/cukur_zemin_dongu.png",
+	"res://assets/fx/hadime/cukur/cukur_zemin_giris.png",
 	"res://assets/fx/hadime/curse_impact_frames.tres",
 	"res://assets/fx/hadime/curse_impact_sheet.png",
 	"res://assets/fx/hadime/curse_launch_frames.tres",
@@ -151,6 +178,10 @@ const PATHS: Array[String] = [
 	"res://assets/fx/shaman_golem/transform_sheet.png",
 	"res://assets/fx/shield_hit/hit_frames.tres",
 	"res://assets/fx/shield_hit/hit_sheet.png",
+	"res://assets/fx/vampir_donusum/in_front.png",
+	"res://assets/fx/vampir_donusum/in_ground.png",
+	"res://assets/fx/vampir_donusum/out_front.png",
+	"res://assets/fx/vampir_donusum/out_ground.png",
 	"res://assets/skills/buyucu_skill_hortum_icon.png",
 	"res://assets/skills/buyucu_skill_meteor_icon.png",
 	"res://assets/skills/cadi_iksir_1_icon.png",
@@ -162,9 +193,13 @@ const PATHS: Array[String] = [
 	"res://assets/skills/shaman_golem_sicrayisi_icon.png",
 	"res://assets/skills/shaman_sarsici_darbe_icon.png",
 	"res://assets/ui/game/hud_inset.png",
+	"res://assets/ui/kit/panel_status_badge.png",
 	"res://assets/ui/status/bat.png",
+	"res://assets/ui/status/petrify.png", ## elle (madde 682): boss efekti / durum ikonu - toplayıcı bossları çağırmaz
+	"res://assets/ui/status/poison.png", ## elle (madde 682): boss efekti / durum ikonu - toplayıcı bossları çağırmaz
 	"res://assets/ui/status/shield_slow.png",
 	"res://assets/ui/status/speed.png",
+	"res://assets/ui/status/stone_slow.png", ## elle (madde 682): boss efekti / durum ikonu - toplayıcı bossları çağırmaz
 	"res://assets/ui/status/talon_stack.png",
 	"res://assets/weapons/mermi/arcane_govde.png",
 	"res://assets/weapons/mermi/arcane_iz.png",
@@ -173,18 +208,18 @@ const PATHS: Array[String] = [
 	"res://assets/weapons/mermi/fisek_alev.png",
 	"res://assets/weapons/mermi/ok_govde.png",
 	"res://assets/weapons/mermi/ok_iz.png",
+	"res://assets/weapons/mermi/pompali_govde.png", ## madde 448 (ProjectileArt load())
 	"res://assets/weapons/mermi/tabanca_govde.png",
 	"res://assets/weapons/mermi/tabanca_iz.png",
 	"res://assets/weapons/mermi/tufek_govde.png",
-	"res://assets/weapons/mermi/pompali_govde.png", ## madde 448 (ProjectileArt load())
 	"res://assets/weapons/mermi/tufek_iz.png",
 	"res://assets/weapons/mermi/zehir_govde.png",
-	"res://assets/weapons/lightning/icon_v3.png",
 	"res://assets/weapons/yeni/arbalet.png",
 	"res://assets/weapons/yeni/arcane.png",
 	"res://assets/weapons/yeni/buz_asasi.png",
 	"res://assets/weapons/yeni/fire_staff.png",
 	"res://assets/weapons/yeni/gokkusagi.png",
+	"res://assets/weapons/yeni/topuz.png",
 	"res://assets/weapons/yeni/uzunkilic.png",
 	"res://assets/weapons/yeni/yay.png",
 	"res://assets/weapons/yeni/yay_d1.png",
@@ -192,7 +227,7 @@ const PATHS: Array[String] = [
 	"res://assets/weapons/yeni/yay_d3.png",
 	"res://assets/weapons/yeni/yay_d4.png",
 	"res://assets/weapons/yeni/yay_d5.png",
-	"res://scenes/fx_buyucu_surge_spark.tscn",
+	"res://assets/weapons/yeni/yildirim_asasi.png",
 	"res://scenes/fx_buyucu_surge_wave.tscn",
 	"res://scenes/fx_hadime_black_hole.tscn",
 	"res://scenes/fx_hadime_curse.tscn",
@@ -204,6 +239,7 @@ const PATHS: Array[String] = [
 	"res://scenes/fx_hit_mini_spark.tscn",
 	"res://scenes/fx_korsan_puff_dust.tscn",
 	"res://scenes/fx_korsan_puff_smoke.tscn",
+	"res://scenes/fx_petrify.tscn", ## elle (madde 682): boss efekti / durum ikonu - toplayıcı bossları çağırmaz
 	"res://scenes/fx_shaman_golem_slam.tscn",
 	"res://scenes/fx_shaman_golem_transform.tscn",
 	"res://scripts/cadi_bottle.gd",
@@ -215,8 +251,20 @@ const PATHS: Array[String] = [
 	"res://scripts/fx_hadime_ground_loop.gd",
 	"res://scripts/fx_paladin_barrier.gd",
 	"res://scripts/fx_paladin_overlay.gd",
+	"res://scripts/fx_petrify.gd", ## elle (madde 682): boss efekti / durum ikonu - toplayıcı bossları çağırmaz
 	"res://scripts/fx_shield_hit.gd",
+	"res://scripts/gonca_drain.gd", ## elle (madde 682): boss efekti / durum ikonu - toplayıcı bossları çağırmaz
+	"res://scripts/gonca_ring.gd", ## elle (madde 682): boss efekti / durum ikonu - toplayıcı bossları çağırmaz
+	"res://scripts/gonca_seed.gd", ## elle (madde 682): boss efekti / durum ikonu - toplayıcı bossları çağırmaz
 	"res://scripts/hadime_black_hole.gd",
+	"res://scripts/kardes_sheet_fx.gd", ## elle (madde 683, Üç Kardeş): spawn_world_fx / SheetFx.play load() eder; dokular betiklerde preload
+	"res://scripts/kardes_shot.gd", ## elle (madde 683)
+	"res://scripts/kardes_zone.gd", ## elle (madde 683)
+	"res://scripts/medusa_gaze.gd", ## elle (madde 682): boss efekti / durum ikonu - toplayıcı bossları çağırmaz
 	"res://scripts/vampir_fx.gd",
+	"res://scripts/weapon_traits/ates_nefesi.gd",
+	"res://scripts/weapon_traits/flamethrower_shape.gd", ## elle (madde 639)
+	"res://scripts/weapon_traits/kizisan_namlu.gd",
+	"res://shaders/hadime_cukur_palet.gdshader",
 	"res://shaders/shield_dome.gdshader",
 ]

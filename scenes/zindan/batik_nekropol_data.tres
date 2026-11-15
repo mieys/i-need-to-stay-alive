@@ -2333,4 +2333,388 @@ objects = [{
 },
 "rect": Rect2(288, 3184, 16, 16),
 "type": "avci"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(1360, 2656, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(1392, 1200, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(1968, 1200, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(1616, 160, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(1376, 384, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(2112, 384, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(1024, 480, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(1088, 480, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(1024, 736, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(1088, 736, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(2304, 480, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(2368, 480, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(2304, 736, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(2368, 736, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(448, 128, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(2688, 128, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(3168, 128, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(2736, 1152, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(2992, 1152, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(3232, 1152, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(2608, 1440, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(3024, 1408, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(3152, 1408, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(2736, 1824, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(2864, 1824, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(2992, 1824, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(3200, 1824, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(2928, 2080, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(3168, 2080, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(176, 2528, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(2928, 2560, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(128, 128, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(1232, 1024, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(1600, 1024, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(1904, 1024, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(2288, 1024, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(432, 1184, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(2464, 1216, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(288, 2016, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(672, 2016, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(2464, 2048, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(3120, 2080, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(928, 2336, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(1264, 2336, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(2096, 2336, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(3200, 2560, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(976, 2880, 16, 48),
+"type": "tuzak"
+}, {
+"name": "Kafatası Kabartması",
+"props": {
+"tema": "kemik",
+"tur": "kafatasi"
+},
+"rect": Rect2(2304, 2896, 16, 48),
+"type": "tuzak"
 }]
