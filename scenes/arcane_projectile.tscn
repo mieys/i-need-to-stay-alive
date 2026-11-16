@@ -3,7 +3,7 @@
 [ext_resource type="Script" path="res://scripts/projectile.gd" id="1"]
 [ext_resource type="SpriteFrames" path="res://assets/weapons/arcane/spin_frames.tres" id="2"]
 [ext_resource type="AudioStream" path="res://assets/audio/arcane_attack.mp3" id="3"]
-[ext_resource type="PackedScene" path="res://scenes/fx_hit_purple_burst.tscn" id="4"]
+[ext_resource type="PackedScene" path="res://scenes/fx_hit_void_crack.tscn" id="4"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_1"]
 radius = 14.0

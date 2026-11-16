@@ -35,25 +35,25 @@ func ", idx)
 	assert(not ("18: _skill_heal()" in match_block), "Korsan ULTİ (id 18) iyileştirmeye gitmemeli")
 
 
-## Güncel dizilim (2026-09-24): Golem Çağır (id 20) E/skill2'de, R/skill3 Lanetli Kafatası (id 44). Ayrı fonksiyon: yukarıdaki
+## Kit 2026-11-16: Kemik Okçusu (id 20) E/skill2'de, Ölüler Ordusu (id 44) R/skill3'te. Ayrı fonksiyon: yukarıdaki
 ## Korsan kontrolü (önceden var olan başarısızlık) bu kontrolleri durdurmasın.
-func test_necro_golem_is_e_and_skull_is_r() -> void:
+func test_necro_archer_is_e_and_army_is_r() -> void:
 	var content: String = FileAccess.get_file_as_string("res://scripts/player.gd")
 	var a2: int = content.find("func _activate_skill2()")
 	var skill2_body: String = content.substr(a2, content.find("func _end_skill2_effects()", a2) - a2)
-	assert("20: _skill_necro_summon_golem()" in skill2_body, "Necromancer E (id 20) _activate_skill2'deki match'ten _skill_necro_summon_golem'a gitmeli")
+	assert("20: _skill_necro_summon_archer()" in skill2_body, "Necromancer E (id 20) _activate_skill2'deki match'ten okçuya gitmeli")
 	var a3: int = content.find("func _activate_skill3()")
 	var skill3_body: String = content.substr(a3, content.find("func _end_skill3_effects()", a3) - a3)
-	assert(not ("20: _skill_necro_summon_golem()" in skill3_body), "golem artık R'de olmamalı")
-	assert("44: _skill_necro_skull()" in skill3_body, "Necromancer R (id 44) kafatasına gitmeli")
+	assert("44: _skill_necro_army()" in skill3_body, "Necromancer R (id 44) orduya gitmeli")
 
 
 func test_korsan_and_necro_functions_exist() -> void:
 	var p := PlayerScript.new()
 	assert(p.has_method("_korsan_try_place_bomb"), "Korsan bomba bırakma fonksiyonu olmalı")
 	assert(p.has_method("_skill_korsan_detonate_all"), "Korsan patlatma fonksiyonu olmalı")
-	assert(p.has_method("_skill_necro_summon_skeleton"), "Necromancer iskelet çağırma fonksiyonu olmalı")
-	assert(p.has_method("_skill_necro_summon_golem"), "Necromancer golem çağırma fonksiyonu olmalı")
+	assert(p.has_method("_skill_necro_summon_warrior"), "Necromancer savaşçı çağırma fonksiyonu olmalı")
+	assert(p.has_method("_skill_necro_summon_archer"), "Necromancer okçu çağırma fonksiyonu olmalı")
+	assert(p.has_method("_skill_necro_army"), "Necromancer ordu fonksiyonu olmalı")
 	assert(p.has_method("on_enemy_killed"), "Öldürme bildirim hook'u olmalı")
 	assert(p.has_method("get_necro_souls"), "Ruh sayısını okuyan getter olmalı")
 	p.free()
@@ -93,20 +93,21 @@ func test_necro_souls_start_at_zero_and_accumulate_on_kill() -> void:
 	p.free()
 
 
-## DÜZELTME: ruh bedeli sonradan kullanıcı isteğiyle 3'ten 10'a
-## (NECRO_SKELETON_SOUL_COST) güncellenmişti, bu test hâlâ eski "3"ü
-## sınıyordu - artık sabitin kendisinden okunuyor ki ileride tekrar
-## dengelenirse test kendiliğinden güncel kalsın.
-func test_necro_skeleton_summon_requires_correct_souls() -> void:
+## Ruh bedeli tek tablodan (NecroArmyMath.WARRIOR_SOUL_COST, kit 2026-11-16) okunur ki ileride dengelenirse test güncel kalsın.
+func test_necro_warrior_summon_requires_correct_souls() -> void:
 	## Oyuncu sahneden (OverheadBar vb. çocuklarıyla) kurulur - player.gd _ready onlara bağlanıyor (2026-10-03 test düzeltmesi).
+	if get_tree().current_scene == null:
+		get_tree().current_scene = self
 	var p: Node = PlayerSceneForNecro.instantiate()
 	add_child(p)
-	var cost: int = PlayerScript.NECRO_SKELETON_SOUL_COST
+	var cost: int = preload("res://scripts/necro_army_math.gd").WARRIOR_SOUL_COST
 	p.necro_souls = cost - 1
 	p.global_position = Vector2.ZERO
-	p._skill_necro_summon_skeleton()
-	assert(p.necro_souls == cost - 1, "Yetersiz ruhla iskelet çağrılmamalı, ruh harcanmamalı")
+	p._skill_necro_summon_warrior()
+	assert(p.necro_souls == cost - 1, "Yetersiz ruhla savaşçı çağrılmamalı, ruh harcanmamalı")
 
 	p.necro_souls = cost
-	p._skill_necro_summon_skeleton()
-	assert(p.necro_souls == 0, "Yeterli ruhla iskelet çağrılınca ruhlar harcanmalı")
+	p._skill_necro_summon_warrior()
+	assert(p.necro_souls == 0, "Yeterli ruhla savaşçı çağrılınca ruhlar harcanmalı")
+	for u in get_tree().get_nodes_in_group("player_allies"):
+		u.free()

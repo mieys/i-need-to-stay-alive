@@ -6,7 +6,11 @@ extends Node
 ## yaratıklar geçici olarak z_index 2'ye alınır (oyuncunun üstüne çizilir), önlerinden ayrılınca eski z'ye döner. Yaratıkların kendi aralarındaki
 ## sıra aynen kalır (main.gd _update_creature_draw_order, C++ draw_order); harita nesneleri için bkz. depth_occluders.gd.
 ## Karakterler = yerel oyuncu + uzak oyuncu kuklaları (depth_occluders.gd collect_characters). Tamamen yerel/kozmetik, ağ gerekmez.
-## Sadece "enemies" (+ görev kopyaları, EnemyQuery.candidates'in döndürdüğü): evcil hayvan/müttefik (player_ally*) oyuncunun altında KALIR (eskisi gibi).
+## "enemies" (+ görev kopyaları, EnemyQuery.candidates'in döndürdüğü) + MÜTTEFİK / YER EVCİLİ (ALLY_DEPTH_GROUPS, 2026-11-16 aşağıda).
+## MÜTTEFİK + EVCİL (2026-11-16, kullanıcı: "hala Y ekseni sorunları var yaratıklar arasında", ekran: oyuncunun önünde z 2'ye çıkan sıçan ÖNÜNDEKİ Minik Cadı'nın
+## üstüne çiziliyordu): müttefikler (Necro iskeleti, golem...) ve yer evcilleri (pet_depth_proxy.gd) eskiden hiç yükseltilmiyordu ("oyuncunun altında kalır"),
+## yaratıklarla aynı ayak sırasındaydılar ama yükseltilen (z 2) bir yaratığın önünde kalınca onun ALTINA çiziliyorlardı; oyuncunun önündeyken de altındaydılar.
+## Artık yaratık gibi havuza girerler: oyuncunun önünde + örtüşüyorsa z 2, kapanışta yükseltilen yaratığın önündeyse o da z 2.
 ## Ölüm animasyonundaki (is_dead) yaratık yerde yatar - hep oyuncunun altında kalır.
 ## Titreme koruması: yükselme ayak farkı > +HYSTERESIS, inme < -HYSTERESIS (yan yana yürürken z her karede gidip gelmesin).
 ##
@@ -57,6 +61,9 @@ const CLOSURE_PAD := 240.0
 const ABOVE_SKIP := 130.0
 ## Düğüm başına önbellek tablosu bu kadar çağrıda bir süpürülür (silinmiş yaratıkların kayıtları atılır).
 const CACHE_SWEEP_EVERY := 300
+## Yaratık gibi derinliğe giren müttefik / evcil grupları (main.gd CREATURE_SORT_GROUPS ile aynı ayak sırasındalar). Oyuncu kuklası ("player_ally"
+## grubundaki RemotePlayer) karakterdir, burada sayılmaz.
+const ALLY_DEPTH_GROUPS: Array[String] = ["player_allies", "player_ally", "ysort_pets"]
 
 static var _cpp_on: bool = OS.get_environment("ENEMY_CPP_DEPTH") != "0"
 
@@ -193,9 +200,14 @@ func _update_cpp(tree: SceneTree, ew: Object) -> void:
 	var ex_nodes: Array = []
 	var ex_data := PackedFloat64Array()
 	var ex_want := PackedByteArray()
-	var copies: Array[Node] = tree.get_nodes_in_group("mission_copies")
-	if not copies.is_empty() and not chars.is_empty():
-		_collect_extras(copies, chars, ex_nodes, ex_data, ex_want)
+	if not chars.is_empty():
+		var extra: Array = []
+		for e in tree.get_nodes_in_group("mission_copies"):
+			if is_instance_valid(e) and e.is_in_group("enemies"):
+				extra.append(e)
+		extra.append_array(_ally_candidates(tree))
+		if not extra.is_empty():
+			_collect_extras(extra, chars, ex_nodes, ex_data, ex_want)
 	var params := PackedFloat64Array([SCAN_RADIUS, CLOSURE_PAD, ABOVE_SKIP, HYSTERESIS, DepthScript.BODY_HALF_WIDTH, EnemyQueryScript.MOVE_SLACK])
 	var res: Array = ew.call("depth_scan", cxy, ex_nodes, ex_data, ex_want, params, false)
 	var need: Array = ew.call("depth_pending")
@@ -214,8 +226,22 @@ func _update_cpp(tree: SceneTree, ew: Object) -> void:
 	_apply_char_z({})
 
 
-## Kayıtsız adaylar (EnemyQuery.candidates'in görev kopyaları kolu): eski update_now süzgeçleriyle AYNI; havuza girenler + ilk yükseltme kararı C++'a verilir.
-func _collect_extras(copies: Array[Node], chars: Array[Vector4], ex_nodes: Array, ex_data: PackedFloat64Array, ex_want: PackedByteArray) -> void:
+## Yaratık gibi derinliğe giren müttefikler / yer evcilleri (ALLY_DEPTH_GROUPS; oyuncu kuklaları hariç).
+static func _ally_candidates(tree: SceneTree) -> Array:
+	var out: Array = []
+	var seen: Dictionary = {}
+	for g in ALLY_DEPTH_GROUPS:
+		for n in tree.get_nodes_in_group(g):
+			if seen.has(n) or not (n is Node2D) or n is RemotePlayer or n.is_in_group("remote_players") or n.is_in_group("player") \
+					or n.is_in_group("enemies"):
+				continue
+			seen[n] = true
+			out.append(n)
+	return out
+
+
+## Kayıtsız adaylar (görev kopyaları + müttefik/evcil): eski update_now süzgeçleriyle AYNI; havuza girenler + ilk yükseltme kararı C++'a verilir.
+func _collect_extras(copies: Array, chars: Array[Vector4], ex_nodes: Array, ex_data: PackedFloat64Array, ex_want: PackedByteArray) -> void:
 	var reach: float = SCAN_RADIUS + CLOSURE_PAD
 	var r2: float = (reach + EnemyQueryScript.MOVE_SLACK) * (reach + EnemyQueryScript.MOVE_SLACK)
 	var index: Dictionary = {}
@@ -224,7 +250,7 @@ func _collect_extras(copies: Array[Node], chars: Array[Vector4], ex_nodes: Array
 	for c in chars:
 		var cpos := Vector2(c.x, c.y)
 		for e in copies:
-			if not is_instance_valid(e) or not e.is_in_group("enemies") or e.get("is_dead") == true 					or cpos.distance_squared_to((e as Node2D).global_position) > r2:
+			if not is_instance_valid(e) or e.get("is_dead") == true or cpos.distance_squared_to((e as Node2D).global_position) > r2:
 				continue
 			var n := e as Node2D
 			if n == null or not n.visible:
@@ -266,8 +292,9 @@ func _update_legacy(tree: SceneTree) -> void:
 	var char_nodes: Array[Node2D] = DepthScript.character_nodes(tree)
 	var chars: Array[Vector4] = DepthScript.collect_characters(tree)
 	var reach: float = SCAN_RADIUS + CLOSURE_PAD
+	var allies: Array = _ally_candidates(tree) if not chars.is_empty() else []
 	for c in chars:
-		for e in EnemyQueryScript.candidates(tree, Vector2(c.x, c.y), reach):
+		for e in EnemyQueryScript.candidates(tree, Vector2(c.x, c.y), reach) + allies:
 			if not is_instance_valid(e):
 				continue
 			var n := e as Node2D

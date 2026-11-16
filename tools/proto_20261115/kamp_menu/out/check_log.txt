@@ -1,0 +1,8 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+SCRIPT ERROR: Parse Error: Cannot find member "hash" in base "PackedByteArray".
+   at: GDScript::reload (res://tools/proto_20261115/kamp_menu/kamp_capture.gd:141)
+SCRIPT ERROR: Parse Error: Function "hash()" not found in base PackedByteArray.
+   at: GDScript::reload (res://tools/proto_20261115/kamp_menu/kamp_capture.gd:141)
+ERROR: Failed to load script "res://tools/proto_20261115/kamp_menu/kamp_capture.gd" with error "Parse error".
+   at: load (modules/gdscript/gdscript_resource_format.cpp:46)

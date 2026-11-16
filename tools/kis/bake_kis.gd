@@ -6,7 +6,7 @@ extends SceneTree
 ##  - "Yer/Zemin Toprak" (kar) + "Yer/Zemin Çimen" (göl kıyısı karı) + "Yer/Patika" (toprak) + kaynak kıyısı "Su/Su ayrıntılar 2" + kar/toprak
 ##    lekeleri "Yer/Leke" + "Yer/Kar süsleri": scenes/kis_zemin.gdshader (madde 630: koyulaşan kar rampası + rüzgâr sırtları; ıslak toprak);
 ##  - "Yer/Buz": scenes/kis_buz.gdshader (yarı saydam buzun altında derinlik + balık gölgeleri + ışıltı bandı);
-##  - "Su/Su": scenes/kis_su.gdshader (sıcak kaynak: ılık turkuaz + kabarcık; karo düz mavi, collision mavi pikseli su sayar);
+##  - "Su/Su": ana haritanın scenes/su.gdshader'ı, sabit renk = harita profilinin "su_doku"su (madde 714; karo düz mavi, collision mavi pikseli su sayar);
 ##  - ağaç / ot / çiçek / y-sıralı nesne katmanları + "Shader Eklenecek" grubu: ana haritanın AYNI adlı düğümlerinin materyali + görünüm
 ##    özellikleri; "Ağaç 1..7" ana haritanın "Ağaç 0"ınkini, "Kayalar 1..3" "Animasyonsuz çalılar"ınkini alır;
 ##  - "Orman parçaları/Orman parçaları" görünmez engel katmanı: visible = false.
@@ -17,7 +17,6 @@ const OUT_PATH := "res://scenes/kis_baked.tscn"
 const MAIN_BAKED := "res://scenes/harita_baked.tscn"
 const GROUND_SHADER := "res://scenes/kis_zemin.gdshader"
 const ICE_SHADER := "res://scenes/kis_buz.gdshader"
-const WATER_SHADER := "res://scenes/kis_su.gdshader"
 const GROUND_LAYERS: PackedStringArray = ["Yer/Zemin Toprak", "Yer/Zemin Çimen", "Yer/Patika", "Su/Su ayrıntılar 2", "Yer/Leke", "Yer/Kar süsleri"]
 const CARRY_FROM_MAIN: PackedStringArray = ["Shader Eklenecek", "Shader Eklenecek/Çiçekler 1", "Shader Eklenecek/Çalılar",
 	"Shader Eklenecek/Çalılar1", "Shader Eklenecek/Animasyonsuz çalılar", "Orman parçaları/Saklanma Çalılığı"]
@@ -61,8 +60,17 @@ func _init() -> void:
 		ice.use_parent_material = false
 	var water := root.get_node_or_null("Su/Su") as TileMapLayer
 	if water != null:
+		## madde 714: tüm sular ana haritanın su shader'ı (scenes/su.gdshader, sabit renk); renkler harita profilinin "su_doku"sundan
+		var prof: Dictionary = ((load("res://scripts/map_profiles.gd") as GDScript).get("PROFILES") as Dictionary)["kis"]
+		## water_fx.gd burada yüklenemez (bake _init'te, autoload'lardan önce; UISound'a başvuruyor) -> make_material'ın aynısı
+		var cfg: Dictionary = prof.get("su_doku", {})
 		var wm := ShaderMaterial.new()
-		wm.shader = load(WATER_SHADER)
+		wm.shader = load("res://scenes/su.gdshader")
+		if cfg.has("renk"):
+			wm.set_shader_parameter("sabit_renk", true)
+			wm.set_shader_parameter("su_rengi", cfg["renk"])
+		if cfg.has("sirt"):
+			wm.set_shader_parameter("sirt_renk", cfg["sirt"])
 		water.material = wm
 		water.use_parent_material = false
 		water.modulate = Color.WHITE

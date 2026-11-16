@@ -738,6 +738,9 @@ func _setup_map() -> void:
 		var floor_fx := DungeonFloorScript.new()
 		root.add_child(floor_fx)
 		floor_fx.setup(root, MapProfilesScript.data())
+	## su = ana haritanın su shader'ı (madde 714, kullanıcı: "tüm sular ana haritadaki su shaderını kullanmalı"): profilin "su_doku"su (Batık Nekropol)
+	if MapProfilesScript.feature("su_efekti"):
+		(load("res://scripts/water_fx.gd") as GDScript).call("attach", root)
 	var emissive: Array = []
 	for did: String in EMISSIVE:
 		for f: String in EMISSIVE[did]:

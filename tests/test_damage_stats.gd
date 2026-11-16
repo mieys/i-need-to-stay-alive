@@ -300,7 +300,7 @@ func test_spiritual_pet_and_passive_counters_madde_531() -> void:
 	BalanceLogScript.on_hit("w:yay", 321.0, false)
 	BalanceLogScript.set_window("s:evcil_slime", false, false)
 	var sl: String = DamageStats.pet_tooltip_bbcode("slime", ink)
-	assert(sl.contains("Kullanım") and sl.contains("Etki sürerken verilen hasar") and sl.contains("321") and sl.contains("saldırı gücü"), sl)
+	assert(sl.contains("Kullanım") and sl.contains("Etki sürerken verilen hasar") and sl.contains("321") and sl.contains("ulti bekleme süresi"), sl) ## Slime: saldırı gücü yerine ulti bekleme azaltması (SLIME_ULT_CDR)
 	BalanceLogScript.on_util("s:evcil_hayalet", "uses")
 	assert(DamageStats.pet_tooltip_bbcode("hayalet", ink).contains("Kullanım"), "Hayalet örtü sayısı")
 	assert(DamageStats.pet_tooltip_bbcode("kelebek", ink).contains("saldırı hızı"), "Kelebek verdiği saldırı hızı")

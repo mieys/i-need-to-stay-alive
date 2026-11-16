@@ -776,7 +776,7 @@ func _build_card(candidate: Dictionary) -> Control:
 		var part_slots: int = 1
 		if _player.has_method("get_max_item_slots"):
 			part_slots = _player.get_max_item_slots()
-		var block_reason: String = Items.purchase_block_reason(item_key, gm.owned_items, part_slots, {"consume": []})
+		var block_reason: String = Items.purchase_block_code(item_key, gm.owned_items, part_slots, {"consume": []})
 		has_slots = block_reason == ""
 		block_label = _slot_block_label(block_reason)
 
@@ -835,32 +835,33 @@ func _build_card(candidate: Dictionary) -> Control:
 	return column
 
 ## AL kapalıyken düğme yazısı: eskiden her engel "SLOTLAR DOLU" yazıyordu ("Zaten sende var" / "en fazla 6 kopya" da dahil;
-## epik/efsanevi/parça havuzları AYRI olduğundan oyuncu "pazar sınırsız" sanıyordu, 2026-11-06 oyuncu bildirimi). reason = Items.purchase_block_reason.
-func _slot_block_label(reason: String) -> String:
-	if reason.begins_with("Zaten"):
+## epik/efsanevi/parça havuzları AYRI olduğundan oyuncu "pazar sınırsız" sanıyordu, 2026-11-06 oyuncu bildirimi). code = Items.purchase_block_code (dilden bağımsız; eskiden çevrilmiş sebep metninin Türkçe başına bakılıyordu ve İngilizcede
+## her engel "SLOTS FULL" çıkıyordu, 2026-11-15).
+func _slot_block_label(code: String) -> String:
+	if code == "owned":
 		return "ZATEN SENDE"
-	if reason.begins_with("Bu parçadan"):
+	if code == "copies":
 		return "KOPYA DOLU"
-	if reason.begins_with(Items.KADEME_NAMES[Items.KADEME_PARCA - 1]):
+	if code == "slots_%d" % Items.KADEME_PARCA: ## dil:yok (kod, ekrana çıkmaz)
 		return "PARÇA DOLU"
-	if reason.begins_with(Items.KADEME_NAMES[Items.KADEME_EPIK - 1]):
+	if code == "slots_%d" % Items.KADEME_EPIK: ## dil:yok (kod, ekrana çıkmaz)
 		return "EPİK DOLU"
-	if reason.begins_with(Items.KADEME_NAMES[Items.KADEME_EFSANEVI - 1]):
+	if code == "slots_%d" % Items.KADEME_EFSANEVI: ## dil:yok (kod, ekrana çıkmaz)
 		return "EFSANEVİ DOLU"
 	return "SLOTLAR DOLU"
 
 
 ## Telefon düğmesinin alt satırı (büyük yazı "DOLU" kalır).
-func _slot_block_sub(reason: String) -> String:
-	if reason.begins_with("Zaten"):
+func _slot_block_sub(code: String) -> String:
+	if code == "owned":
 		return "zaten sende var"
-	if reason.begins_with("Bu parçadan"):
+	if code == "copies":
 		return Loc.t("en fazla %d tane") % Items.PART_MAX_COPIES
-	if reason.begins_with(Items.KADEME_NAMES[Items.KADEME_PARCA - 1]):
+	if code == "slots_%d" % Items.KADEME_PARCA: ## dil:yok (kod, ekrana çıkmaz)
 		return "parça slotu dolu"
-	if reason.begins_with(Items.KADEME_NAMES[Items.KADEME_EPIK - 1]):
+	if code == "slots_%d" % Items.KADEME_EPIK: ## dil:yok (kod, ekrana çıkmaz)
 		return "epik slotu dolu"
-	if reason.begins_with(Items.KADEME_NAMES[Items.KADEME_EFSANEVI - 1]):
+	if code == "slots_%d" % Items.KADEME_EFSANEVI: ## dil:yok (kod, ekrana çıkmaz)
 		return "efsanevi slotu dolu"
 	return "yer yok"
 
@@ -908,7 +909,7 @@ static func _set_desc_font_size(desc_lbl: RichTextLabel, font_size: int) -> void
 ## kadar küçülür (alt sınır CARD_NAME_MIN_FONT_SIZE, o da yetmezse alt satıra kayar); açıklama CARD_DESC_FONT_SIZE'dan başlayıp
 ## metnin yüksekliği ayrılan alana SIĞANA kadar (alt sınır CARD_DESC_MIN_FONT_SIZE) küçülür. Kısa metinler tam boyutta kalır.
 func _fit_card_texts(card: Control) -> void:
-	var name_lbl: Label = card.get_meta("name_label", null) as Label
+	var name_lbl: Label = (card.get_meta("name_label") if card.has_meta("name_label") else null) as Label
 	if name_lbl and is_instance_valid(name_lbl) and name_lbl.size.x > 0.0:
 		var font: Font = name_lbl.get_theme_font("font")
 		var fs: int = _name_fs()
@@ -917,7 +918,7 @@ func _fit_card_texts(card: Control) -> void:
 		name_lbl.add_theme_font_size_override("font_size", fs)
 		if font.get_string_size(name_lbl.text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > name_lbl.size.x:
 			name_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	var desc_lbl: RichTextLabel = card.get_meta("desc_label", null) as RichTextLabel
+	var desc_lbl: RichTextLabel = (card.get_meta("desc_label") if card.has_meta("desc_label") else null) as RichTextLabel
 	if desc_lbl and is_instance_valid(desc_lbl) and desc_lbl.size.y > 0.0:
 		var dfs: int = _desc_fs()
 		_set_desc_font_size(desc_lbl, dfs)
@@ -1121,11 +1122,14 @@ func _build_phone_card(candidate: Dictionary) -> Control:
 	var kc: Color = PH_KADEME_COL[kd - 1]
 	var stat_lines: Array = []
 	var passive: String = ""
+	## Items.describe seçili dilde ("Passive: ..."): önek de çevrilmiş olmalı - eskiden düz "Pasif:" arandığından İngilizcede pasif
+	## kutusu hiç çıkmıyor, pasif metni stat satırı gibi görünüyordu (2026-11-15).
+	var passive_tag: String = Loc.t("Pasif:")
 	for ln: String in desc_text.split("\n"):
 		if ln.strip_edges() == "":
 			continue
-		if ln.begins_with("Pasif:"):
-			passive = ln.substr(6).strip_edges()
+		if ln.begins_with(passive_tag):
+			passive = ln.substr(passive_tag.length()).strip_edges()
 		else:
 			stat_lines.append(ln)
 	var w: float = PH_CHEST_W
@@ -1213,7 +1217,7 @@ func _build_phone_card(candidate: Dictionary) -> Control:
 		var part_slots: int = 1
 		if _player.has_method("get_max_item_slots"):
 			part_slots = _player.get_max_item_slots()
-		var block_reason: String = Items.purchase_block_reason(item_key, gm.owned_items, part_slots, {"consume": []})
+		var block_reason: String = Items.purchase_block_code(item_key, gm.owned_items, part_slots, {"consume": []})
 		has_slots = block_reason == ""
 		block_sub = _slot_block_sub(block_reason)
 	var power_mult: float = 1.0

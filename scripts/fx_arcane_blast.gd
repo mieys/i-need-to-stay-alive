@@ -5,7 +5,7 @@ class_name FxArcaneBlast
 ## büyüyormuş gibi değil, hafif sihir patlaması"). Eski "Kadim Patlama" mühür efektinin (fx_mage_passive_burst, silindi) yerine.
 ##   ön (z 50, yaratıkların üstü): merkezde 8 kollu parıltı + 16 ışık tozu hafif sarmal çizip alanın kenarına konar, pırıldayıp yükselir
 ##   zemin (GroundSlot.place: haritanın üstü, yaratıkların altı): tozun konduğu yerde kısa yatay pırıltı
-## İkisi TOPLAMALI (BuyucuFx.add_material). Sayfa DRAWN_RADIUS yarıçap için çizildi; bu düğümün ölçeği = gerçek yarıçap / DRAWN_RADIUS
+## İkisi TOPLAMALI + hafif parıltı (fx_pixel_glow.gd additive, madde 739; eskiden düz BuyucuFx.add_material). Sayfa DRAWN_RADIUS yarıçap için çizildi; bu düğümün ölçeği = gerçek yarıçap / DRAWN_RADIUS
 ## (Efsunlu Büyü büyütür). Kaster (player.gd _spawn_world_explosion_fx) ve uzak kopya (network_manager "hitscan_impact" scene_path +
 ## fx_scale) AYNI sahne; global_position add_child'dan SONRA kurulduğu için sayfalar bir sonraki karede (call_deferred) doğar.
 ## Müttefik efekt yoğunluğu (ally_fx_density.gd soften) bu düğümün modulate'ini kısar -> sayfalara kopyalanır.
@@ -13,6 +13,7 @@ class_name FxArcaneBlast
 
 const BuyucuFxScript := preload("res://scripts/buyucu_fx.gd")
 const GroundSlotScript := preload("res://scripts/ground_slot.gd")
+const FxPixelGlowScript := preload("res://scripts/fx_pixel_glow.gd")
 const FPS := 20.0
 const FRAMES := 12
 const DRAWN_RADIUS := 52.5 ## tools/gen_arcane_blast_fx.py / prototip BLAST_WORLD ile aynı
@@ -40,7 +41,11 @@ func _spawn_sheets() -> void:
 		var s: Sprite2D = BuyucuFxScript.spawn_world(tree, sheet, global_position, FRONT_Z, FPS, size)
 		if s == null:
 			continue
-		s.material = BuyucuFxScript.add_material()
+		## Toplamalı + HAFİF PARILTI (madde 739, kullanıcı: "büyücü kızın arcane patlaması da aynı şekilde hafiften parlasın", Matthew
+		## şimşekleri / Ateş Asası alevi gibi). Parıltı kapalıysa (GLOW 0) eski düz toplamalı malzeme.
+		var cell := Vector2(float(s.texture.get_width()) / float(maxi(s.hframes, 1)), float(s.texture.get_height()))
+		var glow_mat: ShaderMaterial = FxPixelGlowScript.material(cell, true)
+		s.material = glow_mat if glow_mat != null else BuyucuFxScript.add_material()
 		s.modulate = modulate
 		if sheet == "patlama_ground":
 			GroundSlotScript.place(s)

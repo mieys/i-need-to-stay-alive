@@ -1001,7 +1001,7 @@ func update_creatures() -> void:
 		var found: Array = []
 		var seen: Dictionary = {}
 		var cand: Array = EnemyQueryScript.candidates(get_tree(), center, view.z)
-		for group_name in ["player_ally", "pvp_rivals", "player_allies", "depth_props"]: ## depth_props: Oakley çiçeği + zemin efekti (oakley_flower.gd DERİNLİK notu)
+		for group_name in ["player_ally", "pvp_rivals", "player_allies", "ysort_pets", "depth_props"]: ## ysort_pets: yer evcili vekili (pet_depth_proxy.gd); depth_props: Oakley çiçeği + zemin efekti (oakley_flower.gd DERİNLİK notu)
 			cand = cand + get_tree().get_nodes_in_group(group_name)
 		var half: Vector2 = Vector2(view.z, view.z)
 		var cam: Camera2D = get_viewport().get_camera_2d()

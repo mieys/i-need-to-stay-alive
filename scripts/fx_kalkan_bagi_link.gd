@@ -1,43 +1,38 @@
 extends Node2D
 
-## Ruhani Yetenek "Kalkan Bağı"nın piksel tarzı bağ görseli (kullanıcı isteği: "Kalkan bağı için pixel tarzda
-## bir kalkan bağı efekti hazırla") - HER İKİ oyuncunun da KENDİ üstünde duran bir kopyası vardır (kaster VE
-## partner, bkz. player.gd _ensure_kalkan_bagi_link_fx/receive_kalkan_bagi_bond - CLAUDE.md'nin "kaster
-## görür, diğerleri görmez" hatasına düşmemek için FxPaladinBarrierLink ile AYNI desen). Şovalye'nin
-## bariyerinden farkı: o SADECE sahibinin etrafında dönen soyut bir halka, bu GERÇEKTEN iki oyuncu arasına
-## gerilen, partnerin CANLI konumunu her karede okuyan bir enerji hattı çiziyor.
+## Ruhani Yetenek "Kalkan Bağı"nın görseli. HER İKİ oyuncunun da KENDİ üstünde duran bir kopyası vardır (kaster VE partner, bkz.
+## player.gd _ensure_kalkan_bagi_link_fx / remote_player.gd _refresh_kalkan_bagi_link_visual) - "kaster görür, diğerleri görmez"
+## hatasına düşmemek için. Kurdeleyi YALNIZ bir kopya çizer (karşılıklı bağda peer_id'si küçük olan, bkz. _partner_local_pos);
+## iki kopya da kendi göğsündeki ışığı çizer.
+## Görünüm = prototip "A Ruh Işığı" (madde 730, kullanıcı seçimi 2026-11-16, madde 734) - eski kayan 1 px hat + gezen rozet +
+## uç elmasları (assets/fx/kalkan_bagi/) silindi:
+##  - iki göğüs arasında hafif sarkan, yavaşça dalgalanan ışık kurdelesi (3 düz bant: dış/orta soluk mavi, 1 px açık çekirdek),
+##    karakterlerin ARKASINDA; bağ kurulunca 0,25 sn'de partnere uzanır
+##  - iki göğüste nefes alan küçük ışık
+##  - pulse_from(kaynak_peer): bağdan kalkan aktığında (yansıyan hasar/bedel/artış) kaynaktan hedefe 0,4 sn'de akan ışık boncuğu
+##    (kurdele boncuğun çevresinde kalınlaşır), varışta hedefin gövdesinde açılan halka + kısa kabuk parlaması.
+##    Çağıran: NetworkManager.kalkan_bagi_pulse_visual (yansımayı gönderen istemci yerelde, diğerleri RPC'yi alınca).
+## Kök ayakta, 1 yerel birim = 1 dünya birimi (bkz. spirit_fx_util.gd).
 
-##
-## YENİDEN TASARIM (kullanıcı isteği 2026-09-25: "kalkan bağının özel efektini pixel tarzda spritesheet olacak şekilde,
-## fazla göz yormayan minimalist bir kalkan bağı efekti olarak yeniden tasarla"). Eskiden her karede prosedürel çizilen,
-## saniyede 46 birim HIZLA akan kesikli bir hat + iki uçta sürekli yanıp sönen kareler vardı - sürekli göz alıyordu.
-## Artık üç küçük sprite (tools/gen_kalkan_bagi_fx.py, assets/fx/kalkan_bagi/):
-##   - link_line.png: 1 piksellik yumuşak mavi hat döşemesi (soluk hale + 8 pikselde bir boncuk), hat boyunca tekrarlanır
-##     (texture_repeat + region, enemy_laser.gd ile aynı teknik) ve ÇOK yavaş kayar.
-##   - link_glint.png: minik kalkan rozeti - GLINT_PERIOD'da bir, bu uçtan partnere süzülür (belirir, parlar, söner).
-##   - link_end.png: iki uçta nefes alan minik elmas.
-## _draw() yok: sadece sprite konum/dönüş/region güncellemesi. Ölçek PixelDraw.TEXEL (karakterlerle aynı piksel yoğunluğu -
-## bu düğüm Player/RemotePlayer'ın 0.5 ölçekli kökünün çocuğu, eski PixelDraw çizimiyle aynı boy).
+const U := preload("res://scripts/spirit_fx_util.gd")
+const DOT_TEX := preload("res://assets/fx/ruhani/kb_dot.png") ## 3 kare: boncuk r 4,5 / uç r 3,5 / uç r 4,1
+const RING_TEX := preload("res://assets/fx/ruhani/ring_tall.png") ## 10 kare rx 5..14 (ry 1,25 rx)
+const SHELL_TEX := preload("res://assets/fx/ruhani/shell_white.png")
 
-const PixelDraw := preload("res://scripts/pixel_draw.gd")
-
-const LINE_TEX_PATH := "res://assets/fx/kalkan_bagi/link_line.png"
-const GLINT_TEX_PATH := "res://assets/fx/kalkan_bagi/link_glint.png"
-const END_TEX_PATH := "res://assets/fx/kalkan_bagi/link_end.png"
-const GLINT_FRAMES := 6
-const END_FRAMES := 8
-const LINE_HEIGHT_PX := 3.0
-const LINE_SCROLL_SPEED := 5.0 ## sanat pikseli/sn - bilerek çok yavaş (göz yormasın)
-const GLINT_PERIOD := 1.8
-const GLINT_TRAVEL := 1.1
-const END_FPS := 6.0
+const BODY_Y := -16.0 ## ayaktan göğüs
+const SAG := 6.0
+const WAVE := 0.9
+const GROW := 0.25
+const BEAD_TRAVEL := 0.4
+const ARRIVE := 0.32
+const PULSE_GAP := 0.3 ## aynı yönde iki boncuk arası en az (sık yansımalar sel olmasın)
 
 var _owner_ref: Node2D = null
 var _t: float = 0.0
-var _line: Sprite2D = null
-var _glint: Sprite2D = null
-var _end_a: Sprite2D = null
-var _end_b: Sprite2D = null
+var _shown_t: float = -1.0 ## kurdelenin göründüğü an (-1 = görünmüyor)
+var _beads: Array = [] ## [doğuş _t, sahipten mi (bool)]
+var _last_pulse: Dictionary = {true: -9.0, false: -9.0}
+var _front: Node2D = null
 
 
 func setup(owner_node: Node2D) -> void:
@@ -45,34 +40,21 @@ func setup(owner_node: Node2D) -> void:
 
 
 func _ready() -> void:
-	z_index = 6
-	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_line = _make_sprite(LINE_TEX_PATH, 1)
-	if _line:
-		_line.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
-		_line.centered = false
-		_line.region_enabled = true
-		_line.offset = Vector2(0.0, -LINE_HEIGHT_PX * 0.5)
-	_end_a = _make_sprite(END_TEX_PATH, END_FRAMES)
-	_end_b = _make_sprite(END_TEX_PATH, END_FRAMES)
-	_glint = _make_sprite(GLINT_TEX_PATH, GLINT_FRAMES)
+	U.setup_root(self)
+	show_behind_parent = true
+	_front = U.front_layer(self, _draw_front)
 
 
-## Doku henüz import edilmemişse (yeni dosya, editör açılmadan) efekt sessizce görünmez kalır - hata/çökme yok.
-func _make_sprite(path: String, hframes: int) -> Sprite2D:
-	if not ResourceLoader.exists(path):
-		return null
-	var tex: Texture2D = load(path) as Texture2D
-	if tex == null:
-		return null
-	var s := Sprite2D.new()
-	s.texture = tex
-	s.hframes = hframes
-	s.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	s.scale = Vector2.ONE * PixelDraw.TEXEL
-	s.visible = false
-	add_child(s)
-	return s
+func pulse_from(src_peer: int) -> void:
+	if _partner_local_pos().length() < 4.0:
+		return ## kurdeleyi bu kopya çizmiyor (ya da bağ görünmüyor)
+	var from_owner: bool = src_peer == _owner_peer_id()
+	if _t - float(_last_pulse[from_owner]) < PULSE_GAP:
+		return
+	_last_pulse[from_owner] = _t
+	_beads.append([_t, from_owner])
+	if _beads.size() > 4:
+		_beads.pop_front()
 
 
 func _process(delta: float) -> void:
@@ -80,47 +62,105 @@ func _process(delta: float) -> void:
 	if not is_instance_valid(_owner_ref):
 		queue_free()
 		return
-	_update_sprites()
+	if _partner_local_pos().length() >= 4.0:
+		if _shown_t < 0.0:
+			_shown_t = _t
+	else:
+		_shown_t = -1.0
+	_beads = _beads.filter(func(b: Array) -> bool: return _t - float(b[0]) < BEAD_TRAVEL + ARRIVE)
+	queue_redraw()
+	_front.queue_redraw()
 
 
-func _update_sprites() -> void:
+func _ends() -> Array:
 	var to_partner: Vector2 = _partner_local_pos()
-	var dist: float = to_partner.length()
-	var show: bool = dist >= 4.0
-	for s: Sprite2D in [_line, _glint, _end_a, _end_b]:
-		if s:
-			s.visible = show
-	if not show:
+	return [Vector2(0.0, BODY_Y), to_partner + Vector2(0.0, 15.0 + BODY_Y)]
+
+
+func _curve(p0: Vector2, p1: Vector2) -> PackedVector2Array:
+	var span: Vector2 = p1 - p0
+	var length: float = span.length()
+	var n: Vector2 = Vector2(-span.y, span.x) / maxf(length, 0.001)
+	var steps: int = clampi(int(length / 2.0), 8, 160)
+	var pts := PackedVector2Array()
+	for i in range(steps + 1):
+		var s: float = float(i) / float(steps)
+		var w: float = WAVE * sin(TAU * (s * length / 70.0 - _t * 0.6)) * sin(PI * s)
+		pts.append(p0 + span * s + Vector2(0.0, SAG * 4.0 * s * (1.0 - s)) + n * w)
+	return pts
+
+
+func _sub(pts: PackedVector2Array, s0: float, s1: float) -> PackedVector2Array:
+	var last: int = pts.size() - 1
+	var a: int = clampi(int(floorf(s0 * last)), 0, last)
+	var b: int = clampi(int(ceilf(s1 * last)), 0, last)
+	return pts.slice(a, b + 1)
+
+
+func _bead_s(b: Array) -> float:
+	var u: float = U.ease_io((_t - float(b[0])) / BEAD_TRAVEL)
+	return u if bool(b[1]) else 1.0 - u
+
+
+func _draw() -> void:
+	if _shown_t < 0.0:
 		return
-	if _line:
-		_line.rotation = to_partner.angle()
-		## Döşeme 8 piksel - kaydırma o periyotta sarılır (uzun oyunda büyüyen sayı hassasiyet kaybetmesin).
-		_line.region_rect = Rect2(-fmod(_t * LINE_SCROLL_SPEED, 8.0), 0.0, dist / PixelDraw.TEXEL, LINE_HEIGHT_PX)
-	var end_frame: int = int(_t * END_FPS) % END_FRAMES
-	if _end_a:
-		_end_a.position = Vector2.ZERO
-		_end_a.frame = end_frame
-	if _end_b:
-		_end_b.position = PixelDraw.snap(to_partner)
-		_end_b.frame = (end_frame + END_FRAMES / 2) % END_FRAMES ## iki uç aynı anda değil, sırayla nefes alır
-	if _glint:
-		var phase: float = fmod(_t, GLINT_PERIOD)
-		if phase < GLINT_TRAVEL:
-			var u: float = phase / GLINT_TRAVEL
-			_glint.position = PixelDraw.snap(to_partner * smoothstep(0.0, 1.0, u))
-			_glint.frame = clampi(int(u * float(GLINT_FRAMES)), 0, GLINT_FRAMES - 1)
+	var e: Array = _ends()
+	var pts: PackedVector2Array = _curve(e[0], e[1])
+	var g: float = U.ease_out((_t - _shown_t) / GROW)
+	var vis: PackedVector2Array = _sub(pts, 0.0, g)
+	if vis.size() < 2:
+		return
+	draw_polyline(vis, U.with_a(U.MANA3, 0.16), 5.2)
+	draw_polyline(vis, U.with_a(U.MANA3, 0.32), 3.2)
+	draw_polyline(vis, U.with_a(U.MANA4, 0.85), 1.0)
+	for b in _beads:
+		if _t - float(b[0]) < BEAD_TRAVEL:
+			var s: float = _bead_s(b)
+			var seg: PackedVector2Array = _sub(pts, maxf(0.0, s - 0.06), minf(1.0, s + 0.06))
+			if seg.size() >= 2:
+				draw_polyline(seg, U.with_a(U.MANA3, 0.32), 6.0)
+
+
+func _draw_front() -> void:
+	var pid: int = _partner_pid()
+	if pid <= 0 or _find_partner(pid) == null:
+		return
+	var br: float = 0.5 + 0.5 * sin(TAU * 0.8 * _t)
+	U.frame(_front, DOT_TEX, 3, 2 if br > 0.5 else 1, 0.0, BODY_Y, U.with_a(Color.WHITE, U.band(0.55 + 0.15 * br, 4)))
+	if _shown_t < 0.0:
+		return
+	var e: Array = _ends()
+	var pts: PackedVector2Array = _curve(e[0], e[1])
+	var g: float = U.ease_out((_t - _shown_t) / GROW)
+	if g < 1.0:
+		var head: Vector2 = pts[clampi(int(g * (pts.size() - 1)), 0, pts.size() - 1)]
+		U.frame(_front, DOT_TEX, 3, 1, head.x, head.y, U.with_a(Color.WHITE, 0.9))
+	for b in _beads:
+		var age: float = _t - float(b[0])
+		if age < BEAD_TRAVEL:
+			var p: Vector2 = pts[clampi(int(roundf(_bead_s(b) * (pts.size() - 1))), 0, pts.size() - 1)]
+			U.frame(_front, DOT_TEX, 3, 0, p.x, p.y, U.with_a(Color.WHITE, 0.95))
 		else:
-			_glint.visible = false
+			var k2: float = (age - BEAD_TRAVEL) / ARRIVE
+			var tgt: Vector2 = e[1] if bool(b[1]) else e[0]
+			var rx: float = 5.0 + 9.0 * U.ease_out(k2)
+			U.frame(_front, RING_TEX, 10, int(roundf(rx)) - 5, tgt.x, tgt.y, U.with_a(U.MANA4, U.band(1.0 - k2, 4)))
+			U.frame(_front, SHELL_TEX, 1, 0, tgt.x, tgt.y, U.with_a(U.MANA3, U.band(0.3 * (1.0 - k2), 4)))
 
 
-## Sahibin peer id'si: RemotePlayer kuklasında kendi peer_id alanı, yerel oyuncuda (player.gd'de peer_id YOK) bu istemcinin id'si.
 func _owner_peer_id() -> int:
 	if "peer_id" in _owner_ref:
 		return int(_owner_ref.get("peer_id"))
 	return multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0
 
 
-## Bağın karşı ucu: bir RemotePlayer kuklası YA DA (sahip bir kuklaysa ve partner BU istemcinin oyuncusuysa) yerel oyuncu.
+func _partner_pid() -> int:
+	if not is_instance_valid(_owner_ref) or not ("_kalkan_bagi_partner_peer_id" in _owner_ref):
+		return 0
+	return int(_owner_ref.get("_kalkan_bagi_partner_peer_id"))
+
+
 func _find_partner(pid: int) -> Node2D:
 	for rp in get_tree().get_nodes_in_group("remote_players"):
 		if is_instance_valid(rp) and "peer_id" in rp and int(rp.peer_id) == pid:
@@ -130,25 +170,15 @@ func _find_partner(pid: int) -> Node2D:
 	return null
 
 
-## Partnerin KENDİ (owner'ın) yerel uzayındaki konumu - bulunamazsa ya da bu hattı karşı uç çiziyorsa ZERO (çizilmez).
-## DÜZELTME (kullanıcı bildirimi: "kalkan bağı ... bar birbirimize yanlış görünüyor kendimizde de yanlış görünüyor"):
-## eskiden (partner.global_position - owner.global_position) DÜNYA farkı doğrudan yerel çizim koordinatı olarak
-## kullanılıyordu - ama bu efekt Player/RemotePlayer'ın çocuğu ve ikisinin de kök düğümünde scale = 0.5 var
-## (main.tscn / remote_player.tscn), yani hat partnerin sadece YARISINA kadar uzanıyordu. to_local() sahibin
-## ölçeğini (ve ileride eklenebilecek her dönüşümü) hesaba katıyor; piksel boyutu (TEXEL) karakterlerle aynı kalıyor.
+## Kurdeleyi BU kopya mı çiziyor: evetse partnerin kökü (yerel = dünya birimi, ayaktan), hayırsa ZERO.
+## İki oyuncu da bağlıyken (mutual) yalnız peer_id'si küçük olan çizer - iki kat parlak kurdele olmasın.
 func _partner_local_pos() -> Vector2:
-	if not is_instance_valid(_owner_ref) or not ("_kalkan_bagi_partner_peer_id" in _owner_ref):
-		return Vector2.ZERO
-	var pid: int = int(_owner_ref.get("_kalkan_bagi_partner_peer_id"))
+	var pid: int = _partner_pid()
 	if pid <= 0:
 		return Vector2.ZERO
 	var partner: Node2D = _find_partner(pid)
 	if partner == null or not is_instance_valid(partner):
 		return Vector2.ZERO
-	## Bağın İKİ ucunda da bu efektin bir kopyası var (bkz. dosya başı) - ikisi de karşılıklı olarak birbirini
-	## gösteriyorsa hattı SADECE küçük peer id'li uç çizer, yoksa üst üste iki kesikli hat (çift parlaklık,
-	## faz kayması) görünürdü. Karşılıklı DEĞİLSE ve partner yerel oyuncuysa çizilmez: yerel taraf bağı zaten
-	## bitirmiş, kuklanın bayrağı sadece bir sonraki durum paketine kadar bayat.
 	var owner_pid: int = _owner_peer_id()
 	var mutual: bool = "_kalkan_bagi_partner_peer_id" in partner and int(partner.get("_kalkan_bagi_partner_peer_id")) == owner_pid
 	if mutual and owner_pid > pid:
@@ -158,10 +188,8 @@ func _partner_local_pos() -> Vector2:
 	return to_local(partner.global_position)
 
 
-## Gece ışığı (bkz. night_glow.gd): iki oyuncu arasındaki bağ hattı boyunca hafif mavi. Hattı çizmeyen uç (bkz.
-## _partner_local_pos notu) ışık da vermez - çift parlaklık olmasın.
 func get_glow_segment() -> Array:
-	var to_partner: Vector2 = _partner_local_pos()
-	if to_partner.length() < 4.0:
+	if _partner_local_pos().length() < 4.0:
 		return []
-	return [global_position, to_global(to_partner)]
+	var e: Array = _ends()
+	return [to_global(e[0]), to_global(e[1])]

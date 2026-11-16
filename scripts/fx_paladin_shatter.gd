@@ -12,10 +12,11 @@ var shards: Array[Dictionary] = []
 var shockwaves: Array[Dictionary] = []
 
 func _shake() -> void:
-	CameraShakeScript.add_at(global_position, 0.5, 1100.0)
+	CameraShakeScript.add_at_fx(self, global_position, 0.5, 1100.0)
 
 
 func _ready() -> void:
+	CameraShakeScript.mark_fx_origin(self) ## madde 711: başkasının kopyası mı (sarsıntı yalnız kasterde)
 	call_deferred("_shake") ## kamera sarsıntısı (bkz. camera_shake.gd)
 	# Generate 45 glass shards flying out in a circular pattern (top-down view)
 	var count := 45

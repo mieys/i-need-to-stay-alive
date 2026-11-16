@@ -51,6 +51,26 @@ const INFO := {
 	"slime_buyu": ["Minik Cadı Büyüsü", "Evcil hayvanının büyüsü: canın, hasarın, boyun ve menzilin %15 arttı. Menzilin ince pembe çizgiyle görünür."],
 	"hayalet_ortu": ["Hayalet Örtüsü", "Hayaletin bedeniyle üstünü kapladı: görünmez ve dokunulmazsın, yaratıkların içinden geçebilirsin."],
 	"kalkan_bagi": ["Kalkan Bağı", "Arkadaşınla mana kalkanınız birbirine bağlı - hasar/bedel/artış %50-%50 paylaşılıyor, ikinizin de mana kalkanı daha hızlı yenileniyor."],
+	## Ayaz Dağı (madde 709, kis_soguk.gd): sayılar CHILL_SLOW / FREEZE_SLOW / FREEZE_AT ile aynı tutulmalı.
+	"cold": ["Üşüme", "Ateşten uzaktasın: yavaş yavaş üşüyüp %10'a kadar yavaşlarsın. Alttaki sayı donmaya kalan süre - bir meşale, mangal, kamp ateşi ya da sıcak kaynağın yanında birkaç saniyede ısınırsın."],
+	"freeze": ["Donma", "Çok uzun süre soğukta kaldın ve donmaya başladın: %30'a kadar yavaşlarsın. Hemen bir ateşin ya da sıcak kaynağın yanına git."],
+	## Altın Kumlar kum fırtınası (madde 718, kum_firtinasi.gd): sayı SLOW ile aynı tutulmalı.
+	"sandstorm": ["Kum Fırtınası", "Çölde kum fırtınası esiyor: açık havada %20'ye kadar yavaşlarsın. Fırtına dinince hızın geri gelir."],
+	## Kara Bataklık batma (bataklik_tehlike.gd): sayılar SINK_DELAY / PULL_TIME ile aynı tutulmalı.
+	"sink": ["Çamura Gömüldün", "Bataklık suyunda 1,5 saniye kıpırdamadan durdun, ayakların çamura gömüldü. Yürümeye kalkınca 0,6 saniye yerinden kıpırdayamazsın. Suda hareket etmeye devam et."],
+	## Madde 725 (2026-11-16): rozeti olmayan etkiler, ikonlar Cozy Status Icons. Sayılar player.gd ile aynı tutulmalı:
+	## wade WADE_MOVE_MULT, item_regen ITEM_VITAMIN_WINDOW, gunes ITEM_GUNES_HEAL/_TIME, light_guard ITEM_LIGHT_GUARD_*, urkek ITEM_URKEK_*.
+	"stun": ["Sersemleme", "Sersemledin: yürüyemez, yetenek kullanamaz ve ateş edemezsin. Alttaki sayı kalan süre."],
+	"slow": ["Yavaşlama", "Bir buz saldırısı ya da rakibin yeteneği seni yavaşlattı. Alttaki sayı kalan süre."],
+	"wade": ["Sığ Su", "Suyun içinde yürüyorsun: %25 yavaşsın. Karaya çıkınca hızın geri gelir."],
+	"brush_hidden": ["Saklı", "Saklanma çalılığındasın ve kimse seni görmüyor: yaratıklar seni hedef alamaz, silahların ateş etmez. Etrafındaki halkaya giren yaratık seni görür; hasar veren bir yetenek kullanırsan açığa çıkarsın."],
+	"brush_spotted": ["Görüldün", "Çalıdasın ama bir yaratık seni gördü: o ve çevresindekiler sana saldırabilir. Çalıdan çıkıp yeniden girersen yine saklanırsın."],
+	"item_regen": ["Yenilenme Özütü", "Hasar aldın: 6 saniye boyunca can yenilenmen artar."],
+	"gunes": ["Güneşin İradesi", "Canın düştü: 6 saniyede canının %25'i yenilenir."],
+	"item_invuln": ["Dokunulmazlık", "Gündüz ve Gece ya da Tanrının Eli seni ölümden kurtardı: kısa bir süre hasar almazsın."],
+	"light_guard": ["Işığın Muhafızı", "Bir arkadaşının Işığın Muhafızı Parşomeni seni iyileştirdi ya da sana kalkan verdi: 6 saniye boyunca %15 saldırı hızı ve +5 saldırı gücü."],
+	"urkek": ["Ürkek Yürek", "Canın %25'in altına düştü: 6 saniye boyunca daha hızlısın, artış giderek azalır."],
+	"kemik": ["Kemik Kolye", "Yetenek kullandın: sonraki saldırıların ek hasar verir. Sayı kalan güçlü saldırı."],
 }
 
 @onready var panel: Panel = $Panel

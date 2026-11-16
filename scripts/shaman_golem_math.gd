@@ -29,9 +29,13 @@ const SLAM := "golem_slam_"
 ## update_position_and_anim_from_net sadece ad değişince play() çağırır).
 const SLAM_ALT := "golem_slam2_"
 const JUMP := "golem_jump_"
+## 2026-11-16 (madde 722, kullanıcı prototip seçimi "D olsun"): gövde = Golem 3 paketi (yosun tonu); darbe = paketin 9 karelik
+## Attack'i, yumruk yere 5. karede. Kare süreleri darbe ANI (0,214 sn) ve toplam süre (0,429 sn) eski 6 karelik klip ile AYNI
+## kalsın diye 0,6 / 0,75 (oynanış zamanlaması değişmedi; prototipteki düz 14 fps'ten biraz hızlı).
 const SLAM_FPS := 14.0
-const SLAM_FRAMES := 6
-const SLAM_IMPACT_FRAME := 3 ## yumrukların yere değdiği kare
+const SLAM_FRAMES := 9
+const SLAM_IMPACT_FRAME := 5 ## yumrukların yere değdiği kare
+const SLAM_FRAME_DURATIONS: Array[float] = [0.6, 0.6, 0.6, 0.6, 0.6, 0.75, 0.75, 0.75, 0.75]
 const JUMP_FPS := 20.0
 const JUMP_FRAME_DURATIONS: Array[float] = [1.4, 1.0, 1.6, 1.6, 1.6, 1.0, 1.6, 1.4]
 const JUMP_TAKEOFF_FRAME := 1 ## ayaklar yerden kesilir (hareket başlar)
@@ -79,10 +83,17 @@ const E_PULL_KEEP := 16.0 ## yaratıklar iniş noktasının bu kadar yakınına 
 ## ---------- Görünüm ----------
 ## Ayak hizası: karakter kökünün YEREL biriminde (kök 0.5 ölçekli - dünyada ~16 birim). Zemin efektleri buraya konur.
 const FEET_LOCAL_Y := 32.0
-## Golem kareleri insan formundan ~2.4 kat geniş: ayak gölgesi büyür (ground_shadow.gd), sıçrayışta havadayken küçülür.
-const SHADOW_SCALE := Vector2(2.3, 1.6)
+## Golem 3 paketinin pikseli yaratıklardaki gibi 1,52325 x EntityScale.SIZE = 1,230 dünya; Shaman sprite'ı 2,2368375 x SIZE x
+## 0,5 kök = 0,903 dünya/piksel -> form boyunca sprite bu kadar büyür (player.gd _golem_evo_apply = char_base_anim_scale,
+## remote_player.gd _apply_shaman_golem_scale; ikisi de form_sprite_scale'i çağırır). Ayak hizası bu ölçeğe göre karelere
+## gömülü (tools/gen_shaman_golem.py NEW_OY) - değiştirirsen ikisini birlikte değiştir. DEFS[12] "scale" değişirse bu da değişir.
+const FORM_SPRITE_SCALE := 1.52325 / (2.2368375 * 0.5)
+## Golem paketin kendi gölgesi kadar geniş (paket gölgesi ~43 x 13 paket pikseli; insan gölgesi 7,4 x 2,7 dünya yarı eksen):
+## ayak gölgesi büyür (ground_shadow.gd), sıçrayışta havadayken küçülür.
+const SHADOW_SCALE := Vector2(3.5, 3.0)
 const JUMP_SHADOW_BY_FRAME: Array[float] = [1.05, 0.9, 0.7, 0.6, 0.66, 0.85, 1.15, 1.05]
-## Can/kalkan çubuğu ve isim etiketi golemin boynuzlarının üstüne çıkar (karakter kökünün yerel birimi, 0.5 ölçekli kök).
+## Can/kalkan çubuğu ve isim etiketi golemin tepesinin üstüne çıkar (karakter kökünün yerel birimi, 0.5 ölçekli kök). Golem 3'ün
+## tacı ayaktan 53 paket pikseli = 65 dünya, eski boynuzlu golemle (67) neredeyse aynı -> değer korundu.
 const OVERHEAD_LIFT := -50.0
 
 
@@ -115,12 +126,24 @@ static func jump_total_time() -> float:
 	return jump_time_to_frame(JUMP_FRAME_DURATIONS.size())
 
 
+static func slam_time_to_frame(frame: int) -> float:
+	var t: float = 0.0
+	for i in range(mini(frame, SLAM_FRAME_DURATIONS.size())):
+		t += SLAM_FRAME_DURATIONS[i]
+	return t / SLAM_FPS
+
+
 static func slam_impact_time() -> float:
-	return float(SLAM_IMPACT_FRAME) / SLAM_FPS
+	return slam_time_to_frame(SLAM_IMPACT_FRAME)
 
 
 static func slam_total_time() -> float:
-	return float(SLAM_FRAMES) / SLAM_FPS
+	return slam_time_to_frame(SLAM_FRAMES)
+
+
+## Form süresince sprite ölçek çarpanı (taban golem paketi x "Dev Golem" evrimi). player.gd ve remote_player.gd AYNI çağrı.
+static func form_sprite_scale(big: bool) -> float:
+	return FORM_SPRITE_SCALE * (EVO_BIG_SCALE_MULT if big else 1.0)
 
 
 ## Ayak gölgesi ölçeği: golem formunda büyük, sıçrayışta havadayken küçülür. İnsan formunda 1.

@@ -146,6 +146,10 @@ static var _net_copies: Dictionary = {}
 ## weapon.gd bu ikisini _fire_at()'te doldurur (bkz. single_active_projectile).
 var return_callback_target: Node = null
 var player_node: Node2D = null
+## Dönüş noktası = silahın karakter etrafındaki YUVASI (kasterde weapon.gd'nin kendisi, uzak kopyada RemotePlayer'ın o
+## silah ikonu). Kullanıcı (2026-11-16): "çakram direk karakterin üstüne ışınlanıyor, diğerleri pozisyonunu koruyor" -
+## eskiden karakterin ortasına dönüp ikon sonra yuvasında birden beliriyordu. Geçersizse eski yol (player_node).
+var return_anchor: Node2D = null
 
 var _traveled: float = 0.0
 var _returning: bool = false
@@ -357,18 +361,33 @@ func _move_physics(delta: float) -> void:
 			_begin_return()
 		_update_trail(delta)
 		return
-	if not is_instance_valid(player_node):
+	if not is_instance_valid(player_node) and not is_instance_valid(return_anchor):
 		_finish()
 		return
-	var to_player: Vector2 = player_node.global_position - global_position
-	if to_player.length() <= return_arrival_distance:
+	var to_player: Vector2 = _return_point() - global_position
+	_return_ramp = minf(1.0, _return_ramp + delta / RETURN_RAMP_TIME)
+	var ease_out: float = 1.0 - (1.0 - _return_ramp) * (1.0 - _return_ramp)
+	var ret_step: float = speed * enchant_return_speed_mult * lerpf(APEX_SPEED_MIN, 1.0, ease_out) * delta
+	## Yuvaya dönüşte tam yuvada biter (ikon aynı noktada belirir); eski merkez yolunda 24 birim (gövdenin altına girer).
+	var arrive: float = maxf(RETURN_SLOT_ARRIVAL, ret_step) if is_instance_valid(return_anchor) else return_arrival_distance
+	if to_player.length() <= arrive:
+		if is_instance_valid(return_anchor):
+			global_position = return_anchor.global_position
 		_finish()
 		return
 	direction = to_player.normalized()
-	_return_ramp = minf(1.0, _return_ramp + delta / RETURN_RAMP_TIME)
-	var ease_out: float = 1.0 - (1.0 - _return_ramp) * (1.0 - _return_ramp)
-	position += direction * speed * enchant_return_speed_mult * lerpf(APEX_SPEED_MIN, 1.0, ease_out) * delta
+	position += direction * ret_step
 	_update_trail(delta)
+
+
+## Yuvaya dönüşte varış eşiği (birim) - adım bundan büyükse adım kadar (aşıp geri sekmesin).
+const RETURN_SLOT_ARRIVAL := 6.0
+
+
+func _return_point() -> Vector2:
+	if is_instance_valid(return_anchor):
+		return return_anchor.global_position
+	return player_node.global_position if is_instance_valid(player_node) else global_position
 
 
 ## Gidiş bitti: en uzak noktaya varıldı YA DA bir düşmana çarpıldı. "Uç nokta" efsun kancaları (Kasırga durması, Çift
@@ -445,7 +464,10 @@ func _spawn_catch_sparkle() -> void:
 	fx.scale = Vector2.ONE * ART_WORLD_PX
 	fx.z_index = 20
 	get_tree().current_scene.add_child(fx)
-	fx.global_position = (player_node.global_position if is_instance_valid(player_node) else global_position) + Vector2(0, -10)
+	if is_instance_valid(return_anchor):
+		fx.global_position = return_anchor.global_position ## yuvada yakalanır (bkz. return_anchor)
+	else:
+		fx.global_position = (player_node.global_position if is_instance_valid(player_node) else global_position) + Vector2(0, -10)
 	fx.play("play")
 	fx.animation_finished.connect(fx.queue_free)
 

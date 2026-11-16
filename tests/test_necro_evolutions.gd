@@ -1,12 +1,11 @@
 extends Node
 
-## Necromancer yetenek evrimleri (kullanıcı isteği 2026-10-11, skill_evolutions.gd DEFS[11]): Q (iskelet) 4 + final, E (golem) 4 + final,
-## R (kafatası) 2 + final. Temel değerler kasıtlı kötüleştirildi (yaratık sınırı 10, iskelet 8 ruh, golem 50 ruh, golemin sersemletmesi yok)
-## ve evrimler geri getirir. Kafatasının kendi davranışı: test_necro_skull.gd.
+## Corvina (Necromancer) kiti 2026-11-16 (kullanıcı onayı): Q = Kemik Savaşçısı, E = Kemik Okçusu, R = Ölüler Ordusu.
+## Statlar Corvina'nın saldırı gücünden (NecroArmyMath), görünüm alınan evrim sayısından (rütbe), evrimler skill_evolutions.gd DEFS[11].
+## Birlik kareleri: test_necro_units.gd.
 
 const PlayerScene: PackedScene = preload("res://scenes/player.tscn")
-const PlayerScript = preload("res://scripts/player.gd")
-const SkullScript = preload("res://scripts/necro_skull.gd")
+const NecroMath := preload("res://scripts/necro_army_math.gd")
 
 var _spawned: Array[Node] = []
 var _prev_char_id: int = 1
@@ -16,17 +15,13 @@ var _prev_character: int = 1
 class FakeEnemy extends Node2D:
 	var is_dead: bool = false
 	var hits: Array = []
-	var pushes: Array = []
-	var taunts: Array = []
+	var stuns: Array = []
 
 	func take_damage(amount: float, _is_crit: bool = false, _pen: float = 0.0, _area: bool = false) -> void:
 		hits.append(amount)
 
-	func apply_skill_push(dir: Vector2, dist: float, _ult: bool = false) -> void:
-		pushes.append([dir, dist])
-
-	func apply_taunt(duration: float, taunter: Node2D = null) -> void:
-		taunts.append([duration, taunter])
+	func apply_stun(d: float) -> void:
+		stuns.append(d)
 
 
 func _make_player() -> Node:
@@ -43,6 +38,8 @@ func _make_player() -> Node:
 	player.global_position = Vector2(1000.0, 1000.0)
 	player.item_shield_hp = 0.0
 	player.item_shield_max = 0.0
+	player.damage_bonus = 20.0
+	player.crit_chance_bonus = -1.0 ## yetenek kritiği kapalı: hasar sayıları kesin
 	return player
 
 
@@ -53,6 +50,12 @@ func _fake_enemy(pos: Vector2) -> FakeEnemy:
 	e.add_to_group("enemies")
 	_spawned.append(e)
 	return e
+
+
+## Doğuş animi bitmiş gibi (yerden kalkarken hasar almaz / vurmaz).
+func _ready_unit(u: Node) -> Node:
+	u.set("_action", "")
+	return u
 
 
 func _cleanup() -> void:
@@ -68,277 +71,227 @@ func _cleanup() -> void:
 	_spawned.clear()
 
 
-# ------------------------------------------------------------------ temel değerler + Q
+# ------------------------------------------------------------------ kit / metin
 
-func test_base_values_are_worse_and_evolutions_restore_them() -> void:
+func test_kit_ids_and_texts_match_the_new_kit() -> void:
+	var d: Dictionary = Characters.DEFS[11]
+	assert(int(d["skill"]) == 19 and int(d["skill2"]) == 20 and int(d["skill3"]) == 44, "id'ler aynı kaldı")
+	assert(str(d["skill_name"]) == "Kemik Savaşçısı" and str(d["skill2_name"]) == "Kemik Okçusu" and str(d["skill3_name"]) == "Ölüler Ordusu")
+	var src: String = (load("res://scripts/player.gd") as GDScript).source_code
+	assert(src.contains("20: _skill_necro_summon_archer()"), "E match'i okçu")
+	assert(src.contains("44: _skill_necro_army()"), "R match'i ordu")
+	assert(not src.contains("_skill_necro_skull") and not src.contains("_skill_necro_summon_golem"), "eski kit kalmadı")
+
+
+# ------------------------------------------------------------------ bedel / sınır
+
+func test_costs_and_caps_with_evolutions() -> void:
 	var p: Node = _make_player()
-	assert(PlayerScript.NECRO_MAX_ACTIVE_PETS == 10 and PlayerScript.NECRO_SKELETON_SOUL_COST == 8 and PlayerScript.NECRO_GOLEM_SOUL_COST == 50, "yeni temel değerler 10 / 8 / 50")
-	assert(p.necro_max_active_pets() == 10 and p.necro_skeleton_soul_cost() == 8 and p.necro_golem_soul_cost() == 50)
+	assert(p.necro_soul_cost("warrior") == 10 and p.necro_soul_cost("archer") == 6)
+	assert(p.necro_unit_cap("warrior") == 5 and p.necro_unit_cap("archer") == 5)
 	p.apply_skill_evolution("necro_q1", true)
 	p.apply_skill_evolution("necro_q2", true)
 	p.apply_skill_evolution("necro_e1", true)
-	assert(p.necro_max_active_pets() == 20, "Kemik Ordusu: 20")
-	assert(p.necro_skeleton_soul_cost() == 5, "Ucuz Ruhlar: 5")
-	assert(p.necro_golem_soul_cost() == 35, "Ucuz Golem: 35")
+	p.apply_skill_evolution("necro_e2", true)
+	assert(p.necro_unit_cap("warrior") == 8 and p.necro_soul_cost("warrior") == 7, "Q1/Q2")
+	assert(p.necro_unit_cap("archer") == 8 and p.necro_soul_cost("archer") == 4, "E1/E2")
 	_cleanup()
 
 
-func test_skeleton_hp_and_lifetime_evolutions() -> void:
+func test_warrior_summon_pays_souls_starts_cooldown_and_respects_cap() -> void:
 	var p: Node = _make_player()
-	var base: Node2D = p._spawn_necro_skeleton(Vector2(1000, 1000))
-	p.apply_skill_evolution("necro_q3", true)
-	p.apply_skill_evolution("necro_q4", true)
-	var evo: Node2D = p._spawn_necro_skeleton(Vector2(1000, 1000))
-	assert(absf(evo.max_health - base.max_health * 1.2) < 0.01, "Sert Kemikler: can +%%20 (%f -> %f)" % [base.max_health, evo.max_health])
-	assert(absf(evo.lifespan - (base.lifespan + 7.5)) < 0.01, "Dayanıklı Ruhlar: +7,5sn (%f -> %f)" % [base.lifespan, evo.lifespan])
-	_cleanup()
-
-
-func test_skeleton_summon_respects_new_cap_and_cost() -> void:
-	var p: Node = _make_player()
-	p.necro_souls = 8
-	p._skill_necro_summon_skeleton()
-	assert(p.necro_souls == 0, "taban bedel 8 ruh")
-	p.necro_souls = 7
-	p._necro_skeleton_cooldown_timer = 0.0
-	p._skill_necro_summon_skeleton()
-	assert(p.necro_souls == 7, "7 ruh yetmez (evrimsiz)")
-	for i in 12:
-		p._spawn_necro_skeleton(Vector2(1000, 1000))
+	p.necro_souls = 10
+	p._skill_necro_summon_warrior()
+	assert(p.necro_souls == 0 and p.necro_unit_count("warrior") == 1, "10 ruh -> 1 savaşçı")
+	assert(p.get_skill_progress() < 0.01, "Q bekleme süpürmesi başladı")
 	p.necro_souls = 99
-	p._necro_skeleton_cooldown_timer = 0.0
-	var before: int = p.necro_souls
-	p._skill_necro_summon_skeleton()
-	assert(p.necro_souls == before, "10 yaratık sınırında çağrılmaz")
-	p.apply_skill_evolution("necro_q1", true)
-	p._necro_skeleton_cooldown_timer = 0.0
-	p._skill_necro_summon_skeleton()
-	assert(p.necro_souls == before - 8, "Kemik Ordusu ile sınır 20: çağrılır")
+	p._skill_necro_summon_warrior()
+	assert(p.necro_souls == 99, "3 sn beklemede çağrılmaz")
+	for i in 6:
+		p._necro_skeleton_cooldown_timer = 0.0
+		p._skill_necro_summon_warrior()
+	assert(p.necro_unit_count("warrior") == 5, "en fazla 5 savaşçı (%d)" % p.necro_unit_count("warrior"))
+	assert(p.necro_unit_count("archer") == 0, "okçu sınırı ayrı")
+	p.necro_souls = 6
+	assert(p._necro_can_summon("archer"), "savaşçılar okçu sınırını doldurmaz")
 	_cleanup()
 
 
-func test_q_final_sacrifices_skeletons_for_health_and_shield() -> void:
+# ------------------------------------------------------------------ AP'den statlar
+
+func test_stats_come_from_attack_power_and_attack_speed() -> void:
 	var p: Node = _make_player()
-	p.apply_skill_evolution("necro_qf", true)
-	p.damage_bonus = 100.0
-	p.item_shield_max = 200.0
-	p.item_shield_hp = 0.0
-	var skeletons: Array = []
-	for i in 3:
-		skeletons.append(p._spawn_necro_skeleton(Vector2(1000, 1000)))
-	p.health = p.max_health * 0.5
-	p._process_necro_final_evos(0.016)
-	for s in skeletons:
-		assert(s.is_dead == false, "can %20 üstündeyken iskeletler tüketilmez")
-	p.health = p.max_health * 0.10
-	var hp0: float = p.health
-	p._process_necro_final_evos(0.016)
-	for s in skeletons:
-		assert(s.is_dead, "can %20'nin altında tüm iskeletler tüketilir")
-	assert(absf((p.health - hp0) - 30.0) < 0.01, "3 iskelet x yüzde 10 x 100 saldırı gücü = 30 can (yenilenen: %f)" % (p.health - hp0))
-	assert(absf(p.item_shield_hp - 30.0) < 0.01, "aynı miktarda kalkan: %f" % p.item_shield_hp)
+	var w: Node = p._spawn_necro_unit("warrior", Vector2(1000, 1000))
+	var a: Node = p._spawn_necro_unit("archer", Vector2(1000, 1000))
+	assert(is_equal_approx(w.max_health, 60.0 + 20.0 * 6.0) and is_equal_approx(w.max_shield, 40.0), "savaşçı can/kalkan (AP 20)")
+	assert(is_equal_approx(w.attack_power, 8.0), "savaşçı vuruşu AP'nin %40'ı")
+	assert(is_equal_approx(a.max_health, 30.0 + 20.0 * 3.0) and is_equal_approx(a.max_shield, 20.0) and is_equal_approx(a.attack_power, 6.0))
+	var as_pct: float = p.get_attack_speed_bonus_percent()
+	assert(is_equal_approx(w.attack_interval, 0.75 / (1.0 + minf(as_pct * 0.5, 200.0) / 100.0)), "saldırı hızının yarısı")
+	assert(is_equal_approx(NecroMath.attack_interval("warrior", 1000.0), 0.75 / 3.0), "bonus üst sınırı +%200")
 	_cleanup()
 
 
-func test_q_final_does_not_eat_new_skeleton_until_rearmed() -> void:
+func test_hit_cap_and_shield_absorb() -> void:
 	var p: Node = _make_player()
-	p.apply_skill_evolution("necro_qf", true)
-	p.damage_bonus = 100.0
-	p._spawn_necro_skeleton(Vector2(1000, 1000))
-	p.health = p.max_health * 0.05
-	p._process_necro_final_evos(0.016)
-	var fresh: Node2D = p._spawn_necro_skeleton(Vector2(1000, 1000))
-	p.health = p.max_health * 0.05 ## hâlâ düşük
-	p._process_necro_final_evos(0.016)
-	assert(not fresh.is_dead, "aynı düşük-can döneminde ikinci kez tetiklenmemeli")
-	p.health = p.max_health * 0.9
-	p._process_necro_final_evos(0.016) ## yeniden kurulur
-	p.health = p.max_health * 0.05
-	p._process_necro_final_evos(0.016)
-	assert(fresh.is_dead, "can yükselip yeniden düşünce tekrar tetiklenir")
+	var w: Node = _ready_unit(p._spawn_necro_unit("warrior", Vector2(1000, 1000)))
+	var hp: float = w.health
+	var cap: float = w.max_health * 0.15 ## 27 < kalkan 40
+	w.take_damage(100000.0)
+	assert(is_equal_approx(w.health, hp) and is_equal_approx(w.shield, 40.0 - cap), "tek vuruş %%15 tavanı, önce kalkan")
+	w.take_damage(100000.0)
+	assert(is_equal_approx(w.shield, 0.0) and is_equal_approx(w.health, hp - (cap - (40.0 - cap))), "kalkan bitince cana (%f)" % w.health)
 	_cleanup()
 
 
-# ------------------------------------------------------------------ E
+# ------------------------------------------------------------------ rütbe (görünüm)
 
-func test_golem_has_no_stun_slam_anymore() -> void:
+func test_rank_follows_evolution_count() -> void:
 	var p: Node = _make_player()
-	var g: Node2D = p._spawn_necro_golem()
-	assert(not g.has_method("_process_golem_slam"), "golemin periyodik sersemletmesi kaldırıldı")
-	assert(FileAccess.get_file_as_string("res://scripts/golem_pet.gd").find("apply_stun") == -1, "golem kodunda sersemletme kalmamalı")
+	var seq_q: Array = [["necro_q1", "armored"], ["necro_q2", "armored"], ["necro_q3", "captain"], ["necro_q4", "captain"], ["necro_qf", "knight"]]
+	assert(p.necro_unit_key("warrior") == "common")
+	for step in seq_q:
+		p.apply_skill_evolution(step[0], true)
+		assert(p.necro_unit_key("warrior") == step[1], "%s -> %s (%s)" % [step[0], step[1], p.necro_unit_key("warrior")])
+	var seq_e: Array = [["necro_e3", "archer"], ["necro_e1", "ghost_archer"], ["necro_e4", "ghost_archer"], ["necro_ef", "mage"]]
+	assert(p.necro_unit_key("archer") == "archer")
+	for step in seq_e:
+		p.apply_skill_evolution(step[0], true)
+		assert(p.necro_unit_key("archer") == step[1], "%s -> %s" % [step[0], step[1]])
 	_cleanup()
 
 
-func test_golem_evolutions_hp_size_knockback() -> void:
+func test_living_units_reskin_and_get_evolution_stats() -> void:
 	var p: Node = _make_player()
-	var base: Node2D = p._spawn_necro_golem()
-	assert(is_equal_approx(base.size_mult, 1.0) and base.evo_knockback == 0.0)
-	p.apply_skill_evolution("necro_e2", true)
-	p.apply_skill_evolution("necro_e3", true)
+	var w: Node = _ready_unit(p._spawn_necro_unit("warrior", Vector2(1000, 1000)))
+	var base_hp: float = w.max_health
+	p.apply_skill_evolution("necro_q3", true)
+	w._poll_rank(1.0)
+	assert(w.unit_key == "armored", "1 evrim: Zırhlı")
+	assert(is_equal_approx(w.max_health, base_hp * 1.3), "Sert Kemikler +%30 yaşayana da")
+	p.apply_skill_evolution("necro_q4", true)
+	var fresh: Node = p._spawn_necro_unit("warrior", Vector2(1000, 1000))
+	assert(is_equal_approx(fresh.lifespan, 40.0), "Dayanıklı Ruhlar +10 sn")
+	var a: Node = p._spawn_necro_unit("archer", Vector2(1000, 1000))
+	assert(a.pierce == 0)
+	p.apply_skill_evolution("necro_e1", true)
 	p.apply_skill_evolution("necro_e4", true)
-	var evo: Node2D = p._spawn_necro_golem()
-	assert(absf(evo.max_health - base.max_health * 1.3) < 0.01, "Taş Gövde: can +%%30")
-	assert(absf(evo.max_shield - base.max_shield * 1.3) < 0.01, "Taş Gövde: kalkan +%%30")
-	assert(is_equal_approx(evo.size_mult, 1.2), "Dev Golem: boyut x1.2")
-	assert(absf(evo.attack_power - base.attack_power * 1.2) < 0.01, "Dev Golem: hasar +%%20")
-	assert(absf(evo.sprite.scale.x - base.sprite.scale.x * 1.2) < 0.001, "Dev Golem: görsel %%20 büyük")
-	assert(evo.evo_knockback > 0.0, "Yıkıcı Yumruk: geri itme açık")
+	a._poll_rank(1.0)
+	assert(a.unit_key == "ghost_archer" and a.pierce == 1, "Hayalet Okçu deler")
+	assert(is_equal_approx(a.attack_range, 280.0 * 1.25) and is_equal_approx(a.dmg_mult, 1.15), "Kartal Gözü")
 	_cleanup()
 
 
-func test_golem_attack_knocks_back_only_with_evolution() -> void:
+# ------------------------------------------------------------------ vuruşlar
+
+func test_captain_cleaves_the_arc_and_knight_super_stuns_around() -> void:
 	var p: Node = _make_player()
-	var g: Node2D = p._spawn_necro_golem()
-	var e: FakeEnemy = _fake_enemy(g.global_position + Vector2(40, 0))
-	g._focus_target = e
-	g._attack_timer = 0.0
-	g._process_attack(0.1)
-	g._process_attack(1.0) ## vuruş karesi (ATTACK_HIT_FRAME) gelince iner
-	assert(e.hits.size() == 1, "golem vurmalı")
-	assert(e.pushes.is_empty(), "evrimsiz itme yok")
-	p.apply_skill_evolution("necro_e2", true)
-	var g2: Node2D = p._spawn_necro_golem()
-	g2.global_position = g.global_position
-	g2._focus_target = e
-	g2._attack_timer = 0.0
-	g2._process_attack(0.1)
-	g2._process_attack(1.0) ## vuruş karesi (ATTACK_HIT_FRAME) gelince iner
-	assert(e.pushes.size() == 1, "Yıkıcı Yumruk: yaratık geri itilmeli")
-	assert((e.pushes[0][0] as Vector2).x > 0.0, "golemden uzağa doğru")
+	var w: Node = _ready_unit(p._spawn_necro_unit("warrior", Vector2(1000, 1000)))
+	var front_a: FakeEnemy = _fake_enemy(Vector2(1040, 1000))
+	var front_b: FakeEnemy = _fake_enemy(Vector2(1035, 1018))
+	var behind: FakeEnemy = _fake_enemy(Vector2(960, 1000))
+	w.set_unit("captain")
+	w._strike_target = front_a
+	w._strike_anim = "attack"
+	w._do_strike()
+	assert(front_a.hits.size() == 1 and front_b.hits.size() == 1, "Yüzbaşı yaydaki ikisine de vurur")
+	assert(behind.hits.is_empty(), "arkadakine vurmaz")
+	w.set_unit("knight")
+	w._strike_anim = "attack3"
+	w._do_strike()
+	assert(behind.hits.size() == 1 and behind.stuns.size() == 1, "Super çevresindeki herkese + sersemletme")
+	assert(is_equal_approx(float(behind.hits[0]), 20.0 * 0.8), "Super AP'nin %80'i")
 	_cleanup()
 
 
-func test_golem_big_form_hits_wider_area() -> void:
+func _frames(n: int) -> void:
+	for i in n:
+		await get_tree().physics_frame
+
+
+## Uçtan uca (gerçek kareler): doğuş animi -> saldırı animi -> vuruş karesi -> hasar; okçuda ok gerçekten uçup vurur.
+func test_warrior_and_archer_really_hit_over_frames() -> void:
 	var p: Node = _make_player()
-	var g: Node2D = p._spawn_necro_golem()
-	var far: FakeEnemy = _fake_enemy(g.global_position + Vector2(125, 0)) ## taban alan 110, büyük alan 132
-	var near: FakeEnemy = _fake_enemy(g.global_position + Vector2(30, 0))
-	g._focus_target = near
-	g._attack_timer = 0.0
-	g._process_attack(0.1)
-	g._process_attack(1.0) ## vuruş karesi (ATTACK_HIT_FRAME) gelince iner
-	assert(far.hits.is_empty(), "taban alanın dışındaki yaratığa vurmaz")
-	p.apply_skill_evolution("necro_e4", true)
-	var big: Node2D = p._spawn_necro_golem()
-	big.global_position = g.global_position
-	big._focus_target = near
-	big._attack_timer = 0.0
-	big._process_attack(0.1)
-	big._process_attack(1.0) ## vuruş karesi (ATTACK_HIT_FRAME) gelince iner
-	assert(far.hits.size() == 1, "Dev Golem: vuruş alanı %20 geniş")
+	var near: FakeEnemy = _fake_enemy(Vector2(1030, 1000))
+	p._spawn_necro_unit("warrior", Vector2(1000, 1000))
+	await _frames(150)
+	assert(near.hits.size() >= 1, "savaşçı vuruyor (%d)" % near.hits.size())
+	_cleanup()
+	p = _make_player()
+	var far: FakeEnemy = _fake_enemy(Vector2(1180, 1000))
+	p._spawn_necro_unit("archer", Vector2(1000, 1000))
+	await _frames(150)
+	assert(far.hits.size() >= 1, "okçunun oku vuruyor (%d)" % far.hits.size())
+	assert(is_equal_approx(float(far.hits[0]), 20.0 * 0.3), "ok AP'nin %30'u")
 	_cleanup()
 
 
-func test_e_final_spawns_free_golem_and_taunts_everyone_with_cooldown() -> void:
+# ------------------------------------------------------------------ R ordusu
+
+func test_army_size_composition_and_commander_refund() -> void:
 	var p: Node = _make_player()
-	p.apply_skill_evolution("necro_ef", true)
-	var near: FakeEnemy = _fake_enemy(p.global_position + Vector2(200, 0))
-	var far_away: FakeEnemy = _fake_enemy(p.global_position + Vector2(5000, 0))
-	p.necro_souls = 0
-	p.health = p.max_health * 0.5
-	p._process_necro_final_evos(0.016)
-	assert(get_tree().get_nodes_in_group("player_allies").size() == 0, "can yüksekken golem doğmaz")
-	p.health = p.max_health * 0.1
-	p._process_necro_final_evos(0.016)
-	var golems: Array = get_tree().get_nodes_in_group("player_allies")
-	assert(golems.size() == 1, "bedelsiz 1 golem doğmalı (ruh 0)")
-	assert(near.taunts.size() == 1 and near.taunts[0][1] == golems[0], "yakındaki yaratık golem tarafından kışkırtılmalı")
-	assert(far_away.taunts.is_empty(), "çok uzaktaki yaratıklar istek yağmuru oluşturmasın")
-	assert(is_equal_approx(p._necro_ef_cd, PlayerScript.EVO_NECRO_EF_COOLDOWN) and PlayerScript.EVO_NECRO_EF_COOLDOWN == 120.0, "120sn bekleme")
-	## bekleme sürerken tekrar düşük canda tetiklenmez
-	p.health = p.max_health * 0.9
-	p._process_necro_final_evos(0.016)
-	p.health = p.max_health * 0.1
-	p._process_necro_final_evos(0.016)
-	assert(get_tree().get_nodes_in_group("player_allies").size() == 1, "bekleme bitmeden ikinci golem yok")
-	p._necro_ef_cd = 0.0
-	p._process_necro_final_evos(0.016)
-	assert(get_tree().get_nodes_in_group("player_allies").size() == 2, "bekleme bitince (hâlâ düşük canda) tetiklenir")
-	_cleanup()
-
-
-# ------------------------------------------------------------------ R yan etkileri (player tarafı)
-
-func test_passive_skull_exists_only_after_r_unlock_and_r_activates_it() -> void:
-	var p: Node = _make_player()
-	p.level = 9
-	p._process_necro(0.016)
-	assert(not is_instance_valid(p._necro_skull), "R açılmadan (10. seviye) pasif kafatası yok")
-	p.level = 10
-	p._process_necro(0.016)
-	assert(is_instance_valid(p._necro_skull), "10. seviyede pasif kafatası doğar")
-	assert(not p._necro_skull.is_active())
-	p._skill_necro_skull()
-	assert(p._necro_skull.is_active(), "R: kafatası aktif (büyük) mod")
-	p._end_necro_skull_active()
-	assert(not p._necro_skull.is_active(), "R bitince pasife döner")
-	if is_instance_valid(p._necro_skull):
-		p._necro_skull.free()
-	_cleanup()
-
-
-func test_cursed_enemy_dying_can_become_skeleton() -> void:
-	var p: Node = _make_player()
+	p._skill_necro_army()
+	var keys: Array = p._necro_army.map(func(u): return u.unit_key)
+	assert(keys.size() == 12, "12 asker (%d)" % keys.size())
+	assert(keys.count("captain") == 1 and keys.count("armored") == 3 and keys.count("common") == 8, str(keys)) ## 2026-11-16: hayalet kostüm yok
+	assert(p.necro_unit_count("warrior") == 0, "ordu sınıra sayılmaz")
+	p._necro_end_army(true)
+	assert(p._necro_army.is_empty())
+	p.apply_skill_evolution("necro_r1", true)
+	p.apply_skill_evolution("necro_r2", true)
 	p.apply_skill_evolution("necro_rf", true)
-	var e: FakeEnemy = _fake_enemy(p.global_position + Vector2(100, 0))
-	p._necro_curse_mark(e, 10.0)
-	assert(p._necro_curse.size() == 1)
-	e.is_dead = true
-	p._necro_curse_poll = 0.0
-	seed(7)
-	## %1 ihtimal: sonuç belirleyici olsun diye aynı ölümü seed'li zarla çok kez dene (tek ölüm = tek zar).
-	var spawned: bool = false
-	for i in 1500:
-		var before: int = p._necro_active_pet_count()
-		p._necro_curse_died(e)
-		if p._necro_active_pet_count() > before:
-			spawned = true
-			break
-	assert(spawned, "lanetli yaratık ölünce %1 ihtimalle iskelet doğar")
-	p._process_necro_curse()
-	assert(p._necro_curse.is_empty(), "ölen lanetli kayıttan düşer")
+	p.necro_souls = 0
+	p._skill_necro_army()
+	assert(p._necro_army.size() == 19, "18 asker + komutan (%d)" % p._necro_army.size())
+	assert(p.necro_commander_alive() and is_equal_approx(p._necro_army_timer, 30.0)) ## R2 2026-11-16: 15 -> 30
+	p._process_necro_army(31.0)
+	assert(p.necro_souls == 18, "hayatta kalan her asker 1 ruh (%d)" % p.necro_souls)
 	_cleanup()
 
 
-func test_curse_expires_without_death() -> void:
+# ------------------------------------------------------------------ Kemik Büyücüsü diriltmesi
+
+func test_mage_reborn_records_only_killed_units() -> void:
 	var p: Node = _make_player()
-	var e: FakeEnemy = _fake_enemy(p.global_position)
-	p._necro_curse_mark(e, 0.0)
-	p._necro_curse_poll = 0.0
-	await get_tree().create_timer(0.05).timeout
-	p._process_necro_curse()
-	assert(p._necro_curse.is_empty(), "süresi dolan lanet kaydı temizlenir")
+	var w: Node = p._spawn_necro_unit("warrior", Vector2(1100, 1000))
+	w._die()
+	assert(p._necro_fallen.is_empty(), "final yokken kayıt tutulmaz")
+	p.apply_skill_evolution("necro_ef", true)
+	var w2: Node = p._spawn_necro_unit("warrior", Vector2(1100, 1000))
+	w2._expire()
+	assert(p._necro_fallen.is_empty(), "ömrü dolan diriltilmez")
+	var w3: Node = p._spawn_necro_unit("warrior", Vector2(1100, 1000))
+	w3._die()
+	assert(p._necro_fallen.size() == 1)
+	assert(p.necro_take_fallen(Vector2(2000, 2000), 100.0).is_empty(), "uzaktaki kayıt alınmaz")
+	var rec: Dictionary = p.necro_take_fallen(Vector2(1000, 1000), 320.0)
+	assert(str(rec.get("kind", "")) == "warrior" and p._necro_fallen.is_empty())
+	var before: int = p.necro_unit_count("warrior")
+	p.necro_reborn(rec)
+	assert(p.necro_unit_count("warrior") == before + 1, "aynı türde geri döner")
 	_cleanup()
 
 
-## 2026-11-13 ("golem tuhaf konumlara tuhaf saldırılar"): hasar klibin 0. karesinde değil vuruş karesinde iner, golem saldırırken
-## hedefe döner ve hedef eski 90-140 px ölü bandındayken de vurur.
-func test_golem_hit_lands_on_hit_frame_and_faces_target() -> void:
-	var p: Node = _make_player()
-	var g: Node2D = p._spawn_necro_golem()
-	g._update_facing(Vector2(0, 1)) ## aşağı bakıyor
-	var e: FakeEnemy = _fake_enemy(g.global_position + Vector2(-60, 0)) ## solunda
-	g._focus_target = e
-	g._attack_timer = 0.0
-	g._process_attack(0.05)
-	assert(g._animation_state == "attack", "saldırı klibi başlamalı")
-	assert(g.facing == "left", "saldırırken hedefe (sola) dönmeli")
-	assert(e.hits.is_empty(), "hasar klibin başında inmemeli")
-	g._process_attack(0.2)
-	assert(e.hits.is_empty(), "vuruş karesinden önce hasar yok")
-	g._process_attack(0.3)
-	assert(e.hits.size() == 1, "vuruş karesinde hasar inmeli")
-	_cleanup()
+# ------------------------------------------------------------------ E / R tekrar kullanılabilir (2026-11-16)
 
-
-func test_golem_attacks_target_in_old_dead_band() -> void:
+## Kullanıcı: "Necromancerın E sinde ve R sinde sorun var bikere kullanınca bidaha kullanılamıyor". E (20) ve R (44) aktif süresi 0:
+## standart makine "active"te sayaç 0 iken hiç ilerlemiyordu -> bekleme/hazır olmuyordu.
+func test_e_and_r_become_ready_again() -> void:
 	var p: Node = _make_player()
-	var g: Node2D = p._spawn_necro_golem()
-	var e: FakeEnemy = _fake_enemy(g.global_position + Vector2(96, 0)) ## eskiden ne kovalanır ne vurulurdu
-	g._focus_target = e
-	g._in_melee_stance = true
-	g._attack_timer = 0.0
-	g._process_attack(0.1)
-	g._process_attack(1.0)
-	assert(e.hits.size() == 1, "duruş bandındaki hedef vurulmalı")
+	p.necro_souls = 100
+	p.item_shield_max = 500.0
+	p.item_shield_hp = 500.0
+	p._activate_skill2()
+	assert(p.necro_unit_count("archer") == 1, "ilk okçu (id %d, durum %s)" % [p.get_skill2_id(), p.skill2_state])
+	for i in 30:
+		p._process_skill2(0.05)
+	assert(p.skill2_state == "ready", "E bekleme sonrası hazır olmalı (%s, %.2f)" % [p.skill2_state, p.skill2_timer])
+	p._activate_skill2()
+	assert(p.necro_unit_count("archer") == 2, "ikinci okçu")
+	p._activate_skill3()
+	assert(not p._necro_army.is_empty(), "ordu çağrıldı")
+	assert(p.skill3_state == "cooldown", "R hemen beklemeye girmeli (%s)" % p.skill3_state)
+	for i in 61:
+		p._process_skill3(1.0)
+	assert(p.skill3_state == "ready", "R 60 sn sonra hazır (%s, %.2f)" % [p.skill3_state, p.skill3_timer])
 	_cleanup()

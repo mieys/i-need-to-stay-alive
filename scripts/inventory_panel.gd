@@ -997,6 +997,7 @@ const HudStatPanel := preload("res://scripts/hud_stat_panel.gd")
 const StatsPanelScript := preload("res://scripts/stats_panel.gd")
 const WeaponTierArt := preload("res://scripts/weapon_tier_art.gd")
 const WeaponCatalogScript := preload("res://scripts/weapon_catalog.gd")
+const ShopsFlag := preload("res://scripts/shops_flag.gd") ## cila A6: demirci kapalıyken (enabled=false) metinler "level pazarı"nı söyler
 const PetCatalog := preload("res://scripts/pet_catalog.gd")
 const ModalSafeArea := preload("res://scripts/modal_safe_area.gd")
 
@@ -1474,7 +1475,7 @@ func _ch_build_weapons() -> bool:
 			var e: Panel = _k.empty_slot(s)
 			e.position = pos
 			e.size = Vector2(s, s)
-			e.tooltip_text = "Boş silah yuvası (demirciden silah alınır)"
+			e.tooltip_text = "Boş silah yuvası (demirciden silah alınır)" if ShopsFlag.enabled else "Boş silah yuvası (level pazarından silah alınır)"
 			e.mouse_filter = Control.MOUSE_FILTER_STOP
 			weapons_grid.add_child(e)
 			continue
@@ -1839,7 +1840,7 @@ func _ch_detail_weapon(i: int) -> void:
 	var d: String = str(WeaponCatalogScript.DESCRIPTIONS.get(key, ""))
 	if d != "":
 		body.add_child(_k.wrap(d, 24, _k.c("dim"), 540))
-	body.add_child(_k.wrap("Kademesini ve geliştirmelerini demirciden alırsın.", 24, _k.c("dim"), 540))
+	body.add_child(_k.wrap("Kademesini ve geliştirmelerini demirciden alırsın." if ShopsFlag.enabled else "Kademesini ve geliştirmelerini level pazarından alırsın.", 24, _k.c("dim"), 540))
 
 
 func _ch_detail_shield() -> void:
@@ -1849,7 +1850,7 @@ func _ch_detail_shield() -> void:
 	sub.add_child(_k.lbl("MANA KALKANI", 24, _k.c("accent")))
 	var body: VBoxContainer = _ch_card(_ch_icon_box(_k.icon(DarkKit.tex(str(ShieldEnchantDefs.ICONS.get(key, ""))), 72), 80, HudTheme.RIM_HI),
 			ShieldEnchantDefs.type_name(key), sub, HudTheme.RIM_HI, null,
-			"Mana kalkanı satılmaz; türünü ve geliştirmelerini demirciden alırsın.", "", false)
+			"Mana kalkanı satılmaz; türünü ve geliştirmelerini demirciden alırsın." if ShopsFlag.enabled else "Mana kalkanı satılmaz; türünü ve geliştirmelerini level pazarından alırsın.", "", false)
 	if not st.is_empty():
 		body.add_child(_ch_line("shield_amount", Loc.t("%d Güç") % int(st["power"]), _k.c("text")))
 		body.add_child(_ch_line("shield_protection", Loc.t("%%%d Soğurma") % int(round(float(st["absorption"]) * 100.0)), _k.c("text")))

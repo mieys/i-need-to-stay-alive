@@ -116,7 +116,7 @@ func _process(delta: float) -> void:
 	scale = Vector2.ONE * s
 	if kind == KIND_SEARCH:
 		position.y += roundf(sin(_t * 4.0) * 1.0) * _base_scale
-		rotation = sin(_t * 2.2) * 0.2
+		## Madde 711 (2026-11-15): +-0,2 rad sallanma kaldırıldı - dönen NEAREST piksel sprite her karede titriyordu (kalabalıkta onlarca "?").
 	else:
 		modulate.a = 1.0 - clampf((_t - (ALERT_LIFE - 0.25)) / 0.25, 0.0, 1.0)
 		if _t >= ALERT_LIFE:

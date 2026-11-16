@@ -9,6 +9,9 @@ görünsün" - eski tek harfli (G/H/İ/Y/K) kısaltmalar kaldırıldı, her efek
   burn (Yanma)               -> ALEV (İblis ateş topu, debuff)
   bleed (Kanama)             -> KAN DAMLASI (Balkabağı Kafa'nın yarasaları, debuff)
   time_frozen (Zaman Durdu)  -> KUM SAATİ (güvenli alan: yenilenme/bekleme/pasif/evcil durur, madde 327)
+  (cold / freeze - Ayaz Dağı üşüme/donma, madde 709 - BURADA ÜRETİLMEZ: kullanıcı seçimi "Cozy Status Icons" paketi
+   chilled / frozen, png_1x x3 en yakın komşu -> assets/ui/status/cold.png, freeze.png. Kullanıcı yapay ikon istemiyor.)
+  sandstorm (Kum Fırtınası)  -> KUM RENGİ RÜZGAR KIVRIMLARI + aşağı ok (Altın Kumlar, madde 718)
 48x48 sanat ızgarası (bkz. hafıza "Pixel density 48x48"), gen_shield_icons.py'daki AYNI küçük
 yardımcı (Icon/poly/circle/rect/outline/dilate) deseni - o dosyaya bağımlı değil, kendi küçük kopyası.
 
@@ -275,6 +278,56 @@ def stone_weight():
     return ic
 
 
+def _gust_stroke(points):
+    """Noktalar arası 2 px çizgi, sonra 4 px kalınlık (dilate 1) - rozet boyutunda (30 px) okunur kalsın."""
+    cells = set()
+    for (x0, y0), (x1, y1) in zip(points, points[1:]):
+        steps = max(int(math.ceil(max(abs(x1 - x0), abs(y1 - y0)))), 1)
+        for st in range(steps + 1):
+            f = st / steps
+            cx, cy = int(round(x0 + (x1 - x0) * f)), int(round(y0 + (y1 - y0) * f))
+            cells |= {(cx, cy), (cx, cy + 1)}
+    return dilate(cells, 1)
+
+
+def _curl(cx, cy, r, a0, a1, n=14):
+    return [(cx + math.cos(math.radians(a0 + (a1 - a0) * i / n)) * r, cy - math.sin(math.radians(a0 + (a1 - a0) * i / n)) * r) for i in range(n + 1)]
+
+
+def sand_gust():
+    """Kum Fırtınası (Altın Kumlar, madde 718): üç kum rengi rüzgar kıvrımı + aşağı ok (yavaşlama) - stone_weight'in okuyla aynı dil."""
+    ic = Icon()
+    strokes = [
+        _gust_stroke([(8, 11), (31, 11)] + _curl(31, 6.5, 4.5, 270, 470)),
+        _gust_stroke([(3, 21), (37, 21)]),
+        _gust_stroke([(9, 31), (25, 31)]),
+    ]
+    allc = set().union(*strokes)
+    ic.outline(allc)
+    for st in strokes:
+        ic.fill_fn(st, lambda x, y, st=st: hexc('#f6e3b4') if (x, y - 1) not in st else (hexc('#b98443') if (x, y + 1) not in st else hexc('#e2b66c')))
+    for gx, gy in ((15, 26), (23, 15), (17, 38)):  # savrulan kum taneleri
+        g = rect(gx, gy, gx + 1, gy + 1)
+        ic.outline(g)
+        ic.fill(g, hexc('#e8c27e'))
+    arrow = poly([(37, 46), (44, 39), (40, 39), (40, 31), (34, 31), (34, 39), (30, 39)])  ## aşağı ok (yavaşlama)
+    for c in arrow:
+        ic.p.pop(c, None)
+    ic.outline(arrow, hexc('#5a0e0e'))
+    ic.fill_fn(arrow, lambda x, y: hexc('#ff8f80') if x < 37 else hexc('#d9463a'))
+    return ic
+
+
+## Cozy Status Icons'tan gelen rozetler (madde 709): kind -> paket dosyası. Üretici bunları yazmaz.
+PACK_KINDS = {'speed': 'hasted', 'invuln': 'shielded', 'shield_slow': 'armor_broken', 'burn': 'burning', 'bleed': 'bleeding',
+              'poison': 'poisoned', 'petrify': 'stunned', 'stone_slow': 'slowed', 'time_frozen': 'doomed', 'sandstorm': 'slowed',
+              'sink': 'slowed', 'hayalet_ortu': 'scared', 'cold': 'chilled', 'freeze': 'frozen',
+              ## madde 725 (2026-11-16): rozeti olmayan etkiler + saklanma çalılığı
+              'stun': 'stunned', 'slow': 'slowed', 'wade': 'slowed', 'brush_hidden': 'blinded', 'brush_spotted': 'focused',
+              'item_regen': 'regen', 'gunes': 'sunlit', 'item_invuln': 'shielded', 'light_guard': 'strengthened', 'urkek': 'hasted',
+              'kemik': 'strengthened'}
+
+
 def build():
     os.makedirs(OUTDIR, exist_ok=True)
     icons = {
@@ -289,7 +342,12 @@ def build():
         'poison': poison_drop(),
         'petrify': stone_eye(),
         'stone_slow': stone_weight(),
+        'sandstorm': sand_gust(),
     }
+    ## madde 709 (kullanıcı seçimi 2026-11-16, "Durum İkonu Seçimi" sayfası): bu rozetler artık Cozy Status Icons paketinden
+    ## (assets/ui/status/<kind>.png, png_1x x3 en yakın komşu). Üretici onları EZMESİN - yalnız sözlükte kalıp pakette karşılığı olmayanlar yazılır.
+    for k in PACK_KINDS:
+        icons.pop(k, None)
     for k, ic in icons.items():
         ic.image().save(os.path.join(OUTDIR, '%s.png' % k))
     sheet = Image.new('RGBA', (N * 4 * len(icons) + 10 * (len(icons) + 1), N * 4 + 20), (40, 30, 22, 255))

@@ -430,8 +430,9 @@ static func signature_info(char_id: int) -> Dictionary:
 		return {}
 	var id: String = str(sig["stat"])
 	var d: Dictionary = MetaUpgradesScript.def(id)
+	## "short": dar yerler için kısa ad (meta_upgrades.gd "short"; yoksa ad) - seçim ekranı orta paneli, madde 748.
 	return {"icon": str(d.get("icon", id)), "value": MetaUpgradesScript.format_value(id, float(sig["value"])).replace(".", ","),
-		"name": str(d.get("name", id))}
+		"name": str(d.get("name", id)), "short": str(d.get("short", d.get("name", id)))}
 
 
 ## Seçili karakter değişince vitrin altındaki istatistik kutusunu günceller (make_stats_grid'in döndürdüğü kutu).
@@ -441,8 +442,8 @@ static func set_stats_grid_character(box: Control, char_id: int) -> void:
 		var row: Dictionary = STAT_ROWS[i]
 		(labels[i] as Label).text = "%s %s" % [row["label"], base_stat_text(char_id, str(row["key"]))]
 	## 4. hücre: karaktere özel stat - ikon + değer (ad uzun, 336 px'e sığmaz -> ipucunda).
-	var sig_icon: TextureRect = box.get_meta("sig_icon", null)
-	var sig_label: Label = box.get_meta("sig_label", null)
+	var sig_icon: TextureRect = (box.get_meta("sig_icon") if box.has_meta("sig_icon") else null)
+	var sig_label: Label = (box.get_meta("sig_label") if box.has_meta("sig_label") else null)
 	if sig_icon == null or sig_label == null:
 		return
 	var info: Dictionary = signature_info(char_id)

@@ -18,6 +18,7 @@ extends Node2D
 const CharAnim := preload("res://scripts/char_anim.gd")
 const PetCatalog := preload("res://scripts/pet_catalog.gd")
 const PetFollowScript := preload("res://scripts/pet_follow.gd")
+const PetDepthProxyScript := preload("res://scripts/pet_depth_proxy.gd")
 const FxSpellScript: GDScript = preload("res://scripts/fx_slime_spell.gd")
 const FRAMES: SpriteFrames = preload("res://assets/pets/slime/slime_frames.tres")
 
@@ -54,6 +55,7 @@ var _stuck_t: float = 0.0
 var _stuck_sample: float = 0.0
 var _stuck_ref: Vector2 = Vector2.ZERO
 var _is_behind: bool = false
+var _proxy: Node2D = null ## görselin derinlik vekili (pet_depth_proxy.gd)
 var _casting: bool = false
 var _release_t: float = -1.0 ## >= 0: büyünün çıkmasına kalan süre
 var _cooldown: float = 0.0
@@ -73,7 +75,10 @@ func setup(body: Node2D, anim_src: AnimatedSprite2D, puppet: bool) -> void:
 	_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_sprite.centered = true
 	_sprite.offset = Vector2(0.0, SPRITE_OFFSET_Y)
-	add_child(_sprite)
+	## Görsel Main altındaki derinlik vekilinde: yaratıklarla aynı y-sıralaması (pet_depth_proxy.gd); Main yoksa eskisi gibi kendi çocuğu.
+	_proxy = PetDepthProxyScript.host(PetDepthProxyScript, self, body, _sprite)
+	if _proxy == null:
+		add_child(_sprite)
 	_sprite.animation_finished.connect(_on_animation_finished)
 	global_scale = Vector2.ONE * EntityScale.SIZE
 	_sprite.play(&"idle_down")
@@ -230,6 +235,8 @@ func _on_animation_finished() -> void:
 
 ## Hayvan sahibinin arkasındaysa çocuk sırasının başında (sahibin sprite'ının altında), önündeyse sonunda çizilir (kirpi_pet.gd).
 func _update_draw_order() -> void:
+	if _proxy != null: ## vekil varken sıra Main'deki y-sıralamasının (pet_depth_proxy.gd)
+		return
 	var dy: float = global_position.y - owner_body.global_position.y
 	var want_behind: bool = _is_behind
 	if dy < -BEHIND_HYSTERESIS:

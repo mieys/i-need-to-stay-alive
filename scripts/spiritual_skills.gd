@@ -131,6 +131,7 @@ const DEFS := {
 		"icon": "res://assets/skills/spirit_can_icon.png",
 		"sound": "res://assets/audio/spiritual/spirit_can.wav",
 		"desc": "Sana ve tüm takım arkadaşlarına mesafe fark etmeksizin anında %8 can ve %15 mana kalkanı kazandırır ve 3 saniyeliğine hasar görmez hale getirir. (90sn bekleme)",
+		"short_desc": "Sana ve tüm takıma anında %8 can, %15 mana kalkanı ve 3sn hasarsızlık verir.",
 	},
 	ADC: {
 		"name": "Adc",
@@ -140,6 +141,7 @@ const DEFS := {
 		"icon": "res://assets/skills/spirit_adc_icon.png",
 		"sound": "res://assets/audio/spiritual/spirit_adc.wav",
 		"desc": "10 saniyeliğine %30 saldırı hızı ve %15 kalkan delme kazanırsın, ayrıca %2 can emme kazanırsın. (75sn bekleme)",
+		"short_desc": "10sn boyunca %30 saldırı hızı, %15 kalkan delme ve %2 can emme kazanırsın.",
 	},
 	TANK: {
 		"name": "Tank",
@@ -149,6 +151,7 @@ const DEFS := {
 		"icon": "res://assets/skills/spirit_tank_icon.png",
 		"sound": "res://assets/audio/spiritual/spirit_tank.wav",
 		"desc": "10 saniye boyunca aldığın hasarın %200'ünü hasarı verene yansıtırsın ve her hasar aldığında eksik mana kalkanının %3'ü yenilenir. (100sn bekleme)",
+		"short_desc": "10sn aldığın hasarın %200'ünü saldırana yansıtırsın; her vuruş eksik mana kalkanının bir kısmını yeniler.",
 	},
 	TAKTIK: {
 		"name": "Taktiksel",
@@ -165,6 +168,7 @@ const DEFS := {
 		"cooldown": 0.0,
 		"icon": "res://assets/skills/spirit_savas_sevki_icon.png",
 		"desc": "PASİF: Her düşman öldürmede 1 savaş şevki kazanırsın (bosslar 25 verir). 50 savaş şevkine ulaşınca maç boyunca kalıcı +1 saldırı gücü kazanırsın; her dönüşümde gereken şevk 5 artar (50, 55, 60...). Ayrıca canı %6'dan az olan düşmanları (bosslarda %3) anında katledersin.",
+		"short_desc": "PASİF: Öldürmeler şevk biriktirir, 50 şevkte kalıcı +1 saldırı gücü. Canı %6'nın altındaki düşmanları anında öldürürsün.",
 	},
 	KALKAN_BAGI: {
 		"name": "Kalkan Bağı",
@@ -173,6 +177,7 @@ const DEFS := {
 		"icon": "res://assets/skills/spirit_kalkan_bagi_icon.png",
 		"sound": "res://assets/audio/spiritual/spirit_kalkan_bagi.wav",
 		"desc": "En yakın arkadaşınla kalkan bağı kurarsın: hasarlar, yetenek bedelinden giden mana kalkanları ve mana kalkanı artışları gibi her türlü mana kalkanı değişikliği %50 birbirinize yansır; mana kalkanı daha az olan, arkadaşının mana kalkanı artışlarından %80 pay alır. Mana kalkanı biten, arkadaşının mana kalkanını kullanır. Aktifken ikinizin de mana kalkanı saniyede %0.5 yenilenir ve %5 mana kalkanı hasar soğurması kazanırsınız. Tekrar kullanana ya da uzaklaşıp bağ kopana kadar sürer. (60sn bekleme)",
+		"short_desc": "En yakın arkadaşınla bağ kurarsın: mana kalkanı değişimleri paylaşılır, ikiniz de kalkan yenilemesi ve hasar soğurması kazanırsınız.",
 	},
 	TOPLAYICI: {
 		"name": "Toplayıcı",
@@ -181,12 +186,20 @@ const DEFS := {
 		"icon": "res://assets/skills/spirit_toplayici_icon.png",
 		"sound": "res://assets/audio/spiritual/spirit_teleport.wav", ## 2026-11-15: ruhani paketinin kullanılmayan sesi; yalnız F ile çekişte (otomatik çekiş sessiz)
 		"desc": "XP toplama menzilin %40 artar. F'ye basınca haritadaki TÜM XP kristalleri mıknatıs gibi sana çekilir (20sn bekleme); ayrıca 60 saniyede bir bu çekiş kendiliğinden yapılır. Altın ve yiyecek çekilmez, çekilen kristallerde XP bonusun işlemez. 2v2'de: menzil %20, 30sn bekleme, 90 saniyede bir otomatik, yalnız kendi takımının düşürdüğü kristaller; çekiş sırasında rakipten hasar alırsan yarıda kalır.",
+		"short_desc": "XP toplama menzilin %40 artar; F'ye basınca (ve 60sn'de bir kendiliğinden) XP kristalleri sana çekilir.",
 	},
 }
 
 
 static func get_def(id: String) -> Dictionary:
 	return Loc.localized("sp:" + id, DEFS.get(id, {})) ## madde 446
+
+
+## Kısa açıklama (madde 756): "short_desc" yoksa uzun "desc". Uzun metin ayrıntı (Shift / AYRINTILI).
+static func short_desc(id: String) -> String:
+	var d: Dictionary = get_def(id)
+	var s: String = str(d.get("short_desc", ""))
+	return s if s != "" else str(d.get("desc", ""))
 
 
 static func is_valid(id: String) -> bool:

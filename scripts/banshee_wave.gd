@@ -64,6 +64,17 @@ func _ready() -> void:
 	queue_redraw()
 
 
+## Gece ışığı (madde 744, night_glow_catalog.gd BY_SCRIPT): şerit boyunca çizgi ışık; uyarıda kısık, dalgada tam -> söner.
+func get_glow_segment() -> Array:
+	return [global_position, global_position + _dir * _length]
+
+
+func get_night_glow_energy() -> float:
+	if _t < _warn:
+		return 0.35
+	return 1.0 - 0.6 * clampf((_t - _warn) / maxf(_fire, 0.01), 0.0, 1.0)
+
+
 func _physics_process(delta: float) -> void:
 	_t += delta
 	if _t >= _warn + _fire:

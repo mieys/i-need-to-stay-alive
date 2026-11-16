@@ -60,13 +60,7 @@ def main():
         12, 12,
         [("flap", (0, 0), 2, True, 16.0)],
     )
-    # --- Ruhani "Adc" alev dili: 12 kareli, FLAME_PERIOD (2pi/11) boyunca seamless loop (bkz. gen_spirit_perf_sprites.py) ---
-    write_sprite_frames(
-        os.path.join(ROOT, "assets", "fx", "spirit_adc", "flames_frames.tres"),
-        "res://assets/fx/spirit_adc/flames.png",
-        96, 96,
-        [("loop", (0, 0), 12, True, 12.0 / (2.0 * 3.14159265 / 11.0))],
-    )
+    # (Ruhani "Adc" alev dili 2026-11-16 silindi: Adc artık "Rün Mührü", tools/gen_ruhani_fx.py, madde 734)
     # --- Buyucu hortum: 36 kareli, TORNADO_LOOP_PERIOD (2pi/6) boyunca seamless loop (bkz. gen_heavy_fx_perf_sprites.py) ---
     write_sprite_frames(
         os.path.join(ROOT, "assets", "fx", "buyucu_tornado", "loop_frames.tres"),

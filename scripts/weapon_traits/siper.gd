@@ -6,12 +6,12 @@ extends "res://scripts/enchant_behavior.gd"
 ## korumasıyla ilgili bir şey ekle"): siper duruşunun menzilli atış hasar azaltması %30 -> %(30 + siper_guard) (KalkanGuard.guard_shot;
 ## weapon.gd yayınlar, MP'de main.gd extra "kguard" kuklaya taşır). Ağır Kenar: kalkan %50 üstündeyken darbe x(1 + siper_heavy).
 ## Sert İtiş: darbenin itmesi x(1 + siper_push). Sarsıcı Darbe: vurulanlar yavaşlar. Final (siper_wall = N): her N. darbe 360°
-## (KalkanBashMath.WALL_R), x1,5 hasar (%100 -> %150), 1 sn sersem. Sadece kasterde çalışır.
+## (KalkanBashMath.WALL_R), darbenin hasarı x1,5 (Kalkan darbesi sahnede zaten saldırı gücünün %150'si -> Final %225, cila A10), 1 sn sersem. Sadece kasterde çalışır.
 
 const KalkanGuard := preload("res://scripts/kalkan_guard.gd")
 const SLOW_DUR := 1.5
 const WALL_STUN := 1.0
-const WALL_DAMAGE_MULT := 1.5 ## %100 -> %150
+const WALL_DAMAGE_MULT := 1.5 ## darbe hasarının üstüne biner: sahne oranı %150 x 1,5 = %225 (eski yorum "%100 -> %150" artık geçersiz)
 const HEAVY_AT := 0.5
 
 var bashes: int = 0 ## gözlem/test

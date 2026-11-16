@@ -29,6 +29,7 @@ var _started: bool = false
 
 
 func setup(p_target: Vector2) -> void:
+	CameraShakeScript.mark_fx_origin(self) ## madde 711: başkasının kopyası mı (sarsıntı yalnız kasterde)
 	target_pos = p_target
 	start_pos = target_pos + START_OFFSET
 	global_position = target_pos
@@ -68,7 +69,7 @@ func _explode() -> void:
 		return
 	has_exploded = true
 	global_position = target_pos
-	CameraShakeScript.add_at(target_pos, 0.55, 1200.0) ## kamera sarsıntısı (bkz. camera_shake.gd)
+	CameraShakeScript.add_at_fx(self, target_pos, 0.55, 1200.0) ## kamera sarsıntısı (bkz. camera_shake.gd)
 	for n in [_rock, _warn]:
 		if is_instance_valid(n):
 			n.queue_free()

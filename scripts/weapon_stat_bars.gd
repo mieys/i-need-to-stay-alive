@@ -17,17 +17,29 @@ const ROWS := [
 	["heal_power", "Destek", HT.GOOD],
 ]
 
-var _pips: Array = [] ## Pips, ROWS sırasıyla
+## KARAKTER çubukları (2026-11-16, kullanıcı: "Hasar, Savunma, Çeviklik ve Destek"): değerler characters.gd STAT_BARS, show_values ile.
+## İkonlar silah çubuklarınınkinden (ROWS) ve orta paneldeki temel stat ızgarasından (Can/Hız/Güç) BİLEREK farklı (kullanıcı isteği).
+const CHAR_ROWS := [
+	["crit_damage", "Hasar", HT.BAD],
+	["shield_amount", "Savunma", HT.SHIELD_BAR],
+	["dodge", "Çeviklik", HT.PRICE],
+	["health_regen", "Destek", HT.GOOD],
+]
+
+var _rows: Array = ROWS
+var _pips: Array = [] ## Pips, _rows sırasıyla
 var _cells: Array = [] ## hücre kutuları (ipucu)
 
 
-## px: 1 sanat pikseli kaç ekran pikseli (masaüstü 3); icon_px: stat ikonu kutusu; fs: ad yazı boyu.
-func setup(px: int = 3, icon_px: float = 48.0, fs: int = DK.FS_LABEL) -> void:
+## px: 1 sanat pikseli kaç ekran pikseli (masaüstü 3); icon_px: stat ikonu kutusu; fs: ad yazı boyu; rows: ROWS / CHAR_ROWS;
+## pip_w: dilim genişliği (sanat px; dar alanda 2); col_sep: sütun arası (-1 = 6 sanat px).
+func setup(px: int = 3, icon_px: float = 48.0, fs: int = DK.FS_LABEL, rows: Array = ROWS, pip_w: int = 6, col_sep: int = -1) -> void:
+	_rows = rows
 	columns = 2
-	add_theme_constant_override("h_separation", 6 * px)
+	add_theme_constant_override("h_separation", 6 * px if col_sep < 0 else col_sep)
 	add_theme_constant_override("v_separation", 2 * px)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	for row: Array in ROWS:
+	for row: Array in _rows:
 		var hb := DK.h(px * 3)
 		hb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		hb.mouse_filter = Control.MOUSE_FILTER_PASS
@@ -37,7 +49,7 @@ func setup(px: int = 3, icon_px: float = 48.0, fs: int = DK.FS_LABEL) -> void:
 		var v := DK.v(0)
 		v.alignment = BoxContainer.ALIGNMENT_CENTER
 		v.add_child(DK.lbl(str(row[1]), fs, DK.C_DIM))
-		var p := Pips.new(row[2], px)
+		var p := Pips.new(row[2], px, pip_w)
 		v.add_child(p)
 		hb.add_child(v)
 		add_child(hb)
@@ -46,11 +58,14 @@ func setup(px: int = 3, icon_px: float = 48.0, fs: int = DK.FS_LABEL) -> void:
 
 
 func show_weapon(key: String) -> void:
-	var vals: Array = WC.stat_bars(key)
+	show_values(WC.stat_bars(key))
+
+
+func show_values(vals: Array) -> void:
 	for i in _pips.size():
 		var n: int = int(vals[i]) if i < vals.size() else 0
 		(_pips[i] as Pips).set_value(n)
-		(_cells[i] as Control).tooltip_text = "%s: %d / %d" % [tr(str(ROWS[i][1])), n, WC.STAT_BAR_MAX]
+		(_cells[i] as Control).tooltip_text = "%s: %d / %d" % [tr(str(_rows[i][1])), n, WC.STAT_BAR_MAX]
 
 
 ## Test / yardımcı: çubukta görünen değerler.
@@ -66,12 +81,14 @@ class Pips extends Control:
 	var value: int = 0
 	var col: Color = Color.WHITE
 	var k: int = 3
+	var pw: int = 6 ## dilim genişliği (sanat px)
 
-	func _init(c: Color, px: int) -> void:
+	func _init(c: Color, px: int, pip_w: int = 6) -> void:
 		col = c
 		k = px
+		pw = pip_w
 		var n: int = WC.STAT_BAR_MAX
-		custom_minimum_size = Vector2(n * 6 * k + (n - 1) * k, 4 * k)
+		custom_minimum_size = Vector2(n * pw * k + (n - 1) * k, 4 * k)
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	func set_value(v: int) -> void:
@@ -79,7 +96,7 @@ class Pips extends Control:
 		queue_redraw()
 
 	func _draw() -> void:
-		var w: float = 6 * k
+		var w: float = pw * k
 		var h: float = 4 * k
 		for i in WC.STAT_BAR_MAX:
 			var x: float = i * (w + k)
@@ -88,5 +105,7 @@ class Pips extends Control:
 				draw_rect(Rect2(x, 0, w, k), col.lightened(0.3))
 				draw_rect(Rect2(x, h - k, w, k), col.darkened(0.35))
 			else:
-				draw_rect(Rect2(x, 0, w, h), HT.DOCK_MARK)
+				## Boş dilim RIM_LO (pencere kenar çizgisi tonu): eski DOCK_MARK (#342316) orta paneldeki ahşap zeminde (INSET #271a11)
+				## kayboluyordu (kullanıcı 2026-11-16: "boş olan çubuklar çok zor okunuyor"); koyu kuyuda da okunur.
+				draw_rect(Rect2(x, 0, w, h), HT.RIM_LO)
 				draw_rect(Rect2(x, h - k, w, k), HT.OUTLINE)

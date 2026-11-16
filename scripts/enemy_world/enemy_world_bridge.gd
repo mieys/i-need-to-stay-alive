@@ -78,7 +78,7 @@ static func get_or_create(tree: SceneTree) -> Node:
 	if scene == null:
 		return null
 	if _instance != null and is_instance_valid(_instance) and not _instance.is_queued_for_deletion() \
-			and (_instance.get_parent() == scene or _instance.get_meta("pending_parent", null) == scene):
+			and (_instance.get_parent() == scene or (_instance.get_meta("pending_parent") if _instance.has_meta("pending_parent") else null) == scene):
 		return _instance
 	var b: Node = (load("res://scripts/enemy_world/enemy_world_bridge.gd") as GDScript).new()
 	b.name = NODE_NAME

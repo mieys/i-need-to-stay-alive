@@ -7,6 +7,7 @@ extends RefCounted
 
 const HT := preload("res://scripts/hud_theme.gd") ## tek arayüz paleti (stil rehberi, madde 403)
 const CampScene := preload("res://scripts/menu_camp_scene.gd")
+const BgBlur := preload("res://scripts/menu_bg_blur.gd") ## sahne bulanık (2026-11-16, ana menü dışındaki her menü)
 ## Koyu kit panelleri (menu_dark_kit.gd) sahnenin üstünde okunur kalsın diye düz koyu örtü; kamp ateşi yine seçilir.
 const DIM_COLOR := HT.DEEP ## tek palet: sıcak koyu ahşap (madde 403; eskiden Gece Sıvası mor-laciverti)
 const DIM_DESKTOP := 0.3
@@ -26,6 +27,7 @@ static func add_to(root: Control, dim: float = 0.0) -> Control:
 	layer.add_child(stage)
 	stage.size = CampScene.SCREEN
 	CampScene.build(stage)
+	BgBlur.add_to(layer) ## sahnenin üstünde, örtünün altında: menü ekranlarında arka plan bulanık
 	if dim > 0.0:
 		var shade := ColorRect.new()
 		shade.color = Color(DIM_COLOR, dim)

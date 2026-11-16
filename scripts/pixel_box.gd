@@ -18,13 +18,22 @@ const SMALL := 30.0 ## bundan küçük kutuda kabartma yok, köşe en çok 1 san
 ## 9 dilimin ORTA bölgesine (kenar + kabartma + köşe basamağının içi) karo döşenir; renk, kenar, köşe, saydamlık AYNEN kalır.
 ## Yalnız pencere dolgusu (WIN_PANEL / WIN_PANEL2 / WIN_PANEL3) ve en kısa kenarı GRAIN_MIN ve üstü olan kutuda: düğme, kuyu (WIN_INSET),
 ## altın düğme, küçük kutu düz kalır. %88 pencere (menu_dark_kit C_PANEL) = onaylanan prototip; daha saydam dolguda doku orantılı söner.
-## Kapatmak için kutuda `grain = false`. Karo: `tools/proto_20261113/panel_doku/gen_panel_doku2.py --oyun` (x3 hazır, 1:1 döşenir; yalnız
-## RIM_HI / DEEP alfa bantları, yeni renk yok). Karo dikeyde 24 bant (6'nın katı) -> tekrar sınırında düz çizgi yok.
+## Kapatmak için kutuda `grain = false`. Karo 2026-11-16'dan beri R2 "Kabartma Damar" (madde 752, kullanıcı: "daha kaliteli ve okunurluğu
+## daha iyi"): E'nin arıtılmışı - temiz 1 px merdiven, seyrek düzensiz aralık, kesik damar + altında 1 px oyma ışığı, düşük kontrast.
+## Üretici `tools/proto_20261116/panel_doku3/gen_panel_doku3.py --oyun r2` (320x192 sanat px, x3 hazır, 1:1 döşenir; yalnız RIM_HI / DEEP
+## alfa bantları, yeni renk yok; bant sayısı karo boyunca tam -> tekrar sınırında düz çizgi yok). Eski E: gen_panel_doku2.py --oyun.
 const GRAIN_TEX: Texture2D = preload("res://assets/ui/panel_doku/ahsap_damar.png")
+## Çizimde kullanılan karo (varsayılan GRAIN_TEX); prototip yakalamaları (tools/proto_20261116/panel_doku3) geçici olarak değiştirir.
+static var grain_tex: Texture2D = GRAIN_TEX
 const GRAIN_MIN := 90.0
 const GRAIN_REF_ALPHA := 0.88
 const HT := preload("res://scripts/hud_theme.gd")
 const GRAIN_FILLS := [HT.WIN_PANEL, HT.WIN_PANEL2, HT.WIN_PANEL3]
+## İç kart / seçim karosu dolgusu (WIN_PANEL2 / WIN_PANEL3: silah/evcil/karakter/harita kartları, düğme) doku gücü (madde 753, kullanıcı:
+## "silahlar zor okunur hale geldi"): 1 = pencereyle aynı, 0 = düz. Kullanıcı seçimi B %35 (A düz / şimdi 1,0 da denendi): kart yine
+## ahşap, ama damar ince silah çizgileriyle yarışmaz. Prototip yakalaması (tools/proto_20261116/panel_doku3 kart_capture.gd) değiştirir.
+static var grain_card_alpha := 0.35
+const GRAIN_CARD_FILLS := [HT.WIN_PANEL2, HT.WIN_PANEL3]
 
 static var _cache: Dictionary = {}
 
@@ -218,7 +227,16 @@ func _draw(ci: RID, rect: Rect2) -> void:
 static func grain_applies(fill: Color, size: Vector2) -> bool:
 	if fill.a <= 0.0 or minf(size.x, size.y) < GRAIN_MIN:
 		return false
+	if grain_card_alpha <= 0.0 and _is_card_fill(fill):
+		return false
 	for c: Color in GRAIN_FILLS:
+		if absf(fill.r - c.r) + absf(fill.g - c.g) + absf(fill.b - c.b) < 0.02:
+			return true
+	return false
+
+
+static func _is_card_fill(fill: Color) -> bool:
+	for c: Color in GRAIN_CARD_FILLS:
 		if absf(fill.r - c.r) + absf(fill.g - c.g) + absf(fill.b - c.b) < 0.02:
 			return true
 	return false
@@ -227,7 +245,7 @@ static func grain_applies(fill: Color, size: Vector2) -> bool:
 ## Karonun kutudaki başlangıç kayması (ekran px, sanat pikseline oturur): kutudan kutuya farklı olsun diye BOYUTA bağlı -> üstüne gelince /
 ## basınca (aynı boy, başka kutu örneği) doku kaymaz.
 static func grain_offset(box_size: Vector2) -> Vector2:
-	var ts: Vector2 = GRAIN_TEX.get_size()
+	var ts: Vector2 = grain_tex.get_size()
 	var h: int = absi(hash(Vector2i(int(box_size.x), int(box_size.y))))
 	return Vector2(float((h % int(ts.x / PX)) * PX), float(((h / 7) % int(ts.y / PX)) * PX))
 
@@ -235,10 +253,12 @@ static func grain_offset(box_size: Vector2) -> Vector2:
 func _draw_grain(ci: RID, inner: Rect2, box_size: Vector2) -> void:
 	if inner.size.x <= 0.0 or inner.size.y <= 0.0:
 		return
-	var ts: Vector2 = GRAIN_TEX.get_size()
+	var ts: Vector2 = grain_tex.get_size()
 	var mod := Color(1, 1, 1, clampf(bg_color.a / GRAIN_REF_ALPHA, 0.0, 1.0))
+	if _is_card_fill(bg_color):
+		mod.a *= clampf(grain_card_alpha, 0.0, 1.0)
 	var off: Vector2 = grain_offset(box_size)
-	var rid: RID = GRAIN_TEX.get_rid()
+	var rid: RID = grain_tex.get_rid()
 	var y: float = -off.y
 	while y < inner.size.y:
 		var x: float = -off.x

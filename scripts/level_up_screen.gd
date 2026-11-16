@@ -71,7 +71,8 @@ const UPGRADES = [
 	## sanılıyordu (bkz. player.gd get_attack_interval_mult).
 	{"id": "fire_rate", "title": "Saldırı Hızı", "desc": "+%6", "cat": "Saldırı", "color": CAT_ATTACK},
 	{"id": "health_regen", "title": "Can Yenilenmesi", "desc": "+2", "cat": "Savunma", "color": CAT_DEFENSE},
-	{"id": "crit_chance", "title": "Kritik Oran", "desc": "+%2.5", "cat": "Saldırı", "color": CAT_ATTACK},
+	## 2026-11-15 (cila A4): "+%2.5" -> "+%3.5" - player.gd apply_upgrade `_nice_up(0.025 * 1.3, 0.005)` = 0.035 uyguluyor (denge değişmedi, yalnız metin).
+	{"id": "crit_chance", "title": "Kritik Oran", "desc": "+%3.5", "cat": "Saldırı", "color": CAT_ATTACK},
 	## Kullanıcı isteği: "kritik hasar oranını arttıran kartta kritik hasar
 	## çarpanı yerine kritik hasar miktarı yazsın" - eskiden "+0.125x kritik
 	## vuruş çarpanı" (hem çarpan/x notasyonu hem de player.gd'deki gerçek
@@ -88,8 +89,9 @@ const UPGRADES = [
 	## (player.gd apply_upgrade dalı duruyor, kayıtlı eski kartlar bozulmasın).
 	{"id": "exp_gain", "title": "Tecrübe Kazanımı", "desc": "+%5", "cat": "Yardımcı", "color": CAT_UTILITY},
 	{"id": "luck", "title": "Şans", "desc": "+3", "cat": "Yardımcı", "color": CAT_UTILITY},
-	{"id": "dodge", "title": "Sıvışma", "desc": "+%2.5", "cat": "Savunma", "color": CAT_DEFENSE},
-	{"id": "shield_amount", "title": "Mana Kalkanı Miktarı", "desc": "+%5", "cat": "Savunma", "color": CAT_DEFENSE},
+	## cila A4: dodge "+%2.5" -> "+%3.5" (`_nice_up(0.025 * 1.3, 0.005)`), shield_amount "+%5" -> "+%6.5" (`_nice_up(0.05 * 1.3, 0.005)`); metin player.gd'deki uygulanan değere uydu.
+	{"id": "dodge", "title": "Sıvışma", "desc": "+%3.5", "cat": "Savunma", "color": CAT_DEFENSE},
+	{"id": "shield_amount", "title": "Mana Kalkanı Miktarı", "desc": "+%6.5", "cat": "Savunma", "color": CAT_DEFENSE},
 	{"id": "cooldown_reduction", "title": "Bekleme Süresi Azaltma", "desc": "-%4", "cat": "Yardımcı", "color": CAT_UTILITY},
 	## Kullanıcı isteği (2026-09-26): "geri tepmeyi level atlama kartlarından kaldırıyoruz ... kalkan soğurmayı da level
 	## atlama kartlarından kaldırıyoruz" - "knockback" (Geri Tepme) ve "shield_protection" (Kalkan Soğurma) kartları
@@ -2129,7 +2131,8 @@ func _evo_grow(card: Button, on: bool) -> void:
 	if not is_instance_valid(card):
 		return
 	card.pivot_offset = (card.size * 0.5).round()
-	var old: Variant = card.get_meta("evo_grow_tw", null)
+	## get_meta(ad, null) eksik anahtarda hata basar (null "varsayılan yok" sayılır) - kullanıcı günlüğünde her ilk üstüne gelişte 2 ERROR.
+	var old: Variant = card.get_meta("evo_grow_tw") if card.has_meta("evo_grow_tw") else null
 	if old is Tween and (old as Tween).is_valid():
 		(old as Tween).kill()
 	var tw: Tween = create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)

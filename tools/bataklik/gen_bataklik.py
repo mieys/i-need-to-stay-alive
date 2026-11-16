@@ -10,7 +10,7 @@
 # ARAZİ = köşe ızgarası (dual grid): su / kara, kara üstünde çamur / çimen, çimen üstünde uzun çimen. Bataklık setinin kenar karoları köşe
 # temellidir: karo, 4 köşesinin hangisi o arazide olduğuna göre seçilir (3x3 ada bloğu + 2x2 iç köşe bloğu); yalnız çapraz iki köşe
 # (KD+GB ya da KB+GD) çiziminde yoktur -> temizlikte ızgaradan atılır. Su katmanı ana haritadaki gibi DÜZ MAVİ karo (collision mavi pikseli
-# su sayar) - bataklık suyu scenes/bataklik_su.gdshader ile çizilir.
+# su sayar) - bataklık suyu ana haritanın scenes/su.gdshader'ı ile çizilir (madde 714).
 #
 # ÇİZİM SIRASI kuralları (Godot): "Shader Eklenecek" y-sıralı; Ağaç / Animasyonsuz çalılar / Çalılar / Çiçekler katmanları y=0'da TEK parça
 # sıralanır (sahne sırasıyla), "Çalılar1" karoları tek tek y'ye göre hepsinden SONRA. Bu yüzden:
@@ -102,13 +102,15 @@ WATER_TILE = ('taban', (0, 0))
 BLOCKER_TILE = ('taban', (1, 0))
 
 ## Katmanlar: (grup, ad) çizim sırasıyla. Harita.tmx adları; "Su süsleri", "Leke" bu haritaya özgü (collision onları saymaz).
+## madde 714 (Y sırası): "Çalılar1" = bir nesnenin/ağacın ÖNÜNDEKİ (kökü güneyinde) bitki (plant_layer_for) -> nesne + ağaç katmanlarından SONRA
+## çizilir; eskiden önlerinden önce çiziliyordu ve öndeki ot/mantar/çiçek arkasındaki kayanın/ağacın altında kalıyordu (tools/harita_cila/nesne_sirasi.py).
 LAYERS = [
     ('Yer', 'Zemin Toprak'), ('Yer', 'Zemin Çimen'), ('Yer', 'Leke'),
     ('Su', 'Su'), ('Su', 'Su süsleri'), ('Su', 'Su ayrıntılar 2'),
     ('Orman parçaları', 'Saklanma Çalılığı'), ('Orman parçaları', 'Orman parçaları'), ('Orman parçaları', 'Orman parçaları 3'),
-    ('Shader Eklenecek', 'Çiçekler 1'), ('Shader Eklenecek', 'Çalılar'), ('Shader Eklenecek', 'Çalılar1'),
+    ('Shader Eklenecek', 'Çiçekler 1'), ('Shader Eklenecek', 'Çalılar'),
     ('Shader Eklenecek', 'Animasyonsuz çalılar'),
-] + [('Shader Eklenecek', 'Ağaç %d' % i) for i in range(8)]
+] + [('Shader Eklenecek', 'Ağaç %d' % i) for i in range(8)] + [('Shader Eklenecek', 'Çalılar1')]
 TREE_LAYERS = 8
 
 ## terrain_collision.gd sabitleri (ayak izi taklidi - oyundaki hesapla aynı)
@@ -138,7 +140,7 @@ def load_sheets():
 
 
 def ensure_base_tiles():
-    """b_taban.png: 0 = düz mavi su (collision su sayar; görünüşü bataklik_su.gdshader), 1 = tamamen saydam (görünmez engel)."""
+    """b_taban.png: 0 = düz mavi su (collision su sayar; görünüşü scenes/su.gdshader sabit renk, madde 714), 1 = tamamen saydam (görünmez engel)."""
     img = Image.new('RGBA', (32, 16), (0, 0, 0, 0))
     for y in range(16):
         for x in range(16):
@@ -848,7 +850,7 @@ def place_landmarks(m):
                     ('kafatasi_totem_1', 7, 5)],
         'olu_orman': [('yuzlu_agac', 0, -2), ('kafa_agaci_1', 9, 5), ('kafatasi_totem_1', -8, 3), ('kutuk_1', -6, -6), ('kemik_3', 5, 7),
                       ('kafa_kazik_2', -3, 6)],
-        'kamp': [('mesale', -5, -3), ('mesale', 5, -3), ('mesale', -6, 3), ('mesale', 6, 3), ('kutuk_6', -9, -7)],
+        'kamp': [('kutuk_6', -9, -7)],  ## 4 büyük meşale kullanıcı isteğiyle kaldırıldı (2026-11-16)
         'sazlik': [('agac_ev', 6, -2), ('kucuk_mesale', 3, 2)],
     }
     for reg, items in plan.items():
@@ -1642,9 +1644,10 @@ def main():
     cov = harita_duvar.nesne_ortusu(m, imgs, tile_rgba, ['Animasyonsuz çalılar', 'Orman parçaları 3'] + ['Ağaç %d' % i for i in range(TREE_LAYERS)],
                                     H, W, T, FEET_SHIFT)
     ncut = harita_duvar.duvari_hizala(m, imgs, cov, compute_blocked, flood, P(*SPAWN), (PX0, PY0, PLAY, PLAY))
+    ncik = harita_duvar.cikinti_temizle(m, imgs, compute_blocked, flood, P(*SPAWN), (PX0, PY0, PLAY, PLAY))  ## madde 714
     blocked, reach, npocket, cat = seal_pockets(m, imgs)
     rim_all, rim_open = harita_duvar.acik_kenar(m, imgs, cov, compute_blocked, flood, P(*SPAWN))
-    print('duvar hizalama: kenar ağacı %d, kırpılan %d hücre, kenar %d (açık görünen %d)' % (getattr(m, 'rim_trees', 0), ncut, rim_all, rim_open))
+    print('çıkıntı temizliği %d hücre; duvar hizalama: kenar ağacı %d, kırpılan %d hücre, kenar %d (açık görünen %d)' % (ncik, getattr(m, 'rim_trees', 0), ncut, rim_all, rim_open))
     play = blocked[PY0:PY0 + PLAY, PX0:PX0 + PLAY]
     rplay = reach[PY0:PY0 + PLAY, PX0:PX0 + PLAY]
     print('ağaç: %d (sığmayan %d)  nesne: %d  bitki: %d  çalılık: %d  su süsü: %s  leke: %d' % (placed, skipped, nprops, nplants, nbrush, wdec, nspots))

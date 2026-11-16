@@ -148,7 +148,29 @@ func _run() -> void:
 			res["bond_gain"] = float(res["b_end"]) - float(res["b_start"])
 			_log("SONUC B host'un kalkanı (kendi yenilenmesi kapalı) bağdan +%.1f kazandı (beklenen > 0; istemci ~160 yeniledi, pay %%50-80)" % float(res["bond_gain"]))
 			_flag("done.flag")
+		# ---------------- C) ruhani görseller iki yerde (madde 734): Kalkan Bağı boncuğu, Tank zap'ı ve Taktiksel hayaletleri kuklada
+		if res.has("bond") or (_role == "host" and _has("b_ready.flag")):
+			var beads: int = 0
+			for n in _all(current_scene):
+				if n.has_method("pulse_from"):
+					beads += (n.get("_beads") as Array).size()
+				elif _role == "host" and n.has_method("zap"):
+					res["host_zaps"] = maxi(int(res.get("host_zaps", 0)), (n.get("_zaps") as Array).size())
+				elif _role == "host" and n.get_script() != null and str((n.get_script() as Script).resource_path).ends_with("fx_spirit_blink.gd"):
+					res["host_blink_ghosts"] = maxi(int(res.get("host_blink_ghosts", 0)), n.get_child_count())
+			res["max_beads"] = maxi(int(res.get("max_beads", 0)), beads)
+		if _role == "client" and res.has("bond") and not res.has("fx_sent") and el > float(res.get("regen_t", el)) + 0.5:
+			res["fx_sent"] = true
+			p.set("_spirit_tank_fx", p.call("_play_and_broadcast_skill_fx", load("res://scenes/fx_spirit_tank.tscn")))
+			await _wait(0.3)
+			root.get_node("NetworkManager").call("send_player_vfx", get_multiplayer().get_unique_id(), "spirit_tank_zap", p.global_position + Vector2(-40, 0), {})
+			p.call("_spirit_blink_fx", "streak", p.global_position, p.global_position + Vector2(120, 0))
+			_log("istemci tank zap + ışınlanma efekti gönderdi")
 		if _has("done.flag") and el > 3.0:
+			if not res.has("c_logged"):
+				res["c_logged"] = true
+				_log("SONUC C %s: en çok boncuk=%d host_zap=%d host_isinlanma_hayalet=%d (beklenen: ikisinde boncuk > 0, host zap >= 1, hayalet >= 4)" % [
+						_role, int(res.get("max_beads", 0)), int(res.get("host_zaps", 0)), int(res.get("host_blink_ghosts", 0))])
 			break
 		await process_frame
 	var out := FileAccess.open(_dir.path_join(_role + ".json"), FileAccess.WRITE)
@@ -171,6 +193,13 @@ func _until(cond: Callable, timeout: float) -> void:
 	while not cond.call() and Time.get_ticks_msec() - t0 < int(timeout * 1000.0):
 		paused = false
 		await process_frame
+
+
+func _all(n: Node) -> Array:
+	var out: Array = [n]
+	for c in n.get_children():
+		out.append_array(_all(c))
+	return out
 
 
 func _find_by_method(n: Node, method: String) -> Node:

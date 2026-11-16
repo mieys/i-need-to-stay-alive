@@ -68,6 +68,43 @@ static func add_at(world_pos: Vector2, amount: float, radius: float = FALLOFF_RA
 	add(amount * falloff(cam.get_screen_center_position().distance_to(world_pos), radius))
 
 
+## OYUNCU YETENEK EFEKTİ sarsıntısı (madde 711, 2026-11-15, göz yorgunluğu): başka oyuncunun yeteneğinin bu makinedeki KOPYASI
+## ekranı sallamaz - yalnız kasterin ekranı sallanır (eskiden müttefikin Nova'sı/meteoru/patlaması yakındaki herkesi sallıyordu).
+## Kopya iki yoldan kurulur: "skill_scene" -> bir RemotePlayer'ın ("remote_players" grubu) altına (burada bulunur); "hitscan_impact"
+## -> network_manager.gd add_child'dan ÖNCE meta "cs_remote_copy" = true yazar. Efekt kurulurken okunur (mark_fx_origin, _ready'nin
+## başında çağır) ve meta'ya yazılır; ertelenmiş / sonradan gelen sarsıntı (call_deferred, meteor düşüşü) bunu okur. Belirlenemezse
+## eski davranış (sallar). RPC gönderen kimliğine BAKILMAZ: aynı sahneler varil patlaması gibi herkesi sallaması gereken yerlerde de
+## host RPC'siyle kurulabiliyor (fx_korsan_explosion = zindan varili).
+static func mark_fx_origin(fx: Node) -> void:
+	if fx == null or fx.has_meta(&"cs_remote_copy"):
+		return
+	fx.set_meta(&"cs_remote_copy", _detect_remote_copy(fx))
+
+
+static func is_remote_fx(fx: Node) -> bool:
+	if fx == null:
+		return false
+	if not fx.has_meta(&"cs_remote_copy"):
+		mark_fx_origin(fx)
+	return bool(fx.get_meta(&"cs_remote_copy", false))
+
+
+static func _detect_remote_copy(fx: Node) -> bool:
+	var p: Node = fx.get_parent()
+	while p != null:
+		if p.is_in_group(&"remote_players"):
+			return true
+		p = p.get_parent()
+	return false
+
+
+## add_at, ama `fx` başka oyuncunun efekt kopyasıysa hiç sallamaz (bkz. mark_fx_origin).
+static func add_at_fx(fx: Node, world_pos: Vector2, amount: float, radius: float = FALLOFF_RADIUS) -> void:
+	if is_remote_fx(fx):
+		return
+	add_at(world_pos, amount, radius)
+
+
 ## Aynı anahtarlı olay en çok `interval` saniyede bir (global). world_pos verilirse add_at, yoksa add.
 static func add_limited(key: String, amount: float, interval: float, world_pos: Variant = null) -> void:
 	var now: int = Time.get_ticks_msec()

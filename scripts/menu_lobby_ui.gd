@@ -86,6 +86,7 @@ static func make_player_row(pinfo: Dictionary, opts: Dictionary) -> Control:
 	var host_tag: String = "  [HOST]" if pinfo.get("is_host", false) else ""
 	var name_lbl := MenuKit.make_label("%s%s" % [pinfo.get("name", "Oyuncu"), host_tag], fs_body, MenuKit.C_TEXT)
 	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_lbl.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED ## oyuncu adı çevrilmez ("Can" -> "Health" olmasın, 2026-11-15)
 	name_lbl.clip_text = true
 	name_lbl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	top.add_child(name_lbl)

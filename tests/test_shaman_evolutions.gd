@@ -331,7 +331,8 @@ func test_rf_bigger_stronger_wider_golem_and_restores() -> void:
 	## Taban golem alanının hemen dışı, +%30 alanın içi.
 	var e: FakeEnemy = _make_enemy(Vector2(1000.0 + GolemMath.AUTO_RADIUS * 1.15, 1000.0))
 	p._skill_shaman_golem()
-	assert(p.char_base_anim_scale.is_equal_approx(scale0 * 1.3), "boyut +%%30: %s" % str(p.char_base_anim_scale))
+	## Golem paketi taban ölçeği (FORM_SPRITE_SCALE, madde 722) x Dev Golem +%30.
+	assert(p.char_base_anim_scale.is_equal_approx(scale0 * GolemMath.FORM_SPRITE_SCALE * 1.3), "boyut +%%30: %s" % str(p.char_base_anim_scale))
 	assert(is_equal_approx(p.damage_bonus, ap0 * 1.15), "saldırı gücü +%%15: %s" % str(p.damage_bonus))
 	assert(is_equal_approx(p._golem_area_mult(), 1.3), "alan çarpanı 1.3")
 	p._shaman_golem_auto_hit()
@@ -339,11 +340,13 @@ func test_rf_bigger_stronger_wider_golem_and_restores() -> void:
 	p._end_shaman_golem()
 	assert(p.char_base_anim_scale.is_equal_approx(scale0) and is_equal_approx(p.damage_bonus, ap0), "form bitince boyut ve güç geri")
 	assert(is_equal_approx(p._golem_area_mult(), 1.0), "alan çarpanı normale")
-	## Evrimsiz oyuncu formda büyümez.
+	## Evrimsiz oyuncu yalnız golem paketinin taban ölçeğine çıkar (+%30 yok), bitişte geri döner.
 	var q: Node = _make_player()
 	var s1: Vector2 = q.char_base_anim_scale
 	q._skill_shaman_golem()
-	assert(q.char_base_anim_scale.is_equal_approx(s1), "evrimsiz boyut aynı")
+	assert(q.char_base_anim_scale.is_equal_approx(s1 * GolemMath.FORM_SPRITE_SCALE), "evrimsiz boyut = taban golem ölçeği")
+	q._end_shaman_golem()
+	assert(q.char_base_anim_scale.is_equal_approx(s1), "evrimsiz form bitince boyut geri")
 	_cleanup()
 
 
@@ -357,12 +360,12 @@ func test_rf_remote_puppet_scales_in_golem_form() -> void:
 	var base: Vector2 = rp.anim.scale
 	rp._evolutions = {"shaman_rf": true}
 	rp.update_position_and_anim_from_net(Vector2(500, 500), GolemMath.IDLE + "down")
-	assert(rp.anim.scale.is_equal_approx(base * 1.3), "kukla golem formunda +%%30: %s vs %s" % [str(rp.anim.scale), str(base)])
+	assert(rp.anim.scale.is_equal_approx(base * GolemMath.FORM_SPRITE_SCALE * 1.3), "kukla golem formunda +%%30: %s vs %s" % [str(rp.anim.scale), str(base)])
 	var bar: Node = rp.get_node("OverheadBar")
 	assert(float(bar.y_offset) < 0.0 or true)
 	rp.update_position_and_anim_from_net(Vector2(500, 500), "idle_down")
 	assert(rp.anim.scale.is_equal_approx(base), "form bitince normal boyut")
 	rp._evolutions = {}
 	rp.update_position_and_anim_from_net(Vector2(500, 500), GolemMath.IDLE + "down")
-	assert(rp.anim.scale.is_equal_approx(base), "evrimsiz kukla büyümez")
+	assert(rp.anim.scale.is_equal_approx(base * GolemMath.FORM_SPRITE_SCALE), "evrimsiz kukla yalnız taban golem ölçeğinde")
 	_cleanup()

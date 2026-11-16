@@ -7,7 +7,7 @@ param(
 	[string]$Filter = "test_*.gd",
 	[int]$EnemyWorld = -1,
 	[string]$Out = "",
-	[int]$TimeoutSec = 180
+	[int]$TimeoutSec = 300 ## 2026-11-16: test_new_enchants.gd (her efsunu gerçek silahla dövüştürür) ~185 sn sürüyor, 180'de "zaman aşımı" düşüyordu
 )
 $godot = "C:\Users\perva\Desktop\Ar$([char]0x015F)iv\Godot_v4.7.2-stable_win64.exe"
 $proj = (Resolve-Path "$PSScriptRoot\..\..").Path

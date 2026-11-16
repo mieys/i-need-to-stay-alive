@@ -3,6 +3,7 @@ extends Node
 ## Zehir Asası "A - Zehir Damlası" (madde 410): mermi gövdesi zehir damlası (iz şeridi yok), kuyruktan kopan damlalar uçuşun altındaki
 ## zemine düşüp gölcük olur, isabette taç sıçraması + büyük gölcük (eski fx_poison_hit yok), asa ucundan sahibin ayak hizasına damla,
 ## geri tepme asa gibi (namlu kalkar, kritik "recoil").
+## Madde 749: mermi / iz / isabet / sıçrama artık "B - Kabarcık" (asa ucu damlası ve trail_drop yolu duruyor).
 
 const PoisonDripFx := preload("res://scripts/poison_drip_fx.gd")
 const StaffTipFx := preload("res://scripts/staff_tip_fx.gd")
@@ -78,39 +79,78 @@ func test_drop_and_puddle_caps_drop_the_oldest() -> void:
 	_cleanup()
 
 
-func test_dart_flies_as_a_poison_drop_drips_and_splashes() -> void:
+## Sahneye eklenmiş, sahne yolu verilen (tek seferlik efekt) düğümler.
+func _fx_nodes(path: String) -> Array:
+	var out: Array = []
+	for c: Node in _scene().get_children():
+		if c.scene_file_path == path and not c.is_queued_for_deletion():
+			out.append(c)
+	return out
+
+
+func _free_fx() -> void:
+	for path in ["res://scenes/fx_hit_kabarcik.tscn", "res://scenes/fx_zehir_bulut.tscn", "res://scenes/fx_namlu_kabarcik.tscn"]:
+		for n: Node in _fx_nodes(path):
+			n.free()
+
+
+## Madde 749 (kullanıcı "B - Kabarcık"ı seçti): gövde dönmeyen, esneyen zehir kabarcığı (1 dünya px pikseli), arkada kabaran puflar
+## (yerde bir şey kalmaz), namlu pufu, isabette fx_hit_kabarcik gövde hizasında (taç sıçraması / gölcük artık yok).
+func test_dart_flies_as_a_poison_bubble_puffs_and_pops() -> void:
 	_cleanup()
+	_free_fx()
 	var dart: Node2D = DartScene.instantiate()
 	dart.set("impact_sounds", [] as Array[AudioStream])
+	dart.scale = Vector2(0.5, 0.5) ## oyuncunun attığı mermi kökü sahibin ölçeğinde (0,5)
 	_scene().add_child(dart)
 	_made.append(dart)
 	dart.global_position = Vector2(200, 200)
-	dart.set("direction", Vector2.RIGHT)
-	var body: Sprite2D = dart.get("_art_body") as Sprite2D
-	assert(body != null and body.texture.resource_path.ends_with("mermi/zehir_govde.png"), "gövde zehir damlası")
+	dart.set("direction", Vector2(0.6, 0.8))
+	var body: AnimatedSprite2D = dart.get("_art_body") as AnimatedSprite2D
+	assert(body != null and (body.sprite_frames.get_frame_texture(&"fly", 0) as AtlasTexture).atlas.resource_path.ends_with("mermi/kabarcik_govde.png"),
+			"gövde zehir kabarcığı")
+	assert(body.sprite_frames.get_frame_count(&"fly") == 6 and body.is_playing(), "kabarcık esner (6 karelik döngü)")
+	var old_bullet: Sprite2D = dart.get_node_or_null("Bullet") as Sprite2D
+	assert(old_bullet == null or not old_bullet.visible, "eski tek kareli gövde gizli")
 	assert(dart.get("_trail") == null and dart.get_node_or_null("ArtTrail") == null, "iz şeridi yok")
 	for i in 12:
 		dart.call("_physics_process", STEP)
-	assert(body.visible and is_equal_approx(body.global_rotation, 0.0), "gövde uçuş yönünde görünür")
+	assert(body.visible and is_equal_approx(body.global_rotation, 0.0), "kabarcık görünür ve dönmez")
+	assert(is_equal_approx(body.global_scale.x, 1.0), "1 sanat pikseli = 1 dünya birimi")
+	assert(_fx_nodes("res://scenes/fx_namlu_kabarcik.tscn").size() == 1, "namlu pufu bir kez")
 	var m: Node = _mgr()
-	assert(m != null and int(m.call("drop_count")) >= 4, "0,2 sn uçuşta kuyruktan damla koptu: %d" % (int(m.call("drop_count")) if m else -1))
-	var first: Dictionary = (m.get("_drops") as Array)[0]
-	assert((first["g"] as Vector2).x < dart.global_position.x, "damla kuyrukta (merminin gerisinde)")
-	var before: int = int(m.call("drop_count"))
+	assert(m != null and int(m.call("puff_count")) >= 3, "0,2 sn uçuşta puf izi: %d" % (int(m.call("puff_count")) if m else -1))
+	assert(int(m.call("drop_count")) == 0 and int(m.call("puddle_count")) == 0, "damla / gölcük yok")
+	var first: Dictionary = (m.get("_puffs") as Array)[0]
+	assert((first["g"] as Vector2).y < dart.global_position.y, "puf kabarcığın gerisinde")
+	_run(m, PoisonDripFx.PUFF_LIFE + 0.05)
+	assert(int(m.call("puff_count")) == 0, "puflar söner (yerde kalmaz)")
 	dart.global_position = Vector2(400, 300) ## kaster: isabette mermi yaratığın konumuna (ayak) ışınlanır
 	dart.call("_spawn_impact")
-	assert(int(m.call("drop_count")) == before + PoisonDripFx.SPLASH_N, "taç sıçraması")
-	var big: int = 0
-	for p: Dictionary in m.get("_puddles"):
-		if int(p["k"]) == PoisonDripFx.K_PUDDLE_BIG:
-			big += 1
-			assert(absf((p["p"] as Vector2).y - 301.0) <= 0.5, "büyük gölcük ayak hizasında")
-	assert(big == 1, "isabette büyük gölcük")
-	var splash: Array = (m.get("_drops") as Array).slice(before)
-	for d: Dictionary in splash:
-		assert(float(d["vz"]) > 0.0, "sıçrama damlası yukarı fırlar")
-		assert(float(d["z"]) >= PoisonDripFx.SPLASH_BODY - 3.0, "gövdeden (ayağın üstünden) çıkar")
-	assert(get_tree().get_node_count_in_group("impact_fx_fx_poison_hit.tscn") == 0, "eski zehir patlaması yok")
+	var hits: Array = _fx_nodes("res://scenes/fx_hit_kabarcik.tscn")
+	assert(hits.size() == 1, "isabette kabarcık kırılır")
+	assert(((hits[0] as Node2D).global_position - Vector2(400, 290)).length() < 0.01, "isabet gövde hizasında (ayağın 10 üstü)")
+	assert(int(m.call("drop_count")) == 0 and int(m.call("puddle_count")) == 0, "taç sıçraması / gölcük yok")
+	_free_fx()
+	_cleanup()
+
+
+## Sıçrayan Zehir damlası artık kabarcık: kalkışta cesetten zehir bulutu, yolda puf, varışta isabetin kırılması (gölcük yok).
+func test_leap_is_a_bubble_with_cloud_and_pop() -> void:
+	_cleanup()
+	_free_fx()
+	PoisonDripFx.leap(get_tree(), Vector2(100, 100), Vector2(180, 120), 0.28)
+	var m: Node = _mgr()
+	var clouds: Array = _fx_nodes("res://scenes/fx_zehir_bulut.tscn")
+	assert(clouds.size() == 1 and ((clouds[0] as Node2D).global_position - Vector2(100, 90)).length() < 0.01, "cesetten bulut")
+	_run(m, 0.15)
+	assert(int(m.call("leap_count")) == 1 and int(m.call("puff_count")) >= 2, "kabarcık uçuyor, puf bırakıyor")
+	_run(m, 0.2)
+	assert(int(m.call("leap_count")) == 0, "vardı")
+	var hits: Array = _fx_nodes("res://scenes/fx_hit_kabarcik.tscn")
+	assert(hits.size() == 1 and ((hits[0] as Node2D).global_position - Vector2(180, 110)).length() < 0.01, "varışta kırılma")
+	assert(int(m.call("drop_count")) == 0 and int(m.call("puddle_count")) == 0, "taç sıçraması / gölcük yok")
+	_free_fx()
 	_cleanup()
 
 

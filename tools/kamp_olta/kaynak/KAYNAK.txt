@@ -1,0 +1,5 @@
+Craftpix "Fishing Game Icons Pixel Art" (craftpix-net-219768), kullanıcının verdiği arşivden (2026-11-16).
+Lisans: License.txt (https://craftpix.net/file-licenses/). Yalnız kullanılan dosya kopyalandı:
+- Icon37.png  (PNG/Transperent/Icon37.png)  - 32x32 altın sarısı olta (kamış + ip)
+Kullanan: tools/proto_20261115/kamp_menu/gen_kamp_kareler.py paket_olta -> assets/ui/ana_menu/talon_olta_kamis.png (ana menü sahnesinde
+Talon'un oltası; kullanıcı: "şu anki koyduğun olta AI, bunu arşivden çıkarıp ipini suyun içine uzanacak şekilde düzeltip Talon'un eline ver").

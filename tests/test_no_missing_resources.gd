@@ -19,7 +19,9 @@ extends Node
 
 ## android: Gradle derleme şablonu (git'te yok, Godot'un kendi örnek dosyaları - android/build/.gdignore ile oyun kaynağı
 ## sayılmaz); içindeki şablon main.tscn'in eksik main.gd referansı oyunun değil (2026-10-03).
-const SKIP_DIRS := [".godot", "addons", "tools", "android"]
+## .claude / .git (2026-11-16): Windows'ta DirAccess nokta ile başlayan klasörleri gizli SAYMAZ; .claude/worktrees altındaki eski
+## worktree kopyaları (oyunun parçası değil, Godot içe aktarmaz) sahte "eksik kaynak" hatası veriyordu.
+const SKIP_DIRS := [".godot", ".claude", ".git", "addons", "tools", "android"]
 
 
 func _collect_files(dir_path: String, extension: String, out: Array[String]) -> void:

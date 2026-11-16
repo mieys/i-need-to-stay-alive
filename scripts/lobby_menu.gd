@@ -325,8 +325,8 @@ func _open_world_map(vote: bool, map_id: String) -> void:
 	if vote:
 		_world_map.set("can_cancel", NetworkManager.is_host) ## oylamayı yalnız host iptal eder
 		_world_map.connect("voted", NetworkManager.cast_world_map_vote)
-	else:
-		_world_map.connect("chosen", _on_world_map_chosen)
+	## Oylamada `chosen` yalnız host'un TEST HARİTASI düğmesinden gelir (madde 731: oylamayı atlar, herkes test haritasına); istemcide düğme yok.
+	_world_map.connect("chosen", _on_world_map_chosen)
 	_world_map.connect("cancelled", _close_world_map.bind(true))
 	add_child(_world_map)
 	UISound.connect_all_buttons(_world_map)
@@ -369,6 +369,8 @@ func _close_world_map(broadcast: bool = false) -> void:
 
 
 func _on_world_map_chosen(map_id: String) -> void:
+	if not NetworkManager.is_host:
+		return ## harita kararı host'un (istemci ekranında YOLA ÇIK / TEST HARİTASI yok)
 	if not NetworkManager.all_players_ready():
 		_close_world_map(true)
 		_set_status("Herkes hazır değil: harita seçimi kapandı.")

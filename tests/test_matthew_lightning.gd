@@ -121,6 +121,30 @@ func test_sheets_match_the_table() -> void:
 		assert(ResourceLoader.exists(str(Characters.DEFS[MATTHEW][icon])), "ikon yok: " + str(Characters.DEFS[MATTHEW][icon]))
 
 
+## 2026-11-16 (kullanıcı: "matthewin tüm yıldırım efektleri hafiften parıldasın", Ateş Asası alevi gibi): her şimşek görseli
+## fx_pixel_glow malzemesini taşır, kare boyu sayfanın karesiyle aynı (komşu kare haleye sızmasın). İz damgası trail testinde.
+func test_all_lightning_fx_carry_the_soft_glow() -> void:
+	assert(ML.FX_GLOW > 0.0 and is_equal_approx(ML.FX_GLOW, 0.55), "Ateş Asası alevindeki parıltıyla aynı güç (madde 642)")
+	for kind: String in ML.SHEETS:
+		var spr: AnimatedSprite2D = ML.make_sprite(kind)
+		var mat: ShaderMaterial = spr.material as ShaderMaterial
+		assert(mat != null and mat.shader == ML.FX_GLOW_SHADER, kind + " parıltı malzemesi yok")
+		var cfg: Dictionary = ML.SHEETS[kind]
+		assert(mat.get_shader_parameter("cell_px") == Vector2(float(cfg["fw"]), float(cfg["fh"])), kind + " kare boyu")
+		assert(is_equal_approx(float(mat.get_shader_parameter("glow")), ML.FX_GLOW), kind + " parıltı gücü")
+		spr.free()
+	assert(ML.make_sprite("impact").material == ML.make_sprite("impact").material, "aynı sayfa aynı malzemeyi paylaşır (toplu çizim)")
+	if get_tree().current_scene == null:
+		get_tree().current_scene = self
+	var bolt: Node2D = BoltScene.instantiate()
+	add_child(bolt)
+	bolt.call("setup", 200.0, Color.WHITE)
+	for t: Array in bolt.get("_tiles"):
+		var m: ShaderMaterial = (t[0] as Sprite2D).material as ShaderMaterial
+		assert(m != null and m.shader == ML.FX_GLOW_SHADER and m.get_shader_parameter("cell_px") == Vector2(float(ML.BOLT_TILE_W), float(ML.BOLT_TILE_H)), "Q şimşeği parçası parıldar")
+	bolt.queue_free()
+
+
 func test_bolt_fx_is_baked_tiles_laid_toward_the_target_and_frees_itself() -> void:
 	if get_tree().current_scene == null:
 		get_tree().current_scene = self
@@ -253,6 +277,8 @@ func test_trail_stamps_follow_the_owner_and_fade() -> void:
 	var first: Sprite2D = stamps[0][0]
 	assert(first.get_parent() == get_tree().current_scene and is_zero_approx(first.rotation), "damga dünyada kalır, sağa giderken döndürülmez")
 	assert(first.texture == ML.sheet_texture("trail"), "normal iz sayfası")
+	var gm: ShaderMaterial = first.material as ShaderMaterial
+	assert(gm != null and gm.shader == ML.FX_GLOW_SHADER and gm.get_shader_parameter("cell_px") == ML.TRAIL_TILE, "iz damgası hafif parıldar (karo boyu)")
 	## Güçlenmiş iz: ayrı sayfa + vuruş noktaları.
 	trail.set("level", 2)
 	for _i in range(6):

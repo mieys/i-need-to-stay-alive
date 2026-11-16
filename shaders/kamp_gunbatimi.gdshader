@@ -4,6 +4,8 @@ shader_type canvas_item;
 // çizilen tam ekran katman; altındaki ekranı okuyup tonlar. Hava HEP "günbatımı olmak üzere": sıcak altın ışık sağ üstten (güneş ağaçların
 // ardında), gölgeler mor-lacivert, hafif loş. Ateşin sıcak ışık havuzu (titrer) + nehirde gökyüzü yansıması (dünya pikseline oturan yumuşak
 // parıltı bantları, akıntı yönünde kayar). Basamak / Bayer / benek YOK (madde 326, "pixel pixel" ışık istenmiyor); yönlü gölge yok.
+// Varsayılanlar GÜNBATIMI; ana menü 2026-11-15'ten beri AY IŞIKLI GECE kullanır: menu_camp_scene.gd SKY bu parametreleri ezer
+// (desat / fire_core / fire_falloff / fire_halo / fire_lum ve su-gökyüzü renkleri o seçim için eklendi; varsayılanlarıyla günbatımı aynı).
 
 uniform sampler2D screen_tex : hint_screen_texture, filter_nearest;
 uniform sampler2D water_mask : filter_nearest;
@@ -25,12 +27,25 @@ uniform vec3 water_tint : source_color = vec3(0.80, 0.80, 0.98);  // suyun kendi
 uniform vec3 sky_far : source_color = vec3(0.55, 0.42, 0.66);     // suda gökyüzü yansıması (güneşten uzak)
 uniform vec3 sky_near : source_color = vec3(1.0, 0.64, 0.44);     // (güneş tarafı)
 uniform float sky_amount = 1.0;
-uniform vec3 glint_color : source_color = vec3(1.0, 0.72, 0.48);
 uniform float desat = 0.0;          // ay ışığında renkler solar (gece); ateşin aydınlattığı yer SOLMAMIŞ renkle aydınlanır
 uniform vec3 fire_core : source_color = vec3(1.0, 0.62, 0.30); // ateşe yakın ışık rengi (dışı fire_color)
 uniform float fire_falloff = 2.0;   // ışık havuzunun sönüşü (küçük = uzun yumuşak kuyruk)
 uniform float fire_halo = 0.05;     // havada hafif sıcak hale
 uniform float fire_lum = 0.0;       // ışığın yüzey PARLAKLIĞIYLA (rengi değil) eklenen payı: yeşil çimen sarı-yeşile değil turuncuya döner
+// "Cozy" gece için (varsayılanları kapalı = günbatımı aynı): sahneyi ateşin sıcaklığına saran çok geniş zayıf ikinci ışık, ateşin üstünde
+// havada yumuşak sıcak parıltı, nehirde ateşin sıcak yansıması, kampa odaklı kenar karartması.
+uniform float fire_wide_radius = 0.0;      // sahne px (yatay; dikey 0.8 kat); 0 = kapalı
+uniform float fire_wide_strength = 0.0;
+uniform float fire_bloom = 0.0;            // havadaki parıltı gücü (ekran px dairesi, ateşin biraz üstünde)
+uniform float fire_bloom_radius = 90.0;
+uniform float water_fire = 0.0;            // nehirde ateş yansıması (geniş ışıkla orantılı)
+uniform vec2 vignette_center = vec2(0.5, 0.5);
+// İkinci ışık kaynağı: Talon'un yanına dikili meşale (varsayılan kapalı). Ateşle aynı sıcak renk, küçük havuz + havada hafif parıltı,
+// kendi titremesi.
+uniform vec2 lamp_pos = vec2(0.0, 0.0);   // sahne px
+uniform float lamp_radius = 0.0;          // 0 = kapalı (yatay; dikey 0.8 kat)
+uniform float lamp_strength = 0.0;
+uniform float lamp_bloom = 0.0;
 
 void fragment() {
 	vec3 c = texture(screen_tex, SCREEN_UV).rgb;
@@ -49,34 +64,52 @@ void fragment() {
 	// Güneş tarafından gelen yumuşak sıcak pus (gökyüzü görünmese de "güneş batıyor" hissi).
 	col += haze_color * pow(sun, 3.0);
 
-	// Nehir: gökyüzünün pembe-turuncu yansıması + akıntı yönünde kayan parıltı bantları (dünya pikselinde).
+	// Ateşin titremesi + çok geniş zayıf sıcak ışık (nehirdeki yansıma da bunu kullanır).
+	float flick = 0.93 + 0.045 * sin(TIME * 7.3) + 0.03 * sin(TIME * 12.7 + 1.3) + 0.02 * sin(TIME * 3.1 + 0.4);
+	float wl = 0.0;
+	if (fire_wide_radius > 0.0) {
+		vec2 wd = (p - fire_pos) / vec2(fire_wide_radius, fire_wide_radius * 0.8);
+		wl = 1.0 - smoothstep(0.0, 1.0, length(wd));
+		wl *= wl;
+	}
+
+	// Nehir: yalnız IŞIK (gökyüzü tonu + ateşin sıcak yansıması). Suyun kendisi ve dalgacıkları oyunun su shader'ından (kamp_su.gdshader,
+	// tabanın üstünde): 2026-11-16'ya kadar burada kendi "parıltı bantlarım" vardı - kullanıcı: "ana menüdeki su shaderı normal ana haritadaki
+	// su shaderı gibi değil" -> kalktı.
 	float w = texture(water_mask, UV).r;
 	if (w > 0.5) {
-		// Suyun mavisi korunur (mor ton griye çekmesin), üstüne gökyüzünün sıcak yansıması güneş tarafında artar.
+		// Suyun mavisi korunur (mor ton griye çekmesin), üstüne gökyüzünün yansıması güneş/ay tarafında artar.
 		vec3 sky = mix(sky_far, sky_near, sun);
 		col = base * water_tint * dim + sky * (0.06 + 0.10 * sun) * sky_amount;
-		vec2 wp = floor(UV * world_size) + 0.5;
-		float along = dot(wp, normalize(vec2(-0.78, 0.62)));  // akıntı: sağ üstten sol alta
-		float across = dot(wp, normalize(vec2(0.62, 0.78)));
-		float a1 = sin(across * 0.9 + along * 0.05 - TIME * 0.7) * 0.5 + 0.5;
-		float a2 = sin(along * 0.45 + TIME * 1.1 + across * 0.3) * 0.5 + 0.5;
-		float a3 = sin(along * 0.11 - TIME * 0.35 + across * 0.07) * 0.5 + 0.5;
-		float glint = smoothstep(0.86, 0.98, a1 * a2) * smoothstep(0.35, 0.8, a3);
-		col += glint_color * glint * (0.06 + 0.12 * sun);
+		col += fire_color * wl * water_fire * 0.18 * flick; // suyun yüzeyinde ateşin sıcak yansıması
 	}
 
 	// Ateş ışığı: titreyen sıcak havuz (yüzeyin kendi rengini aydınlatır + az miktar ortam).
 	vec2 fd = (p - fire_pos) / vec2(fire_radius, fire_radius * 0.72);
 	float d = length(fd);
-	float flick = 0.93 + 0.045 * sin(TIME * 7.3) + 0.03 * sin(TIME * 12.7 + 1.3) + 0.02 * sin(TIME * 3.1 + 0.4);
 	float fl = pow(1.0 - smoothstep(0.0, 1.0, d), fire_falloff);
 	vec3 fcol = mix(fire_color, fire_core, fl);
 	col += c * fcol * fl * fire_strength * flick;
 	col += fcol * fl * fire_halo * flick;
 	col += vec3(lum) * fcol * fl * fire_lum * flick;
+	col += c * fire_color * wl * fire_wide_strength * flick;
+	// Meşale ışığı (ateşinkinden bağımsız titrer; su da dahil her yüzeyi kendi rengiyle aydınlatır).
+	if (lamp_radius > 0.0) {
+		float tflick = 0.95 + 0.03 * sin(TIME * 5.3 + 0.7) + 0.02 * sin(TIME * 11.3 + 2.1);
+		float td = length((p - lamp_pos) / vec2(lamp_radius, lamp_radius * 0.8));
+		float tl = pow(1.0 - smoothstep(0.0, 1.0, td), 1.4);
+		vec3 tcol = mix(fire_color, fire_core, tl);
+		col += c * tcol * tl * lamp_strength * tflick;
+		col += vec3(lum) * tcol * tl * fire_lum * 0.6 * lamp_strength * tflick;
+		float tb = length(p - lamp_pos) / 50.0;
+		col += fire_core * exp(-tb * tb) * lamp_bloom * tflick;
+	}
+	// Havada sıcak parıltı (ateşin biraz üstünde, yumuşak).
+	float bd = length(p - fire_pos - vec2(0.0, -18.0)) / fire_bloom_radius;
+	col += fire_core * exp(-bd * bd) * fire_bloom * flick;
 
 	// Kenar karartması (yumuşak).
-	vec2 vu = (UV - 0.5) * vec2(1.0, 1.25);
+	vec2 vu = (UV - vignette_center) * vec2(1.0, 1.25);
 	col *= 1.0 - vignette * smoothstep(0.25, 0.85, length(vu));
 
 	COLOR = vec4(col, 1.0);

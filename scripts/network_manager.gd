@@ -2558,6 +2558,9 @@ func broadcast_projectile(scene_path: String, spawn_pos: Vector2, direction: Vec
 		var rp: RemotePlayer = _find_remote_player(player_id)
 		if rp:
 			proj.player_node = rp
+			## Kasterdeki gibi silah yuvasına döner (boomerang_projectile.gd return_anchor).
+			if "return_anchor" in proj and rp.has_method("weapon_icon_for_key"):
+				proj.return_anchor = rp.weapon_icon_for_key("boomerang")
 	if player_id > 0 and "return_callback_target" in proj:
 		var rp2: RemotePlayer = _find_remote_player(player_id)
 		if rp2:
@@ -2688,11 +2691,16 @@ func _spawn_visual_drop(drop_type: String, pos: Vector2, amount: int, network_id
 	## bunu hiç yaşamıyordu). Bu zamanlayıcı sadece GERÇEK bir kaçak/paket
 	## kaybı durumuna karşı son çare olmalı, normal oynanışta HİÇBİR ZAMAN
 	## tetiklenmemeli - 30sn'den 5 dakikaya (300sn) çıkarıldı.
+	## Lambda düğümü DOĞRUDAN yakalamaz: kopya neredeyse hep 300 sn dolmadan toplanıp silinir ve silinmiş yakalama, is_instance_valid
+	## korumasına rağmen her seferinde "Lambda capture at index 0 was freed" basıyordu (istemci günlüğünde 5 dk sonra toplu hata).
+	var drop_ref: WeakRef = weakref(drop)
 	var timer: SceneTreeTimer = get_tree().create_timer(300.0)
 	timer.timeout.connect(func():
-		if is_instance_valid(drop):
-			_visual_drops.erase(network_id)
-			drop.queue_free()
+		var d: Object = drop_ref.get_ref()
+		if d != null and is_instance_valid(d):
+			if _visual_drops.get(network_id) == d:
+				_visual_drops.erase(network_id)
+			(d as Node).queue_free()
 	)
 
 
@@ -3673,7 +3681,7 @@ func broadcast_enemy_vfx(network_id: int, vfx_type: String, extra_data: Dictiona
 		## _apply_frost_slow_host). Yavaşlatma simülasyonu host'ta; burada sadece görsel (ömrünü efekt kendisi sayar).
 		"frost_slow_start":
 			if target_enemy.has_method("_spawn_frost_chill_fx"):
-				target_enemy._spawn_frost_chill_fx(float(extra_data.get("duration", 6.0)))
+				target_enemy._spawn_frost_chill_fx(float(extra_data.get("duration", 6.0)), bool(extra_data.get("tint_only", false))) ## madde 749 Buz Asası: yalnız ton
 		"bleed":
 			if target_enemy.has_method("_spawn_bleed_fx"):
 				target_enemy._spawn_bleed_fx()
@@ -3873,9 +3881,8 @@ func broadcast_oakley_vine_state(player_id: int, instance_id: String, pos: Vecto
 		rp._update_vine_visual_state(instance_id, pos, target_pos, has_target)
 
 
-## Necromancer ULTİ'sinin diğer oyunculardaki kozmetik kafatasları (oyuncu peer id -> NecroSkull), bkz. "necro_skull" dalı.
-const NecroSkullScript := preload("res://scripts/necro_skull.gd")
-var _necro_skull_visuals: Dictionary = {}
+## Corvina birlik efektleri (ok / ateş sütunu / diriltme) - bkz. "necro_fx" dalı.
+const NecroFxScript := preload("res://scripts/necro_fx.gd")
 
 
 ## OYUNCU GÖRSELLERİNİ GÖNDERMENİN TEK YOLU: send_player_vfx (broadcast_player_vfx.rpc'yi doğrudan çağırma).
@@ -3887,7 +3894,7 @@ var _necro_skull_visuals: Dictionary = {}
 ## güvenilir kanalı tıkamasın - bkz. 2026-09-30 broadcast_weapon_attack notu). Yeni bir tür eklerken bu listeye bak.
 const RELIABLE_PLAYER_VFX := {
 	"skill_scene": true, "skill_ring": true, "skill_burst": true, "teleport_snap": true, "speed_line": true,
-	"beam_start": true, "beam_stop": true, "weapon_icon_visibility": true, "necro_skull": true,
+	"beam_start": true, "beam_stop": true, "weapon_icon_visibility": true,
 	"rbeam_start": true, "rbeam_stop": true, ## Gökkuşağı Asası ışını (madde 306) - başlangıç/bitiş kaybolursa ışın görünmez / asılı kalır
 	"oakley_flower_spawn": true, "oakley_flower_bond": true, "spirit_blink": true,
 	"weapon_reload": true, ## Tabanca/Tüfek şarjör doldurma (madde 296) - silah başına ~5-10 sn'de bir; kaybolursa doldurma diğer ekranda hiç görünmez
@@ -3898,6 +3905,7 @@ const RELIABLE_PLAYER_VFX := {
 	"oakley_tree": true, ## Oakley R Hayat Ağacı dikimi - ulti başına bir kez; kaybolursa ağaç diğer oyuncularda hiç çıkmaz
 	"oakley_tree_root": true, ## Hayat Ağacı kök dalgası (2 sn'de bir, 3 hedef) - kaybolursa yer altı izi eksik kalır
 	"oakley_revive": true, ## Kadim Diriliş (Oakley R finali, madde 348) - ağaç başına bir kez; kaybolursa dost ayağa kalkmaz
+	"kemik_charges": true, ## Kemik Kolye diş sayısı (madde 742) - en çok 6 / 10 sn; kaybolursa diğer ekranda diş havada asılı kalır
 }
 ## "melek_sparkle" (2026-10-10): Melek pasifinin iyileştirme işareti - extra "peers" = işaretin çıkacağı oyuncular (Melek dahil); her istemci kendi
 ## yerel oyuncusu ya da ilgili kukla altında fx_melek_heal_sparkle.gd kurar. Güvenilmez (kaybolursa bir sonraki 3 sn'de yine gelir).
@@ -3991,6 +3999,11 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 				skill_fx.set("position", Vector2(extra_data["position"]))
 			if AllyFxDensity.is_personal_scene(scene_path): ## yalnız KİŞİSEL sahneler (tablo dışı = tam görünür; TAKIM/ÇAĞRILAN/FORM burada yok)
 				AllyFxDensity.soften(skill_fx, rp)
+		"kemik_charges":
+			## Kemik Kolye (madde 742): kukladaki diş halkası (fx_item_bone_fangs.tscn, "skill_scene" ile açıldı) kalan diş sayısını alır.
+			for c in rp.get_children():
+				if c.has_method("set_charges"):
+					c.call("set_charges", int(extra_data.get("n", 0)))
 		"yinyang_idle":
 			## Yin Yang Kitabı (madde 334): saldıracak düşman yokken yalnız ak küre (kalkan) - kaster YinYangBook.idle_shot; alıcı bu makinenin
 			## oyuncusu ya da bir kukla (kalkanın kendisi kasterden _apply_shield_heal_to_ally RPC'siyle gelir, burası salt görsel).
@@ -4004,6 +4017,7 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 			if not impact_scene:
 				return
 			var impact_fx: Node2D = impact_scene.instantiate() as Node2D
+			impact_fx.set_meta(&"cs_remote_copy", true) ## madde 711: başkasının yetenek kopyası bu ekranı sallamaz (camera_shake.gd add_at_fx)
 			## Yetenek evrimi efektleri (player.gd _evo_world_fx): yön (rotation) - yarıçap setup(radius, color) ile aşağıda.
 			if extra_data.has("rotation"):
 				impact_fx.rotation = float(extra_data["rotation"])
@@ -4078,32 +4092,17 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 			if chain_fx.has_method("setup_positions"):
 				chain_fx.setup_positions(Vector2(extra_data.get("from_pos", pos)), pos)
 			AllyFxDensity.soften(chain_fx, rp)
-		## Necromancer ULTİ (Lanetli Kafatası, bkz. necro_skull.gd dosya başı): extra_data.phase = "start" (pos = doğuş), "hb" (kalp atışı:
-		## kopya yoksa kurar), "mode" (aktif/pasif + kalan süre), "leg" (pos = hedef, from/dur - "necro_skull_leg" güvenilmez kanaldan), "end".
-		## Her oyuncu için tek kozmetik kafatası (_necro_skull_visuals) - hasar/korku YOK, sadece yetkili kafatasının bacaklarını aynı sürede
-		## uçar, boştayken sahibinin kuklasının etrafında döner ve bacak sonunda aynı çarpma efektini oynatır.
-		"necro_skull", "necro_skull_leg":
-			var phase: String = str(extra_data.get("phase", ""))
-			var skull: Node = _necro_skull_visuals.get(player_id)
-			if skull != null and not is_instance_valid(skull):
-				skull = null
-			if phase == "end":
-				if skull and skull.has_method("network_end"):
-					skull.network_end()
-				_necro_skull_visuals.erase(player_id)
-				return
-			if skull == null or phase == "start":
-				if skull and skull.has_method("network_end"):
-					skull.network_end()
-				var start_pos: Vector2 = pos if phase != "leg" else Vector2(extra_data.get("from", pos))
-				skull = NecroSkullScript.new()
-				skull.setup_network(start_pos, player_id)
-				get_tree().current_scene.add_child(skull)
-				_necro_skull_visuals[player_id] = skull
-			if phase == "leg" and skull.has_method("network_leg"):
-				skull.network_leg(Vector2(extra_data.get("from", pos)), pos, float(extra_data.get("dur", 0.5)))
-			elif (phase == "mode" or phase == "hb" or phase == "start") and skull.has_method("network_mode"):
-				skull.network_mode(bool(extra_data.get("active", false)), float(extra_data.get("t", 10.0)))
+		## Corvina birlik efektleri (kit 2026-11-16, bkz. necro_fx.gd): t = "arrow" (pos = çıkış, to = nişan, g = hayalet ok), "fire"
+		## (Kemik Büyücüsü ateş sütunu, pos = hedef), "reborn" (diriltme oku). Kozmetik: hasar kasterin istemcisinden gelir. Güvenilmez
+		## kanal (ok saniyede birkaç kez; kaybolan tek ok fark edilmez).
+		"necro_fx":
+			match str(extra_data.get("t", "")):
+				"arrow":
+					NecroFxScript.spawn_arrow(get_tree(), pos, Vector2(extra_data.get("to", pos)), bool(extra_data.get("g", false)))
+				"fire":
+					NecroFxScript.spawn_fire(get_tree(), pos)
+				"reborn":
+					NecroFxScript.spawn_reborn(get_tree(), pos)
 		"arcane_skull_bounce":
 			## Büyücü Kız'ın Arcane Lanet varyasyonu - "chain_lightning" ile
 			## BİREBİR AYNI gerekçe (bkz. yukarısı): uzak oyuncularda gerçek
@@ -4285,7 +4284,13 @@ func broadcast_player_vfx(player_id: int, vfx_type: String, pos: Vector2, extra_
 			var blink := Node2D.new()
 			blink.set_script(load("res://scripts/fx_spirit_blink.gd"))
 			get_tree().current_scene.add_child(blink)
-			blink.call("setup", str(extra_data.get("kind", "streak")), pos, Vector2(extra_data.get("to", pos)))
+			blink.call("setup", str(extra_data.get("kind", "streak")), pos, Vector2(extra_data.get("to", pos)), rp)
+		## Ruhani Tank "Rün Mührü" (madde 734): yansıyan vuruşta kuklanın altıgeninden saldırana altın çizgi (pos = saldıran).
+		"spirit_tank_zap":
+			for c: Node in rp.get_children():
+				if c.has_method("zap"):
+					c.call("zap", pos)
+					break
 		## Yetenek evrimi Assasin "Gölge Kopyası" (2026-09-30): kaster kopyasına ışınlandı - kukla normal konum yumuşatmasıyla
 		## (lerp + hız tahmini) oraya KAYMASIN, kasterin ekranındaki gibi anında sıçrasın (bkz. remote_player.gd snap_to_network_position).
 		"teleport_snap":
@@ -5375,12 +5380,38 @@ func sync_kalkan_bagi_bond(target_peer_id: int, source_peer_id: int, active: boo
 ## ikinci bir kaynak YOK, sadece o TEK fonksiyonun sonucu iletiliyor.
 @rpc("any_peer", "call_remote", "reliable")
 func sync_kalkan_bagi_shield_delta(target_peer_id: int, delta_amount: float) -> void:
+	kalkan_bagi_pulse_visual(multiplayer.get_remote_sender_id(), target_peer_id, delta_amount) ## görsel HERKESTE (madde 734)
 	var local_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0
 	if local_id != target_peer_id:
 		return
 	var local_player: Node = get_tree().get_first_node_in_group("player")
 	if local_player and local_player.has_method("receive_kalkan_bagi_shield_delta"):
 		local_player.receive_kalkan_bagi_shield_delta(delta_amount)
+
+
+## Kalkan Bağı görseli (madde 734, "A Ruh Işığı"): bağdan kalkan aktığında kaynaktan hedefe ışık boncuğu. Bu makinedeki iki ucun
+## bağ efektine iletilir (kurdeleyi çizen kopya boncuğu alır, öteki yok sayar). Yansımayı gönderen istemci yerelde çağırır (RPC
+## call_remote), diğerleri sync_kalkan_bagi_shield_delta'yı alınca - böylece kaster, partner ve üçüncü oyuncular aynısını görür.
+## 1'in altındaki kırıntılar (yuvarlama) boncuk açmaz; sık yansımaları efektin kendi aralığı (PULSE_GAP) seyreltir.
+func kalkan_bagi_pulse_visual(src_peer: int, dst_peer: int, amount: float) -> void:
+	if absf(amount) < 1.0 or src_peer <= 0 or dst_peer <= 0:
+		return
+	for pid: int in [src_peer, dst_peer]:
+		var n: Node = _kalkan_bagi_node_for(pid)
+		if n == null:
+			continue
+		var fx: Variant = n.get("_kalkan_bagi_link_fx")
+		if fx is Node and is_instance_valid(fx) and (fx as Node).has_method("pulse_from"):
+			(fx as Node).call("pulse_from", src_peer)
+
+
+func _kalkan_bagi_node_for(pid: int) -> Node:
+	if multiplayer.has_multiplayer_peer() and pid == multiplayer.get_unique_id():
+		return get_tree().get_first_node_in_group("player")
+	for rp: Node in get_tree().get_nodes_in_group("remote_players"):
+		if is_instance_valid(rp) and "peer_id" in rp and int(rp.get("peer_id")) == pid:
+			return rp
+	return null
 
 
 ## Host otoritesinde ortak takım EXP toplama

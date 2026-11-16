@@ -1,7 +1,7 @@
 extends Node
 
 ## Yeni evciller (madde 509, kullanıcı isteği 2026-11-09):
-## Minik Cadı (iyi slime): +%5 saldırı gücü; ulti kullanınca (bekleme 90 sn; ilk sürüm 120) büyü -> 8 sn can/hasar(saldırı gücü)/boy/menzil +%15, menzil çizgisi.
+## Minik Cadı (iyi slime): ulti bekleme -%15 (2026-11-15; eskiden +%8 saldırı gücü); ulti kullanınca (bekleme 60 sn; önce 120/90) büyü -> 8 sn can/hasar(saldırı gücü)/boy/menzil +%15, menzil çizgisi.
 ## Hayalet (yarı opak): +%5 sıvışma; can %25 altına düşünce (bekleme 80 sn) 8 sn görünmez + dokunulmaz (yaratık hedeflemez, hasar/CC işlemez).
 
 const PlayerScene: PackedScene = preload("res://scenes/player.tscn")
@@ -57,8 +57,8 @@ func test_catalog_has_new_pets_with_user_values() -> void:
 		assert(PetCatalog.description(k) != "" and PetCatalog.display_name(k) != "", "%s: ad + açıklama" % k)
 		assert(MetaProgressScript.COSTS[MetaProgressScript.PET].has(k), "%s: Ruh Mağazası fiyatı (kilitli)" % k)
 	assert(PetCatalog.display_name("slime") == "Minik Cadı")
-	assert(PetCatalog.SLIME_AP_PERCENT == 0.08 and PetCatalog.SLIME_BUFF_PERCENT == 0.15 and PetCatalog.SLIME_BUFF_TIME == 8.0 \
-		and PetCatalog.SLIME_COOLDOWN == 90.0, "kullanıcı değerleri: %5 saldırı gücü, 8 sn %15, 90 sn (madde 513)")
+	assert(PetCatalog.SLIME_ULT_CDR == 0.15 and PetCatalog.SLIME_BUFF_PERCENT == 0.15 and PetCatalog.SLIME_BUFF_TIME == 8.0 \
+		and PetCatalog.SLIME_COOLDOWN == 60.0, "kullanıcı değerleri: ulti bekleme -%15, 8 sn %15, 60 sn (2026-11-15)")
 	assert(PetCatalog.HAYALET_DODGE == 0.05 and PetCatalog.HAYALET_HP_THRESHOLD == 0.25 and PetCatalog.HAYALET_COVER_TIME == 8.0 \
 		and PetCatalog.HAYALET_COOLDOWN == 80.0, "kullanıcı değerleri: %5 sıvışma, %25 can, 8 sn, 80 sn (madde 513)")
 	_end()
@@ -69,13 +69,10 @@ func test_slime_gives_five_percent_attack_power_and_attaches() -> void:
 	var p: Node = _player("slime")
 	var s: Node = p.get_node_or_null("Slime")
 	assert(p._pet_kind == "slime" and s != null and not p.has_node("Hayalet"), "slime düğümü kurulmalı")
-	assert(is_equal_approx(p.pet_ap_percent, 0.08), "+%8 saldırı gücü payı (2026-11-14: %5 -> %8)")
-	p.damage_bonus = 100.0 + p._ap_pct_applied
-	p._refresh_item_ap_percent()
-	var base: float = p.damage_bonus - p._ap_pct_applied
-	assert(is_equal_approx(p.damage_bonus, base * (1.0 + p.item_ap_percent + 0.08)), "saldırı gücü %%8 artar (%f)" % p.damage_bonus)
+	assert(p.pet_ap_percent == 0.0, "kalıcı saldırı gücü payı yok (2026-11-15: ulti bekleme azaltmasına çevrildi)")
+	assert(is_equal_approx(p.get_pet_ult_cd_mult(), 0.85), "ulti bekleme süresi x0,85")
 	var other: Node = _player("kirpi")
-	assert(other.pet_ap_percent == 0.0, "diğer evciller saldırı gücü vermez")
+	assert(other.pet_ap_percent == 0.0 and is_equal_approx(other.get_pet_ult_cd_mult(), 1.0), "diğer evciller ulti bekleme azaltmaz")
 	_end()
 
 
@@ -91,14 +88,14 @@ func test_slime_ult_casts_and_buffs_owner_for_eight_seconds() -> void:
 	var anim_scale0: Vector2 = p.anim.scale
 	p._pet_on_ult_used()
 	assert(s.is_casting() and String(s.current_clip()).begins_with("cast_"), "ulti -> kulak parlama klibi")
-	assert(is_equal_approx(s.cooldown_left(), 90.0) and is_equal_approx(s.cooldown_fraction(), 1.0), "90 sn bekleme başlar")
+	assert(is_equal_approx(s.cooldown_left(), 60.0) and is_equal_approx(s.cooldown_fraction(), 1.0), "60 sn bekleme başlar")
 	assert(not p.slime_buff_active(), "büyü kare 4'te çıkar (hemen değil)")
 	for i in range(5): ## _process deltayı 0,1 sn ile sınırlar
 		s._process(0.1)
 	assert(p.slime_buff_active(), "büyü sahibine ulaştı")
 	assert(p.has_node("SlimeSpellFx"), "sahibin üstünde pembe büyü efekti kurulur")
 	assert(is_equal_approx(p.max_health, 230.0) and is_equal_approx(p.health, 130.0), "azami can +%%15, mevcut cana da eklenir (%f / %f)" % [p.health, p.max_health])
-	assert(is_equal_approx(p.pet_ap_percent, 0.23), "saldırı gücü (hasar) +%15 (kalıcı %8'in üstüne)")
+	assert(is_equal_approx(p.pet_ap_percent, 0.15), "saldırı gücü (hasar) +%15 (büyü süresince)")
 	assert(is_equal_approx(w.pet_mult, 1.15) and is_equal_approx(w.attack_range, 230.0), "menzil +%15")
 	assert(p.anim.scale.is_equal_approx(anim_scale0 * 1.15) and is_equal_approx(p.get_pet_size_mult(), 1.15), "boy +%15")
 	var ring: Node = p.get_node_or_null("SlimeRangeRing")
@@ -107,14 +104,14 @@ func test_slime_ult_casts_and_buffs_owner_for_eight_seconds() -> void:
 	assert(p.get_status_effects().any(func(e: Dictionary) -> bool: return e["kind"] == "slime_buyu"), "buff rozeti")
 	## bekleme dolmadan ikinci ulti: büyü yok
 	s._casting = false
-	assert(not s.on_owner_ult(), "90 sn dolmadan büyü yok")
+	assert(not s.on_owner_ult(), "60 sn dolmadan büyü yok")
 	p._process_pet_buffs(7.9)
 	assert(p.slime_buff_active(), "8 sn dolmadan sürer")
 	p._process_pet_buffs(0.2)
 	assert(not p.slime_buff_active() and is_equal_approx(p.max_health, 200.0) and is_equal_approx(p.health, 130.0), "bitince azami can geri, mevcut can tavanda")
-	assert(is_equal_approx(p.pet_ap_percent, 0.08) and is_equal_approx(w.pet_mult, 1.0), "saldırı gücü/menzil geri")
+	assert(is_equal_approx(p.pet_ap_percent, 0.0) and is_equal_approx(w.pet_mult, 1.0), "saldırı gücü/menzil geri")
 	assert(p.anim.scale.is_equal_approx(anim_scale0) and ring.is_ending(), "boy geri, çizgi söner")
-	s.process_cooldown(90.0)
+	s.process_cooldown(60.0)
 	assert(s.on_owner_ult(), "bekleme dolunca yeniden")
 	_end()
 

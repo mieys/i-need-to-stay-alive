@@ -139,7 +139,7 @@ func test_settings_phone_tabs_and_touch_rows() -> void:
 	s.queue_free()
 	_phone(false)
 	await get_tree().process_frame
-	assert(genel == ["language", "shake", "ui_anim", "fps", "auto_pick", "dmg_numbers", "ally_fx"], "telefon GENEL: %s" % str(genel))
+	assert(genel == ["language", "shake", "ui_anim", "fps", "auto_pick", "player_names", "dmg_numbers", "ally_fx"], "telefon GENEL: %s" % str(genel))
 	assert(touch == ["joystick", "button_size", "ui_opacity", "vibration"], "DOKUNMATİK: %s" % str(touch))
 	assert(absf(row_r.size.y - 120.0) < 1.0, "satır 120 px: %s" % row_r)
 	assert(absf(tab_r.end.y - 1052.0) < 1.0 and tab_r.size.y > 130.0, "sekmeler altta 136 px: %s" % tab_r)
@@ -349,7 +349,13 @@ func test_character_select_phone_faces_and_tabs() -> void:
 	cs.queue_free()
 	_phone(false)
 	await get_tree().process_frame
-	assert(cards.size() == Characters.DEFS.size() and face_ok, "her karakterin 196 px yüz kartı")
+	## Telefon ızgarası yalnız AÇILMIŞ karakterleri gösterir (lobby_select_desktop._ph_chars_page); testler gerçek kayıtla koşar.
+	var MPS: GDScript = load("res://scripts/meta_progress.gd")
+	var open_n: int = 0
+	for cid in Characters.DEFS.keys():
+		if bool(MPS.call("is_unlocked", "char", int(cid))):
+			open_n += 1
+	assert(cards.size() == open_n and face_ok, "her açık karakterin 196 px yüz kartı: %d/%d" % [cards.size(), open_n])
 	assert(prev_k == 6, "sağda boydan önizleme (6x): %d" % prev_k)
 	assert(tabs.size() == 4 and opts > 0, "ray 4 sekme (tek oyunculu), SİLAH ızgarası dolu: %d" % opts)
 	assert(start_h >= 144.0, "BAŞLAT altta iri")

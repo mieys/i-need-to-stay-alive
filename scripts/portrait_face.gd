@@ -150,6 +150,12 @@ class FramedPortrait extends Control:
 			frame.accent = c
 			frame.queue_redraw()
 
+	## Çerçevenin açık kenar / ahşap / koyu ahşap katmanları başka renkte (seçili kart altın, üstündeki açık ahşap; madde 759). [] = ahşap.
+	func set_palette(p: Array) -> void:
+		if frame and frame.pal != p:
+			frame.pal = p
+			frame.queue_redraw()
+
 	func _draw() -> void:
 		var b: float = 3.0 * (frame.t if frame else 2.0)
 		draw_rect(Rect2(Vector2(b, b), size - Vector2(b, b) * 2.0), HudTheme.OUTLINE)
@@ -159,9 +165,10 @@ class FrameLayer extends Control:
 	const HudTrayFrame := preload("res://scripts/hud_tray_frame.gd")
 	var t: float = 2.0
 	var accent: Color = Color(0, 0, 0, 0)
+	var pal: Array = []
 
 	func _ready() -> void:
 		resized.connect(queue_redraw)
 
 	func _draw() -> void:
-		HudTrayFrame.draw_local(self, Rect2(Vector2.ZERO, size), t, accent)
+		HudTrayFrame.draw_local(self, Rect2(Vector2.ZERO, size), t, accent, pal)

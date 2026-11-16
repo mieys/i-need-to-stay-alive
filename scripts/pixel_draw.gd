@@ -59,18 +59,11 @@ static func disc(ci: CanvasItem, center: Vector2, radius: float, col: Color) -> 
 		ci.draw_rect(Rect2(c.x - hw * TEXEL, c.y + float(iy) * TEXEL - TEXEL * 0.5, hw * 2.0 * TEXEL, TEXEL), col)
 
 
-## Dolu daire, ama dama (checker) desenli - "yarı saydam ışık" hissini gerçek alfa yerine dither ile verir.
-## cell: dama karesinin kenarı (sanat pikseli) - büyük alanlarda 2 kullanmak çizim sayısını 4'e böler.
-static func disc_dither(ci: CanvasItem, center: Vector2, radius: float, col: Color, parity: int = 0, cell: int = 1) -> void:
-	var c: Vector2 = snap(center)
-	var cs: float = TEXEL * float(maxi(cell, 1))
-	var rc: int = int(radius / cs)
-	for iy in range(-rc, rc + 1):
-		var hw: int = int(sqrt(maxf(0.0, float(rc * rc) - float(iy * iy))))
-		for ix in range(-hw, hw + 1):
-			if ((ix + iy + parity) & 1) == 0:
-				continue
-			ci.draw_rect(Rect2(c.x + float(ix) * cs - cs * 0.5, c.y + float(iy) * cs - cs * 0.5, cs, cs), col)
+## Eskiden dama (checker) desenli daireydi; çağıranlar paritenin her karede değişmesiyle dama her kare tersine dönüyordu (strobo).
+## Madde 711 (2026-11-15, dither kalıcı yasak): artık DÜZ yarı saydam daire - dama yarı pikseli boyadığı için alfa * 0,5 aynı ortalama
+## parlaklığı verir. parity / cell imza uyumu için duruyor, kullanılmıyor.
+static func disc_dither(ci: CanvasItem, center: Vector2, radius: float, col: Color, _parity: int = 0, _cell: int = 1) -> void:
+	disc(ci, center, radius, Color(col.r, col.g, col.b, col.a * 0.5))
 
 
 ## ASCII pixel-art: rows'un her karakteri palette'teki bir renk ('.' ya da palette'te olmayan = boş). center =

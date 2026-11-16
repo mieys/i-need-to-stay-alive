@@ -312,7 +312,10 @@ const RAGE_HP_THRESHOLD := 0.30
 ## şekilde arttırıldı ("vahşice koşmaları gerekiyordu" isteğiyle) - artık
 ## normal yakın dövüşçü hızının neredeyse İKİ KATI (asıl görünmezlik sebebi
 ## ayrı bir tween çakışma hatasıydı, bkz. _flash()/_refresh_chill_tint()).
-const RAGE_TINT_COLOR := Color(1.7, 0.3, 0.3, 1.0)
+## Madde 711 (2026-11-15, göz yorgunluğu): (1,7 / 0,3 / 0,3) yaratığı neredeyse düz, aşırı parlak kırmızı bir silüete çeviriyordu
+## (kalabalıkta canı düşük her yakın dövüşçü). Öneri (1,15 / 0,8 / 0,75) idi; eski "rage görünmüyor" bildirimi yüzünden ortada
+## kaldı: belirgin kırmızımsı ama sanatın ayrıntısı okunuyor. Hız artışı zaten asıl işaret.
+const RAGE_TINT_COLOR := Color(1.3, 0.65, 0.6, 1.0)
 ## Kullanıcı isteği: "canavarlar rage moduna girince daha yüksek hareket
 ## hızına sahip olsun" - 1.9'dan (neredeyse iki kat) 2.4'e (neredeyse iki
 ## buçuk kat) yükseltildi, "vahşice koşma" hissi daha da belirginleşti.
@@ -1857,6 +1860,9 @@ func apply_element_host(kind: String, p: Dictionary, attacker_peer: int) -> void
 			apply_stun(float(p.get("dur", 0.5)))
 		"slow":
 			apply_slow(float(p.get("pct", 0.3)), float(p.get("dur", 2.0)), bool(p.get("boss", false)))
+			## Buz Asası (madde 749): yavaşlayan yaratık hafif buz mavisine döner (kırağı / kristal yok).
+			if bool(p.get("chill", false)) and (not is_boss or bool(p.get("boss", false))):
+				_apply_chill_tint_host(float(p.get("dur", 2.0)))
 		## Büyücü Kız Don Nova (2026-10-04): %80'e kadar yavaşlatma + buz görünümü (bkz. _apply_frost_slow_host).
 		"frost_slow":
 			_apply_frost_slow_host(float(p.get("pct", FROST_SLOW_MAX)), float(p.get("dur", 6.0)))
@@ -2907,11 +2913,14 @@ func _frost_chill_active() -> bool:
 
 
 ## Yerel (host) ve ağdan gelen ("frost_slow_start") ortak giriş - zaten varsa süresi tazelenir.
-func _spawn_frost_chill_fx(duration: float) -> void:
+## tint_only (madde 749, Buz Asası yavaşlatması): yalnız buz mavisi ton, kırağı / kristal yok; Don Nova gelirse katmanlar eklenir.
+func _spawn_frost_chill_fx(duration: float, tint_only: bool = false) -> void:
 	if is_dead:
 		return
 	if _frost_chill_active():
 		_frost_chill_fx.call("refresh", duration)
+		if not tint_only and bool(_frost_chill_fx.get("tint_only")):
+			_frost_chill_fx.call("add_layers")
 	else:
 		if _frost_chill_scene == null and ResourceLoader.exists(FROST_CHILL_FX_PATH):
 			_frost_chill_scene = load(FROST_CHILL_FX_PATH) as PackedScene
@@ -2920,8 +2929,20 @@ func _spawn_frost_chill_fx(duration: float) -> void:
 		else:
 			_frost_chill_fx = _frost_chill_scene.instantiate() as Node2D
 			add_child(_frost_chill_fx)
-			_frost_chill_fx.call("setup", duration, _body_radius)
+			_frost_chill_fx.call("setup", duration, _body_radius, tint_only)
 	_refresh_chill_tint()
+
+
+## Buz Asası yavaşlatmasının görseli (madde 749): host karar verir, istemcilere "frost_slow_start" + tint_only. Yavaşlatmanın kendisi
+## apply_slow'da (bosslar bağışıksa ton da yok).
+func _apply_chill_tint_host(duration: float) -> void:
+	if is_dead or duration <= 0.0:
+		return
+	_spawn_frost_chill_fx(duration, true)
+	if NetworkManager.is_multiplayer_active and NetworkManager.is_host:
+		var net_id: int = int(get_meta("network_enemy_id", 0))
+		if net_id > 0:
+			NetworkManager.broadcast_enemy_vfx.rpc(net_id, "frost_slow_start", {"duration": duration, "tint_only": true})
 
 
 ## fx_frost_chill_status.gd kendi süresi bitince çağırır.
@@ -5367,6 +5388,8 @@ func _apply_damage(amount: float, is_crit: bool, shield_pen_percent: float) -> v
 ## ASLA aynı property üzerinde çakışmıyor/birbirinin üstüne binmiyor.
 const HitFlashShader: Shader = preload("res://shaders/hit_flash.gdshader")
 const HIT_FLASH_DURATION := 0.12
+## Madde 711 (2026-11-15, göz yorgunluğu): tepe gücü 1,0 -> 0,55 (renk de saf beyaz değil krem, bkz. hit_flash.gdshader).
+const HIT_FLASH_PEAK := 0.55
 var _hit_flash_material: ShaderMaterial = null
 
 
@@ -5400,7 +5423,7 @@ func _flash() -> void:
 	## HER vuruşta yeni bir Tween nesnesi oluşturuluyordu (200 yaratıklık bir alan
 	## hasarı = tek karede 200 Tween). Aynı 1.0 -> 0.0 doğrusal sönüm artık
 	## _tick_hit_flash() içinde basit bir sayaçla yapılıyor - görünüm birebir aynı.
-	_hit_flash_material.set_shader_parameter("flash_amount", 1.0)
+	_hit_flash_material.set_shader_parameter("flash_amount", HIT_FLASH_PEAK)
 	_flash_time_left = HIT_FLASH_DURATION
 
 
@@ -5409,7 +5432,7 @@ var _flash_time_left: float = 0.0
 func _tick_hit_flash(delta: float) -> void:
 	_flash_time_left = maxf(0.0, _flash_time_left - delta)
 	if _hit_flash_material:
-		_hit_flash_material.set_shader_parameter("flash_amount", _flash_time_left / HIT_FLASH_DURATION)
+		_hit_flash_material.set_shader_parameter("flash_amount", HIT_FLASH_PEAK * _flash_time_left / HIT_FLASH_DURATION)
 
 
 func die() -> void:

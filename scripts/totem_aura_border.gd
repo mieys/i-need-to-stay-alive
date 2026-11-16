@@ -71,6 +71,24 @@ func is_fading() -> bool:
 	return _fade >= 0.0
 
 
+## Gece ışığı (madde 744, night_glow_catalog.gd BY_SCRIPT): perde halkası boyunca kapalı kırık çizgi (atmosphere_overlay
+## _push_polyline lekeleri yola eşit dağıtır, nokta sayısı ışığın sıklığını değiştirmez) + açılış/sönüş saydamlığı.
+const GLOW_RING_POINTS := 33
+
+func get_glow_segment() -> Array:
+	var r: float = drawn_radius()
+	if r < 4.0:
+		return []
+	var pts: Array = []
+	for i in GLOW_RING_POINTS:
+		pts.append(_center + Vector2.from_angle(TAU * float(i) / float(GLOW_RING_POINTS - 1)) * r)
+	return pts
+
+
+func get_night_glow_energy() -> float:
+	return float(_mat.get_shader_parameter("alpha_mult")) if _mat else 0.0
+
+
 func _process(delta: float) -> void:
 	if _totem_alive():
 		if LimboScript.is_frozen(totem):

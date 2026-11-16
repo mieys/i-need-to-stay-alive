@@ -5,6 +5,7 @@ extends VBoxContainer
 ## NetworkManager.lobby_chat_log'da: oda lobisinden karakter seçimine geçince mesajlar kaybolmaz.
 
 const MAX_LINES := 50
+const ScrollFollowScript := preload("res://scripts/scroll_follow.gd")
 
 var _fs_body: int = MenuKit.FS_BODY
 var _fs_small: int = MenuKit.FS_SMALL
@@ -32,6 +33,7 @@ func setup(sz: Dictionary, mobile: bool, log_min_h: float, expand: bool = false)
 	_log.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_log.add_theme_constant_override("separation", 2)
 	_scroll.add_child(_log)
+	ScrollFollowScript.attach(_scroll)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
 	add_child(row)
@@ -97,5 +99,4 @@ func _scroll_to_end() -> void:
 	if not is_inside_tree():
 		return
 	await get_tree().process_frame
-	if is_instance_valid(_scroll):
-		_scroll.scroll_vertical = int(_scroll.get_v_scroll_bar().max_value)
+	ScrollFollowScript.to_end(_scroll)

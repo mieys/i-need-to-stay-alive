@@ -177,7 +177,8 @@ func test_kirpi_does_not_reflect_or_cut_damage_in_safe_zone() -> void:
 	var e := FakeEnemy.new()
 	add_child(e)
 	_spawned.append(e)
-	assert(is_equal_approx(player._kirpi_on_hit(100.0, e), 95.0) and e.taken.size() == 1, "açık haritada Kirpi çalışır")
+	var cut: float = 100.0 * (1.0 - float(preload("res://scripts/pet_catalog.gd").KIRPI_SHIELD_REDUCTION)) ## denge sabitine bağlı (eskiden %5 = 95 sabit yazılıydı)
+	assert(is_equal_approx(player._kirpi_on_hit(100.0, e), cut) and e.taken.size() == 1, "açık haritada Kirpi çalışır")
 	player.is_in_merchant_zone = true
 	assert(is_equal_approx(player._kirpi_on_hit(100.0, e), 100.0) and e.taken.size() == 1, "güvenli alanda Kirpi ne yansıtır ne azaltır")
 	var kirpi: Node = player.get_node("Kirpi")
@@ -217,7 +218,8 @@ func test_parrot_stays_perched_and_counters_freeze_in_safe_zone() -> void:
 	_cleanup()
 
 
-func test_dog_totem_and_necro_skull_use_the_same_safe_zone_rule() -> void:
+## (Necromancer'ın Lanetli Kafatası 2026-11-16 kit yenilemesinde kalktı - kontrolü de buradan çıktı.)
+func test_dog_and_totem_use_the_same_safe_zone_rule() -> void:
 	var player: Node = _make_player(1)
 	## köpek (player_pet.gd): sahibi demircideyken artık saldırmaz/kovalamaz (eskiden yalnız satıcı bölgesine bakıyordu)
 	var dog: Node = (load("res://scripts/player_pet.gd") as GDScript).new()
@@ -231,14 +233,8 @@ func test_dog_totem_and_necro_skull_use_the_same_safe_zone_rule() -> void:
 	assert(totem._caster_in_safe_zone(), "sahibi demircideyken totem durur")
 	player.global_position = Vector2(1000.0, 1000.0)
 	assert(not totem._caster_in_safe_zone(), "dışarıda totem çalışır")
-	## Necro kafatası: satıcı bölgesinde sahibiyle birlikte askıya alınır
-	var skull: Node = (load("res://scripts/necro_skull.gd") as GDScript).new()
-	assert(not skull._suspended(player), "açık haritada kafatası çalışır")
-	player.is_in_merchant_zone = true
-	assert(skull._suspended(player), "güvenli alanda kafatası askıda")
 	dog.free()
 	totem.free()
-	skull.free()
 	_cleanup()
 
 

@@ -3,7 +3,7 @@
 [ext_resource type="Script" path="res://scripts/projectile.gd" id="1"]
 [ext_resource type="Texture2D" path="res://assets/weapons/tuftuf/dart_v2.png" id="2"]
 [ext_resource type="AudioStream" path="res://assets/audio/tuftuf_dart_hit.wav" id="3"]
-[ext_resource type="PackedScene" path="res://scenes/fx_poison_hit.tscn" id="4"]
+[ext_resource type="PackedScene" path="res://scenes/fx_hit_kabarcik.tscn" id="4"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_1"]
 radius = 2.0
@@ -15,9 +15,7 @@ script = ExtResource("1")
 speed = 460.0
 face_direction = true
 impact_scene = ExtResource("4")
-impact_offset = Vector2(0, -32)
 impact_max_alive = 8
-impact_scale = 0.8
 impact_sounds = Array[AudioStream]([ExtResource("3")])
 impact_sound_volume_db = -2.79
 

@@ -1,6 +1,6 @@
 [gd_scene load_steps=3 format=3 uid="uid://dg82h5w28q36b"]
 
-[ext_resource type="Script" uid="uid://cd94h1d77x2n6" path="res://scripts/fx_assasin_stealth.gd" id="1"]
+[ext_resource type="Script" uid="uid://bio6oplru2vmw" path="res://scripts/fx_assasin_stealth.gd" id="1"]
 [ext_resource type="AudioStream" uid="uid://c64xxvq38eja3" path="res://assets/audio/arcane_attack.mp3" id="2"]
 
 [node name="FxAssasinStealth" type="Node2D"]

@@ -131,10 +131,11 @@ const PARTICLE_TRAILS := {
 	## Madde 201 mermi sanatı (fx_particle_trail.gd yeni stiller, 0,575 dünya px pikseli): Buz C camgöbeği kar artıları, Arcane C mor
 	## kıvılcım, Tüftüf A düşen zehir damlası. Eski Buz "ice" stili artık kullanılmıyor.
 	"ice_bolt_projectile": "buz_c",
-	"arcane_projectile": "arcane_c",
+	## Arcane "C - Kaos Yarığı" (madde 749): mor kıvılcım parçacığı ("arcane_c") kalktı - iz kopuk yırtık şeridi (projectile_art.gd kaos_iz).
 	## Zehir Asası (eski Tüftüf) madde 410: GPU "zehir_damla" izi yerine poison_drip_fx.gd damlaları (POISON_DRIP_SCENES).
 }
-## Madde 410 (Zehir Asası "A - Zehir Damlası"): kuyruktan kopup yere düşen damlalar + isabette taç sıçraması (eski fx_poison_hit yerine).
+## Zehir Asası "B - Kabarcık" (madde 749; eskiden madde 410 A - Zehir Damlası): kabarcığın arkasında kalıp kabaran yumuşak puflar
+## (poison_drip_fx.gd trail_puff). İsabet artık sahnenin impact_scene'i (fx_hit_kabarcik.tscn: kabarcık kırılır + bulut hedefe emilir).
 ## Kaster ve uzak kopya aynı betik -> iki tarafta da (kozmetik, ek RPC yok).
 const PoisonDripFx := preload("res://scripts/poison_drip_fx.gd")
 const POISON_DRIP_SCENES := ["dart_projectile"]
@@ -150,6 +151,9 @@ var _trail_scale: float = TRAIL_SCALE
 ## adımında uçuş yönüne çevrilir (bkz. _physics_process). null = eski görünüm (diğer mermiler).
 const ProjectileArt := preload("res://scripts/projectile_art.gd")
 var _art_body: Node2D = null
+var _art_rotates: bool = true ## madde 749: Kabarcık dönmez (parlaması hep sol üstte)
+var _muzzle_path: String = "" ## madde 749: ilk fizik adımında (konum belli) asanın ucunda bir kez
+var _impact_on_body: bool = false ## madde 749: isabet sahnesi gövde hizasında (impact_point)
 
 
 func _setup_trail() -> void:
@@ -158,7 +162,10 @@ func _setup_trail() -> void:
 		var parts: Dictionary = ProjectileArt.apply(self, key, TRAIL_CRIT_COLOR if is_crit else Color.WHITE)
 		_art_body = parts["body"]
 		_trail = parts["trail"]
-		_trail_scale = ProjectileArt.WORLD_PX
+		_trail_scale = ProjectileArt.world_px(key)
+		_art_rotates = ProjectileArt.rotates(key)
+		_muzzle_path = ProjectileArt.muzzle_path(key)
+		_impact_on_body = ProjectileArt.impact_on_body(key)
 		return
 	if not TRAIL_COLORS.has(key):
 		return
@@ -243,11 +250,13 @@ func _physics_process(delta: float) -> void:
 	if _art_body:
 		## Madde 201 sanatı +x = uçuş yönü çizildi: silahın eski çapraz sprite ofseti (ranged_projectile_rotation_offset, Tüftüf/Arcane
 		## ~-2,3 rad) ve uzak kopyanın ofsetsiz güdüm dönüşü (_net_homing) ne olursa olsun gövde + iz her adımda uçuş yönüne bakar.
-		_art_body.global_rotation = direction.angle()
+		## Dönmeyen gövde (madde 749 Kabarcık) dünyada dik kalır (kök face_direction ile dönse de).
+		_art_body.global_rotation = direction.angle() if _art_rotates else 0.0
 		if _trail:
-			_trail.global_rotation = _art_body.global_rotation
+			_trail.global_rotation = direction.angle()
 		if not _art_body.visible:
 			_art_body.visible = true
+			_spawn_muzzle()
 	if not ProjectileRangeScript.within(self): ## menzil = görüş elipsi (bkz. projectile_range.gd)
 		queue_free()
 		return
@@ -260,11 +269,43 @@ func _physics_process(delta: float) -> void:
 			return
 	if _poison_drip:
 		_drip_dist += speed * delta
-		_drip_acc += PoisonDripFx.TRAIL_RATE * delta
+		_drip_acc += PoisonDripFx.PUFF_RATE * delta
 		while _drip_acc >= 1.0:
 			_drip_acc -= 1.0
-			PoisonDripFx.trail_drop(get_tree(), global_position - direction * PoisonDripFx.TRAIL_BACK, direction, _drip_dist)
+			PoisonDripFx.trail_puff(get_tree(), global_position - direction * PoisonDripFx.PUFF_BACK)
 	_ew_poll_hits()
+
+
+## Gövde hizasındaki isabet noktası (madde 749 Kaos / Kabarcık isabet sahneleri, 1 dünya px pikselli küçük efektler): kaster mermiyi
+## yaratığın konumuna (ayak) ışınlar, uzak kopya çarptığı yerde kalır (_hit_feet = vurulanın kökü). İsabet ayağa yakınsa gövdenin
+## IMPACT_BODY birim üstüne çıkarılır (eski poison_drip_fx.splash SPLASH_BODY kuralıyla aynı).
+const IMPACT_BODY := 10.0
+
+
+func impact_point() -> Vector2:
+	var feet: Vector2 = _hit_feet if _hit_feet != Vector2.INF else global_position
+	var o: Vector2 = global_position
+	if o.y > feet.y - IMPACT_BODY * 0.6:
+		o.y = feet.y - IMPACT_BODY
+	return o
+
+
+## Namlu efekti (madde 749, projectile_art.gd "muzzle"): merminin ilk görünür adımında, çıktığı yerde (asanın ucu) bir kez.
+## Kaster ve uzak kopya aynı betik -> iki ekranda da aynı (ek RPC yok). Sahne tembel yüklenir, önbellekte kalır.
+static var _muzzle_cache: Dictionary = {}
+
+
+func _spawn_muzzle() -> void:
+	if _muzzle_path == "" or get_tree().current_scene == null:
+		return
+	if not _muzzle_cache.has(_muzzle_path):
+		_muzzle_cache[_muzzle_path] = load(_muzzle_path) if ResourceLoader.exists(_muzzle_path) else null
+	var ps: PackedScene = _muzzle_cache[_muzzle_path]
+	if ps == null:
+		return
+	var fx: Node2D = ps.instantiate() as Node2D
+	get_tree().current_scene.add_child(fx)
+	fx.global_position = global_position
 
 
 ## Yaratık yeniden yazımı (PLAN §4.3): EnemyWorld açıkken kayıtlı yaratıkların fizik gövdesi kapalı - onları
@@ -453,11 +494,6 @@ func _spawn_impact() -> void:
 	## Büyücü pasifi güçlendirilmiş mermi: ilk isabette mor patlama (madde 188; kaster + uzak kopya, impact_scene'den bağımsız).
 	if has_meta("buyucu_surge"):
 		preload("res://scripts/buyucu_fx.gd").surge_impact(self)
-	if _poison_drip:
-		## Zehir Asası (madde 410): taç sıçraması + büyük gölcük; kaster mermiyi yaratığın konumuna (ayak) ışınlamıştır.
-		var feet: Vector2 = _hit_feet if _hit_feet != Vector2.INF else global_position
-		PoisonDripFx.splash(get_tree(), global_position, feet.y)
-		return
 	if not impact_scene:
 		return
 	var budget_group: StringName = &""
@@ -471,7 +507,7 @@ func _spawn_impact() -> void:
 		(fx as Node).add_to_group(budget_group)
 	if impact_scale != 1.0 and fx is Node2D:
 		(fx as Node2D).scale *= impact_scale
-	fx.global_position = global_position + impact_offset
+	fx.global_position = impact_point() if _impact_on_body else global_position + impact_offset
 	if impact_face_direction and fx is Node2D and direction.length() > 0.001:
 		fx.rotation = direction.angle()
 

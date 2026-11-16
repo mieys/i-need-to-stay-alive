@@ -103,7 +103,7 @@ func test_taken_tracks_family_and_killer() -> void:
 ## her yetenek çağrısı "s:" öneklisi olmalı (yeni bir take_damage çağrısı eklenirse bu liste/etiket unutulmasın).
 const TAGGED_SCRIPTS: Array = [
 	"res://scripts/player.gd", "res://scripts/evo_area.gd", "res://scripts/golem_pet.gd", "res://scripts/player_pet.gd",
-	"res://scripts/skeleton_pet.gd", "res://scripts/necro_skull.gd", "res://scripts/korsan_bomb.gd", "res://scripts/fx_buyucu_tornado.gd",
+	"res://scripts/skeleton_pet.gd", "res://scripts/necro_unit.gd", "res://scripts/necro_arrow.gd", "res://scripts/korsan_bomb.gd", "res://scripts/fx_buyucu_tornado.gd",
 	"res://scripts/fx_papagan_feather_storm.gd", "res://scripts/totem_attack.gd", "res://scripts/totem_base.gd", "res://scripts/oakley_vine.gd",
 	"res://scripts/enchant_area.gd", "res://scripts/enchant_behavior.gd", "res://scripts/enchants/hunters_eye.gd",
 	"res://scripts/oakley_tree.gd",

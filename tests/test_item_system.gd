@@ -181,9 +181,9 @@ func test_epics_are_unique_but_parts_and_legendary_recipes_still_work() -> void:
 	player.max_item_slots = 4
 	assert(player.acquire_item("bile_tasi", {}, 0) and player.acquire_item("bile_tasi", {}, 0), "parçadan istenildiği kadar (slot sınırına kadar)")
 	assert(player.acquire_item("savasci_bileyi", {}, 0), "ilk epik alınır")
-	assert(Items.purchase_block_reason("savasci_bileyi", GameManager.owned_items, 4) == "Zaten sende var", "aynı epik ikinci kez alınamaz")
+	assert(Items.purchase_block_code("savasci_bileyi", GameManager.owned_items, 4) == "owned", "aynı epik ikinci kez alınamaz")
 	assert(not player.acquire_item("savasci_bileyi", {}, 0), "acquire_item de ikinciyi reddeder")
-	assert(Items.purchase_block_reason("kemik_kolye", GameManager.owned_items, 4) != "Zaten sende var", "başka epik alınabilir")
+	assert(Items.purchase_block_code("kemik_kolye", GameManager.owned_items, 4) != "owned", "başka epik alınabilir")
 	## Efsanevi tarifi aynı epikten 2 ister (Anka: 2 Yenilenme Özütü + Yaşam Kristali); 1 tanesi elde: tüketilir, ikincisi tarifle gelir.
 	_reset()
 	player = _make_player()

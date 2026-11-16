@@ -1,0 +1,19 @@
+{
+ "fps": 20,
+ "w": 144,
+ "h": 112,
+ "ox": 72,
+ "oy": 80,
+ "cols": 10,
+ "clips": {
+  "a_cast": 20,
+  "a_loop": 20,
+  "a_taunt": 24,
+  "b_cast": 20,
+  "b_loop": 20,
+  "b_taunt": 24,
+  "c_cast": 20,
+  "c_loop": 20,
+  "c_taunt": 24
+ }
+}

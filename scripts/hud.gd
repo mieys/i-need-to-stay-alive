@@ -882,6 +882,7 @@ func _apply_hud_skill_override(icon, ov: Dictionary, slot: String) -> void:
 	if not ov.is_empty():
 		icon.name_override = str(ov.get("name", ""))
 		icon.desc_override = str(ov.get("desc", ""))
+		icon.short_override = str(ov.get("short_desc", "")) ## madde 756
 		icon.cooldown_override = float(ov.get("cooldown", -1.0))
 		var tex: Texture2D = _cached_texture(str(ov.get("icon", ""))) if str(ov.get("icon", "")) != "" else null
 		if tex and icon.custom_texture != tex:
@@ -891,6 +892,7 @@ func _apply_hud_skill_override(icon, ov: Dictionary, slot: String) -> void:
 		icon.remove_meta("hud_override")
 		icon.name_override = ""
 		icon.desc_override = ""
+		icon.short_override = ""
 		icon.cooldown_override = -1.0
 		var def: Dictionary = Characters.get_def(GameManager.selected_char_id)
 		if def.has(slot + "_icon"):
@@ -3245,7 +3247,7 @@ func _on_chat_input_submitted(text: String) -> void:
 	## Debug modu (kullanıcı isteği: chate "baykusseverim" yazılınca debug butonu belirsin) -
 	## GERÇEK bir sohbet mesajı olarak GÖNDERİLMİYOR (bkz. aşağıdaki return), sadece bu
 	## istemcide bir komut olarak tüketiliyor - bkz. GameManager.debug_mode_unlocked notu.
-	if trimmed.to_lower() == "baykusseverim" and GameManager.debug_allowed(): ## exportta kod yok: sıradan sohbet mesajı olarak gider
+	if trimmed.to_lower() == "baykusseverim" and GameManager.debug_allowed(): ## exportta yalnız "Debug Modu" düğmesiyle başlayan oyunda; değilse sıradan sohbet mesajı (madde 741)
 		_unlock_debug_mode()
 		return
 	_send_chat_message(trimmed)
@@ -3528,6 +3530,7 @@ func _process(delta: float) -> void:
 				skill2_icon.skill_id = player.get_skill2_id()
 				skill2_icon.name_override = player.get_buyucu_variation_name()
 				skill2_icon.desc_override = player.get_buyucu_variation_desc()
+				skill2_icon.short_override = player.get_buyucu_variation_short()
 				## İkon dizisi SET sırasındadır (characters.gd skill2_variation_icons: [Arcane Lanet, Hortum]) - varyasyon id'si değil set.
 				var v_idx: int = player.buyucu_variation_set if "buyucu_variation_set" in player else 0
 				var v_icons: Array = Characters.get_def(4).get("skill2_variation_icons", [])
@@ -3539,6 +3542,7 @@ func _process(delta: float) -> void:
 			else:
 				skill2_icon.name_override = ""
 				skill2_icon.desc_override = ""
+				skill2_icon.short_override = ""
 				skill2_icon.update_state(player.get_skill2_progress(), player.is_skill2_active(), player.skill2_timer, player.get_skill2_active_fraction())
 		## Korsan'ın bomba şarj sayısı (TEMEL/skill2 ikonunun üstünde) ve
 		## Necromancer'ın biriken ruh sayısı (pasif ikonunun üstünde) -
@@ -3578,6 +3582,7 @@ func _process(delta: float) -> void:
 				skill3_icon.skill_id = player.get_skill3_id()
 				skill3_icon.name_override = player.get_buyucu_variation_name_r()
 				skill3_icon.desc_override = player.get_buyucu_variation_desc_r()
+				skill3_icon.short_override = player.get_buyucu_variation_short_r()
 				## characters.gd "skill3_variation_icons" SET sırasındadır: [Don Nova, Meteor Patlaması] (2026-10-04'ten beri).
 				var v_icons_r: Array = Characters.get_def(4).get("skill3_variation_icons", [])
 				var v_local_idx_r: int = player.buyucu_variation_set if "buyucu_variation_set" in player else 0
@@ -3593,6 +3598,7 @@ func _process(delta: float) -> void:
 				skill3_icon.skill_id = player.get_skill3_id()
 				skill3_icon.name_override = str(cadi_r.get("name", ""))
 				skill3_icon.desc_override = str(cadi_r.get("desc", ""))
+				skill3_icon.short_override = str(cadi_r.get("short_desc", ""))
 				var cadi_tex: Texture2D = _cached_texture(str(cadi_r.get("icon", "")))
 				if cadi_tex and skill3_icon.custom_texture != cadi_tex:
 					skill3_icon.custom_texture = cadi_tex
@@ -3603,6 +3609,7 @@ func _process(delta: float) -> void:
 			else:
 				skill3_icon.name_override = ""
 				skill3_icon.desc_override = ""
+				skill3_icon.short_override = ""
 				skill3_icon.update_state(player.get_skill3_progress(), player.is_skill3_active(), player.skill3_timer, player.get_skill3_active_fraction())
 		## Ruhani Yetenek ikonu (F) - kendi durum makinesi (bkz. player.gd get_spirit_*).
 		if spirit_icon and player.has_method("get_spirit_progress"):

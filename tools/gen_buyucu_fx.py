@@ -4,6 +4,7 @@
 1 sayfa pikseli = 1 Büyücü sanat pikseli (0,903 dünya). KARAKTERE BAĞLI sayfalarda (q_*, hortum_cast, surge_wave) karenin merkezi =
 karakterin 48x48 karesinin merkezi (BuyucuFx.char_layer AnimatedSprite2D'nin konum/offset/ölçeğini kopyalar); ayak satırı = merkez + 16.
 Kullanım (proje kökünden): python -I tools/gen_buyucu_fx.py [onizleme.png]   -> sonra Godot --headless --path . --import
+  Yalnız hortum (madde 728, C Toz Şeytanı): python -I tools/gen_buyucu_fx.py --hortum
 """
 import math
 import os
@@ -18,6 +19,8 @@ sys.path.insert(0, os.path.join(HERE, 'proto_20261016'))
 sys.path.insert(0, os.path.join(HERE, 'proto_20261012'))
 import pixfx as P  # noqa: E402
 import gen_buyucu_buyu as B  # noqa: E402
+sys.path.insert(0, os.path.join(HERE, 'proto_20261116', 'hortum'))
+import gen_hortum_v2 as HV  # noqa: E402  (Hortum = C Toz Şeytanı, madde 728)
 
 OUT = os.path.join(PROJECT, 'assets', 'fx', 'buyucu')
 TAU = math.tau
@@ -147,80 +150,16 @@ def _burst(size, R, t, pal, seed):
 
 
 # ====================================================================== Hortum (dünyada, 15 fps, kusursuz döngü)
-HN = 28  ## döngü kare sayısı - bütün fazlar bu sürede tam tur atar
-TW, TH, TGROUND = 48, 72, 64  ## zemin satırı 64 (düğüm orijini)
+## 2026-11-16 (madde 728): kullanıcı yeni prototiplerden "C Toz Şeytanı"nı seçti. Çizim tools/proto_20261116/hortum/gen_hortum_v2.py
+## c_body / c_ground / c_cast / c_hit (bütün zaman terimleri HV.LOOP = HN karede tam tur -> dikişsiz). Eski beyaz-lavanta huni (madde 188)
+## git geçmişinde (6a15d1b9, tornado_frame/swirl_frame). Sadece hortumu yeniden üretmek: python -I tools/gen_buyucu_fx.py --hortum
+HN = HV.LOOP  ## 28
+TW, TH, TGROUND = 48, 72, 64  ## zemin satırı 64 (düğüm orijini; fx_buyucu_tornado.gd SHEET_OFFSET (0,-28) = 64 - 36)
 
 
-def tornado_frame(cv, x, gy, f, h, sc=1.0, cut=0.0):
-    """Prototip B.tornado'nun DÖNGÜLÜ hali: her faz HN karede tam sayıda tur (eğilme 1, bant 6, yırtık kenar 8/10, kırıntı 4, tutam 3)."""
-    import numpy as np
-    if h < 2:
-        return
-    ph = TAU * f / HN
-    X, Y = cv.grid()
-    base_y = gy - 2.0
-    r0, r1 = 2.2 * sc, 13.0 * sc
-
-    def rad(s):
-        return r0 + (r1 - r0) * np.clip(s, 0, 1) ** 1.25
-
-    def sway(s):
-        return 3.5 * sc * np.clip(s, 0, 1) ** 1.4 * np.sin(ph + s * 2.4)
-
-    s = (base_y - Y) / h
-    xc = x + sway(s)
-    rr = rad(s) * (1.0 + 0.1 * np.sin(s * 22.0 - ph * 8)) + 0.6 * np.sin(s * 37.0 + ph * 10)
-    body = (s >= cut) & (s <= 1.0) & (np.abs(X - xc) <= rr)
-    xt, top_y, ryr = x + float(sway(1.0)), base_y - h, r1 * 0.32
-    rim = ((X - xt) / r1) ** 2 + ((Y - top_y) / ryr) ** 2 <= 1.0
-    mouth = ((X - xt) / max(r1 - 2.2, 0.5)) ** 2 + ((Y - top_y + 0.4) / max(ryr - 1.1, 0.5)) ** 2 <= 1.0
-
-    def bits(front):
-        for q in range(5):
-            a = ph * 4 + q * 1.9
-            sq = (f / HN + q * 0.21) % 1.0
-            if sq < cut or (math.cos(a) > 0) != front:
-                continue
-            yy = base_y - sq * h
-            xx = x + float(sway(sq)) + (float(rad(sq)) + 1.5) * math.sin(a)
-            if q < 3:
-                cv.px(xx, yy, ARC[4] if front else ARC[2])
-                if front:
-                    cv.px(xx - 1, yy, ARC[3])
-                    cv.px(xx + 1, yy, ARC[3])
-            elif q == 3:
-                cv.px(xx, yy, B.LEAF[3] if front else B.LEAF[1])
-                cv.px(xx + 1, yy - 1, B.LEAF[2] if front else B.LEAF[1])
-            else:
-                cv.px(xx, yy, P.STONE[3] if front else P.STONE[1])
-
-    bits(False)
-    u = np.clip((X - xc) / np.maximum(rr, 0.5), -1, 1)
-    th = np.arcsin(u)
-    band = s * 13.0 - ph * 6
-    stripe = np.sin(th * 2.0 + band)
-    gap = body & (stripe < -0.4) & (s < 0.9)
-    front = (body & ~gap) | rim
-    cv.put(gap & (np.sin((math.pi - th) * 2.0 + band) > -0.1), HOR[1])
-    tone = np.where(u < -0.35, 3, np.where(u > 0.6, 1, 2))
-    tone = np.where(stripe > 0.55, np.minimum(tone + 1, 4), tone)
-    tone = np.where(rim & ~body, 3, tone)
-    for tt in range(1, 5):
-        cv.put(front & (tone == tt), HOR[tt])
-    cv.put(mouth & ~body | (mouth & (Y < top_y)), HOR[1])
-    cv.put(P.outline_of(front) & ~front & ~(mouth & rim), HOR[0])
-    for side in (-1, 1):
-        a0 = ph * 3 + (0 if side > 0 else math.pi)
-        P.arc_band(cv, xt + side * (r1 + 1.5), top_y - 1.0, 3.2 * sc, a0, a0 + 2.6, 1.6, 0.5, HOR)
-    bits(True)
-
-
-def swirl_frame(cv, x, gy, f, sc=1.0, level=1.0):
-    if level < 0.25:
-        return
-    for j in (0, 1):
-        a0 = TAU * f / HN * 3 + j * math.pi
-        P.arc_band(cv, x, gy, 8.0 + 3.0 * sc, a0, a0 + 2.3, 2.2 * level, 0.6, P.DUST, squash=0.45)
+def _tornado(cv, x, gy, f, g=1.0, e=0.0):
+    HV.c_ground(cv, x, gy, f, g, e, 0.0)
+    HV.c_body(cv, x, gy, f, g, e, 0.0)
 
 
 def hortum_sheets():
@@ -228,43 +167,29 @@ def hortum_sheets():
     loop, grow, out = [], [], []
     for f in range(HN):
         cv = P.Canvas(TW, TH)
-        swirl_frame(cv, x, gy, f)
-        tornado_frame(cv, x, gy, f, B.HMAX)
+        _tornado(cv, x, gy, f)
         loop.append(cv)
-    for i in range(6):  ## doğuş: küçük girdaptan huniye; faz döngünün sonuna denk gelir -> döngüye dikişsiz geçer
-        g = P.ease_out((i + 1) / 6.0)
-        f = HN - 6 + i
+    for i in range(6):  ## doğuş: küçük sütundan tam boya; faz döngünün sonuna denk gelir -> döngüye dikişsiz geçer
         cv = P.Canvas(TW, TH)
-        swirl_frame(cv, x, gy, f, (i + 1) / 6.0)
-        tornado_frame(cv, x, gy, f, B.HMAX * g, sc=0.55 + 0.45 * g)
+        _tornado(cv, x, gy, HN - 6 + i, P.ease_out((i + 1) / 6.0))
         grow.append(cv)
-    for i in range(12):  ## bitiş: alttan çözülüp yükselir, seyrelir
-        u = i / 12.0
-        tv, cv = P.Canvas(TW, TH), P.Canvas(TW, TH)
-        swirl_frame(cv, x, gy, i, 1.0, 1.0 - u)
-        tornado_frame(tv, x, gy - u * 10.0, i, B.HMAX, cut=u * 0.9)
-        B.fade_cv(tv, 1.0 - u * 0.85)
-        m = tv.filled()
-        cv.rgba[m] = tv.rgba[m]
+    for i in range(12):  ## bitiş: sütun yere çöker, etek + zemin çizgileri açılır, düz alfa basamaklarıyla söner (dither yok)
+        e = (i + 1) / 12.0
+        cv = P.Canvas(TW, TH)
+        _tornado(cv, x, gy, i, 1.0, e)
+        HV.fade(cv, 1.0 if e < 0.5 else 1.0 - (e - 0.5) / 0.5)
         out.append(cv)
     res = [strip_png('hortum_loop', loop), strip_png('hortum_in', grow), strip_png('hortum_out', out)]
     cast = []
-    for k in range(5):  ## ayak altında açılan girdap (karaktere bağlı 64x64)
+    for k in range(5):  ## ayağa doğru daralan zemin çizikleri (karaktere bağlı 64x64, karakterin altında)
         cv = P.Canvas(QW, QH)
-        kk = k / 5.0
-        for j in (0, 1):
-            a0 = k * 0.8 + j * math.pi
-            P.arc_band(cv, QX, QFEET, 8.0 + 6.0 * kk, a0, a0 + 2.4, 2.2 * (1 - kk * 0.6), 0.6, HOR, squash=0.45)
+        HV.c_cast(cv, QX, QFEET, k, k + 4)
         cast.append(cv)
     res.append(strip_png('hortum_cast', cast))
     hit = []
-    for k in range(4):  ## temas: yaratığın gövdesinde rüzgâr kesikleri
+    for k in range(4):  ## temas: yaratıktan yukarı yelpaze kum çizgileri + sıçrayan çakıl
         cv = P.Canvas(40, 40)
-        for q in (0, 1):
-            a0 = k * 1.1 + q * math.pi
-            P.arc_band(cv, 20, 20, 10.0 + k, a0, a0 + 1.6, 2.0 * (1 - k / 4.0) + 0.4, 0.5, HOR)
-        if k == 0:
-            P.star(cv, 20, 19, 4, P.WHITE, HOR[3], diag=True)
+        HV.c_hit(cv, 20, 26, k, 0)
         hit.append(cv)
     res.append(strip_png('hortum_hit', hit))
     return res
@@ -400,6 +325,10 @@ def meteor_sheets():
 def main():
     os.makedirs(OUT, exist_ok=True)
     made = []
+    if '--hortum' in sys.argv:  ## yalnız hortum sayfaları (diğer Büyücü sayfalarına dokunmaz)
+        for (n, c, w, h) in hortum_sheets():
+            print('%-14s %2d kare  %dx%d' % (n, c, w, h))
+        return
     for new in (0, 1):  ## q_*_<hedef set>: 0 = Set 1'e (soğuk) geçiş, 1 = Set 2'ye (sıcak) geçiş
         backs, fronts = q_frames(1 - new, new)
         made.append(strip_png('q_back_%d' % new, backs))

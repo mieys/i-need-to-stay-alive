@@ -51,6 +51,8 @@ const LIGHT_MAP_EVERY := 2
 ## Karakter kökü gövdenin ortasına yakın; ışık ayakların biraz üstünde dursun (zemine düşen ışık).
 const PLAYER_LIGHT_OFFSET := Vector2(0.0, 6.0)
 const PLAYER_GROUPS: Array[String] = ["player", "remote_players"]
+## Toplu ışık sağlayıcıları (get_night_lights(); bkz. _gather_lights sonu, ates_bocegi_fx.gd).
+const LIGHT_PROVIDER_GROUP := &"night_light_provider"
 ## Çizgi ışıklarında (şimşek ışını, lazer) leke aralığı / yarıçap ve tek çizgideki en fazla leke.
 const SEGMENT_SPACING := 0.6
 const SEGMENT_MAX_DOTS := 48
@@ -248,6 +250,16 @@ func _gather_lights(xf: Transform2D, map_size: Vector2) -> Array:
 				_push_segment(out, (xf * Vector2(seg[0])) * inv, (xf * Vector2(seg[1])) * inv, r_px, col, map_size)
 		else:
 			_push(out, (xf * glow.global_position) * inv, r_px, col, map_size)
+	## TOPLU IŞIK SAĞLAYICILARI (madde 761, ana haritanın ateş böcekleri - ates_bocegi_fx.gd): tek düğüm çok sayıda küçük, hareketli ışık verir
+	## (her biri için night_glow düğümü kurmadan). get_night_lights() -> [[dünya konumu, yarıçap (dünya), renk, güç 0..1], ...]; ölçek / tavan
+	## night_glow ışıklarıyla aynı.
+	for p: Node in tree.get_nodes_in_group(LIGHT_PROVIDER_GROUP):
+		for l: Array in p.call("get_night_lights"):
+			var pe: float = minf(float(l[3]) * GLOW_ENERGY_SCALE, GLOW_ENERGY_CAP)
+			if pe <= 0.01:
+				continue
+			var pc: Color = l[2]
+			_push(out, (xf * Vector2(l[0])) * inv, float(l[1]) * GLOW_RADIUS_SCALE * zoom * inv, Color(pc.r * pe, pc.g * pe, pc.b * pe, 1.0), map_size)
 	return out
 
 

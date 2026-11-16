@@ -1,9 +1,9 @@
 [gd_scene format=3 uid="uid://cbkx2q8yvnm2e"]
 
-[ext_resource type="Script" uid="uid://b00g7qwyj3h8f" path="res://scripts/remote_player.gd" id="1_remote"]
-[ext_resource type="Script" uid="uid://c6s78w221s8vj" path="res://scripts/shadow_blob.gd" id="2_shadow"]
-[ext_resource type="Script" uid="uid://dfw4p8b0v84x1" path="res://scripts/shield_visual.gd" id="3_shield"]
-[ext_resource type="Script" uid="uid://bsh25h8y0v2xq" path="res://scripts/overhead_bar.gd" id="4_overhead"]
+[ext_resource type="Script" uid="uid://c8egekpuprukb" path="res://scripts/remote_player.gd" id="1_remote"]
+[ext_resource type="Script" uid="uid://c1yhbklktfh6d" path="res://scripts/shadow_blob.gd" id="2_shadow"]
+[ext_resource type="Script" uid="uid://bv357ieieu4pe" path="res://scripts/shield_visual.gd" id="3_shield"]
+[ext_resource type="Script" uid="uid://bi5mnvkbou2d6" path="res://scripts/overhead_bar.gd" id="4_overhead"]
 [ext_resource type="Script" path="res://scripts/remote_player_name.gd" id="5_name"]
 [ext_resource type="SpriteFrames" uid="uid://cta55xjsqi3a8" path="res://assets/fx/shield_bubble/bubble_frames.tres" id="6_bubble"]
 [ext_resource type="AudioStream" uid="uid://cva5u03wv8xhs" path="res://assets/audio/shield_break.wav" id="7_break"]

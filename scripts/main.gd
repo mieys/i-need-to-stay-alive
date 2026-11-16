@@ -5,6 +5,7 @@ const LevelUpScreenScene = preload("res://scenes/level_up_screen.tscn")
 ## Yetenek evrimleri (2026-09-28): evrim kartı seçimi "evo:<id>" olarak gelir (bkz. _on_upgrade_chosen).
 const SkillEvolutionsScript := preload("res://scripts/skill_evolutions.gd")
 const DungeonDefsScript := preload("res://scripts/dungeon/dungeon_defs.gd") ## ZİNDANLAR (madde 373)
+const KisSogukScript := preload("res://scripts/kis_soguk.gd") ## Ayaz Dağı üşümesi (madde 709)
 const MissionCompleteWindowScript := preload("res://scripts/mission_complete_window.gd")
 const GameNoticeScript := preload("res://scripts/game_notice.gd") ## bildirim levhaları (madde 264)
 const WaitOverlayScript := preload("res://scripts/wait_overlay.gd") ## oyuncular bekleniyor ekranı (madde 264)
@@ -246,6 +247,9 @@ var _remote_state_cache: Dictionary = {}
 ## HARİTA SEÇİMİ (madde 444): seçili harita ana harita değilse main.tscn'deki "Harita" onun sahnesiyle değiştirilir - aynı sebeple _enter_tree
 ## (hiçbir çocuk eski haritayı görmeden). Dükkan ayıklaması ana haritanın düğümlerine bakar, değişimden sonra (zindan haritasında no-op).
 func _enter_tree() -> void:
+	## TEST HARİTASI (madde 731): çocuklar hazırlanmadan ÖNCE debug açılır - HUD'un DEBUG düğmesi baştan görünür, Q/E/R baştan açık (meta debug_open).
+	if MapProfilesScript.is_test_map():
+		GameManager.enter_test_map()
 	MapProfilesScript.install(self)
 	ShopsFlag.strip_shops(self)
 
@@ -466,6 +470,11 @@ func _ready() -> void:
 	sun_clouds.name = "SunClouds"
 	add_child(sun_clouds)
 	move_child(sun_clouds, atmosphere_layer.get_index())
+	## Kum fırtınası (madde 718, yalnız Altın Kumlar): bulut gölgelerinden SONRA, renk geçişinin HEMEN önüne (gölge yerde, toz üstünde) - gece karartması kumu da karartır, sis + HUD üstte kalır.
+	var sand_layer: CanvasLayer = atmosphere.create_sand_layer()
+	if sand_layer:
+		add_child(sand_layer)
+		move_child(sand_layer, atmosphere_layer.get_index())
 	## Güneş huzmesi: sisin HEMEN arkasına (HUD'dan önce) - gökyüzünden gelen ışık, sis onu karartmasın.
 	add_child(sun_clouds.light_layer)
 	move_child(sun_clouds.light_layer, vision_fog.get_index() + 1)
@@ -504,7 +513,7 @@ func _ready() -> void:
 		## Başıboş çimen / köprü altı bitki ayıklaması Harita.tmx'in belirli karolarına göre - Kara Bataklık'ta yok ("harita_ayiklama").
 		MapColorGradeScript.attach(harita_node, true, MapProfilesScript.feature("harita_ayiklama"))
 		## Su (madde 214): akıntılı dalgacık shader'ına kıyı uzaklığı + akış dokuları, çarpışmasız su da aynı materyal (bkz. water_fx.gd).
-		## Kara Bataklık suyu kendi shader'ı (scenes/bataklik_su.gdshader), zemini tek materyal: ikisi de ana haritanın dokularına bağlı değil.
+		## Madde 714: bütün haritaların suyu bu shader (profilin "su_doku"su: sabit renk + kendi pişmiş dokuları; zindan haritasında dungeon_manager.gd bağlar).
 		if MapProfilesScript.feature("su_efekti"):
 			WaterFxScript.attach(harita_node)
 		if MapProfilesScript.feature("zemin_gecisi"):
@@ -514,6 +523,14 @@ func _ready() -> void:
 			var swamp_fx: Node2D = preload("res://scripts/bataklik_fx.gd").new()
 			swamp_fx.name = "BataklikFx"
 			harita_node.add_child(swamp_fx)
+		## Ana harita: gece ateş böcekleri (madde 761, bkz. ates_bocegi_fx.gd) - renk geçişinin HEMEN arkasına, sisin önüne (aynı layer=1,
+		## ağaç sırası): karartmanın üstünde kendi ışıklarıyla parlarlar, sis onları da örter.
+		if MapProfilesScript.feature("ates_bocekleri"):
+			var fireflies: CanvasLayer = preload("res://scripts/ates_bocegi_fx.gd").new()
+			fireflies.name = "AtesBocekleri"
+			fireflies.call("setup", harita_node)
+			add_child(fireflies)
+			move_child(fireflies, vision_fog.get_index())
 		## Altın Kumlar: küre tapınağının gece ışığı (bkz. col_fx.gd).
 		if MapProfilesScript.feature("col_fx"):
 			var desert_fx: Node2D = preload("res://scripts/col_fx.gd").new()
@@ -524,6 +541,9 @@ func _ready() -> void:
 			var winter_fx: Node2D = preload("res://scripts/kis_fx.gd").new()
 			winter_fx.name = "KisFx"
 			harita_node.add_child(winter_fx)
+		## Ayaz Dağı üşüme / ısınma / donma (madde 709): yerel oyuncunun kis_cold'unu ısı noktalarına göre sayar (bkz. kis_soguk.gd).
+		if MapProfilesScript.cold_climate():
+			add_child(KisSogukScript.new())
 		## Kara Bataklık suyu yürünür (madde 525): suya giren yürüyen karakter / yaratık / evcilin ayağı suyun altında (bkz. wade_fx.gd).
 		if MapProfilesScript.water_walkable():
 			var wade: Node = preload("res://scripts/wade_fx.gd").new()
@@ -823,7 +843,8 @@ func _update_character_draw_order() -> void:
 ## merkeze göre sıralanınca büyük bir yaratığın ayağının hemen üstündeki küçük yaratık yine onun üstüne çiziliyordu.
 ## Ayak = sprite karesindeki en alt dolu piksel satırı (gölgeli sayfalarda gölgenin altı), doku başına bir kez ölçülür.
 ## "ysort_props": yerde duran küçük nesneler (Oakley çiçeği, 2026-10-19) yaratıklarla aynı ayak sırasına girer (oakley_flower.gd DERİNLİK notu).
-const CREATURE_SORT_GROUPS: Array[String] = ["enemies", "player_ally", "pvp_rivals", "player_allies", "ysort_props"]
+## "ysort_pets": yer evcillerinin (Kirpi / Minik Cadı) görsel vekili (pet_depth_proxy.gd, 2026-11-16) - top_level hayvan bu sıraya hiç girmiyordu.
+const CREATURE_SORT_GROUPS: Array[String] = ["enemies", "player_ally", "pvp_rivals", "player_allies", "ysort_pets", "ysort_props"]
 
 
 ## 2026-11-14 (kullanıcı: "diğer oyuncu üstteyken onun üstünde görünüyor"; ayak hizası düzeltmesi yetmedi): uzak oyuncu kuklası remote_player.tscn'de
@@ -1003,7 +1024,10 @@ func _visual_foot_local(vis: Node2D) -> float:
 			var fr := Rect2i(Vector2i.ZERO, Vector2i(frame_size)).intersection(Rect2i(Vector2i.ZERO, img.get_size()))
 			var used: Rect2i = img.get_region(fr).get_used_rect()
 			if used.size.y > 0:
-				foot_row = float(used.end.y)
+				## Kırpılmış AtlasTexture (kenar boşluklu, ör. Necro iskeletleri): get_image() yalnız BÖLGEYİ döndürür, kare boyu (get_size)
+				## ise boşluk dahil - üst boşluk eklenmezse ayak ~13 sanat px yukarıda ölçülüyordu (2026-11-16, Necro birlikleri yaratıkların arkasında).
+				var top_pad: float = (tex as AtlasTexture).margin.position.y if tex is AtlasTexture else 0.0
+				foot_row = top_pad + float(used.end.y)
 		if key != "":
 			_foot_row_cache[key] = foot_row
 	return offset.y + foot_row - (frame_size.y * 0.5 if centered else 0.0)
@@ -1236,6 +1260,12 @@ func _process_multiplayer_sync(delta: float) -> void:
 		## Cadı'nın süpürgesinde YOLCULUK (HER karakter): süpürgesine bindiğimiz cadının peer id'si. Binmiyorken anahtar yok.
 		if "cadi_ride_host_peer" in player and int(player.cadi_ride_host_peer) != 0:
 			extra["cride"] = int(player.cadi_ride_host_peer)
+		## Ayaz Dağı üşümesi (madde 709): tam saniye (kis_soguk.gd net_value) - uzak kuklanın tonu + ısı çubuğu. Sıcakken anahtar yok.
+		if "kis_cold" in player and player.kis_cold > 0.0:
+			extra["kc"] = KisSogukScript.net_value(player.kis_cold)
+		## Kara Bataklık batma (bataklik_tehlike.gd): su çizgisine eklenen tam piksel (0..4) - kuklanın ayak örtüsü (wade_fx.gd). 0'da anahtar yok.
+		if "wade_sink_px" in player and int(player.wade_sink_px) > 0:
+			extra["wsk"] = int(player.wade_sink_px)
 
 		## Klasik canlanma sistemi (bkz. player.gd is_downed/_go_down/
 		## _process_downed): downed iken hp/max_hp alanları GERÇEK canı
@@ -2936,6 +2966,9 @@ var _meta_tick_count: int = 0
 
 ## Kayıt yazımını engelleyen neden (boş = kayıt açık). Debug modu bayrağı işlem boyunca açık kalır (ana menüye dönmek kapatmaz).
 func _record_skip_reason() -> String:
+	## TEST HARİTASI (madde 731): exportlu istemcide debug açılamaz - kapı haritaya bakar (rekor / kıymık / başarım / balans hiçbiri yazılmaz).
+	if MapProfilesScript.is_test_map():
+		return "test haritası (madde 731)"
 	if GameManager.debug_mode_unlocked:
 		return "debug modu açık (GameManager.debug_mode_unlocked)"
 	if GameManager.content_unlock_mode:

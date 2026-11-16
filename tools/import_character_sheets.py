@@ -84,7 +84,7 @@ SHEETS = [
 # karakterlere tools/import_ek_animasyonlar.py ile SONRADAN eklendi (o karakterler buradan yeniden ice alinirsa sit
 # klipleri icin o betik tekrar kosulmali).
 OPTIONAL_SHEETS = {"pickup", "sit"}
-BAT_ANIM = ("bat", 4, True, 10.0)
+BAT_ANIM = ("bat", 11, True, 18.0)  # 2026-11-16: kullanicinin bat_fly.png sayfasi (gen_vampir_bat_form.py)
 
 
 def ascii_key(name):

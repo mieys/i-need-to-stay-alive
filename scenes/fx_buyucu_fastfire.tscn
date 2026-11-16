@@ -1,6 +1,6 @@
 [gd_scene load_steps=3 format=3 uid="uid://df72g5w28q36a"]
 
-[ext_resource type="Script" uid="uid://cd84h1d77x2n5" path="res://scripts/fx_buyucu_fastfire.gd" id="1"]
+[ext_resource type="Script" uid="uid://dn8o5mic0hkui" path="res://scripts/fx_buyucu_fastfire.gd" id="1"]
 [ext_resource type="AudioStream" uid="uid://eemy3wbj7q68" path="res://assets/audio/buyucu_ulti.wav" id="2"]
 
 [node name="FxBuyucuFastfire" type="Node2D"]

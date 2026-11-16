@@ -39,10 +39,11 @@ func setup(radius: float, color: Color = DEFAULT_TINT) -> void:
 
 
 func _shake() -> void:
-	CameraShakeScript.add_at(global_position, 0.4, 1000.0)
+	CameraShakeScript.add_at_fx(self, global_position, 0.4, 1000.0)
 
 
 func _ready() -> void:
+	CameraShakeScript.mark_fx_origin(self) ## madde 711: başkasının kopyası mı (sarsıntı yalnız kasterde)
 	z_index = 12
 	if sprite:
 		sprite.visible = false ## eski sprite artık çizilmiyor

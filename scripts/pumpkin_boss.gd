@@ -294,6 +294,6 @@ func _player_count() -> int:
 func _alive_count(kind: String) -> int:
 	var n: int = 0
 	for m: Node in e.get_tree().get_nodes_in_group("summons"):
-		if is_instance_valid(m) and m.get("is_dead") != true and str(m.get_meta("creature_id", "")) == kind and m.get_meta("summoner", null) == e:
+		if is_instance_valid(m) and m.get("is_dead") != true and str(m.get_meta("creature_id", "")) == kind and (m.get_meta("summoner") if m.has_meta("summoner") else null) == e:
 			n += 1
 	return n

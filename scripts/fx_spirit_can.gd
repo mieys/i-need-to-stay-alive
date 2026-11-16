@@ -1,119 +1,122 @@
 extends Node2D
 
-## Ruhani Yetenek "Can" (F, bkz. spiritual_skills.gd): takım arkadaşlarının HEPSİNİN üzerinde çıkar (player.gd
-## apply_spirit_can_buff + network_manager.gd _rpc_spirit_team_buff).
-## DÜZELTME (2026-09-23, "aynı şeyi ruhani büyüler için de yap"): dokunulmazlık boyunca (3sn) süren altın bariyer HER
-## karede dither dolgu + 3 halka çizerek ~1000+ draw_rect() maliyetine yol açıyordu. Dolgu + 3 halka + perçinler artık
-## PNG'ye pişirildi (assets/fx/spirit_can/), her biri KENDİ hızında script'te döndürülen/soluklaştırılan ayrı bir
-## Sprite2D (bkz. oakley_bee_swarm_ring.gd'deki AYNI desen) - draw_rect sayısı ~1000+ -> 5'e indi. Şifa halkaları
-## (~0.7sn, tek seferlik) ve yükselen "+" işaretleri (14 tanesi, birkaç px()/parçacık - zaten ucuz) PROSEDÜREL kaldı.
-##  - ilk 0.7sn: dışa açılan ince altın-yeşil şifa halkaları + yukarı süzülen pixel "+" işaretleri (prosedürel)
-##  - 3sn boyunca (dokunulmazlık süresi): gövdeyi saran yarı saydam altın dither bariyer + dönen kesikli halkalar (baked)
-## Player/RemotePlayer'ın ÇOCUĞU olarak doğar, ömrü sabittir (DURATION) - ağdan bayrak beklemez.
+## Ruhani Yetenek "Can" (F): takım arkadaşlarının HEPSİNİN üzerinde çıkar (player.gd apply_spirit_can_buff + network_manager.gd
+## _rpc_spirit_team_buff, uzak kuklalara aynı sahne). Görünüm = prototip "A Ruh Işığı" (madde 730, kullanıcı seçimi 2026-11-16,
+## madde 734) - eski altın kubbe + dönen kesikli halkalar + "+" serpintisi silindi.
+##  - 0-0,75 sn: gökten inen ışık sütunu (3 düz bant: dış yeşil-altın, altın, krem çekirdek; üstü 3 basamakta söner),
+##    karakterin ARKASINDA; önünde yalnız soluk bir parıltı (gövde ışıkta yıkanır)
+##  - 0,18 sn'de yere iner: altın ışık havuzu + iki genişleyen yer halkası
+##  - 3 sn (dokunulmazlık): gövdeyi saran altın kabuk (kenara doğru koyulaşan bantlar, üst kenar krem), nefes alır
+##  - yükselen birkaç 4 uçlu pırıltı (krem çekirdek, yeşil/altın kol)
+## Kök ayak noktasında, 1 yerel birim = 1 dünya birimi (bkz. spirit_fx_util.gd). Ömür sabit (CAN_INVULN_TIME + sönüş).
 
-const PixelDraw := preload("res://scripts/pixel_draw.gd")
+const U := preload("res://scripts/spirit_fx_util.gd")
 const SpiritualSkillsScript: GDScript = preload("res://scripts/spiritual_skills.gd")
-const DOME_FILL_TEX := preload("res://assets/fx/spirit_can/dome_fill.png")
-const RING1_TEX := preload("res://assets/fx/spirit_can/ring1.png")
-const RING2_TEX := preload("res://assets/fx/spirit_can/ring2.png")
-const RING3_TEX := preload("res://assets/fx/spirit_can/ring3.png")
-const RIVETS_TEX := preload("res://assets/fx/spirit_can/rivets.png")
+const SHELL_TEX := preload("res://assets/fx/ruhani/can_shell.png") ## 6 kare: açılış 0,25/0,5/0,75/1 + nefes -/+
+const GLOW_TEX := preload("res://assets/fx/ruhani/can_glow.png") ## en parlak bant 0,6 alfa pişti
+const RING_TEX := preload("res://assets/fx/ruhani/ring_ground.png") ## 23 kare rx 4..26
 
-const BODY_CENTER := Vector2(0, -4)
-const FADE_OUT := 0.4
-const DOME_RADIUS := 31.0
-## bkz. sınıf üstü not - orijinal `ring(..., phase=_t*X)` kaymalarının yaklaşık açısal karşılığı (X * halka başına adım
-## açısı) - PNG'ler sabit fazda pişirildi, dönüş burada verilir. Rivets kendi ayrı hızında (eski `a=_t*1.2+...`).
-const RING1_SPIN := 0.20 ## eski phase=_t*10.0 ile aynı yön
-const RING2_SPIN := -0.16 ## eski phase=-_t*8.0 ile aynı yön
-const RING3_SPIN := -0.28 ## eski phase=-_t*14.0 ile aynı yön
-const RIVET_SPIN := 1.2
+const SHAFT_TOP := -110.0
+const SHELL_Y := -16.0
+const FADE := 0.4
 
 var _t: float = 0.0
-var _duration: float = SpiritualSkillsScript.CAN_INVULN_TIME
-var _plus: Array = [] ## [pos, vel, age, life, pink]
-
-var _dome_fill: Sprite2D = null
-var _ring1: Sprite2D = null
-var _ring2: Sprite2D = null
-var _ring3: Sprite2D = null
-var _rivets: Sprite2D = null
+var _inv: float = SpiritualSkillsScript.CAN_INVULN_TIME
+var _seed: int = 0
+var _shell: Sprite2D = null
+var _front: Node2D = null
 
 
 func _ready() -> void:
-	z_index = 2
-	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	for i in range(14):
-		var a: float = randf() * TAU
-		var r: float = randf_range(8.0, 28.0)
-		_plus.append([BODY_CENTER + Vector2(cos(a) * r, sin(a) * r * 0.8), Vector2(randf_range(-5.0, 5.0), randf_range(-44.0, -22.0)), -randf() * 0.6, randf_range(0.9, 1.4), i % 2 == 0])
-
-	_dome_fill = _make_sprite(DOME_FILL_TEX)
-	_ring1 = _make_sprite(RING1_TEX)
-	_ring2 = _make_sprite(RING2_TEX)
-	_ring3 = _make_sprite(RING3_TEX)
-	_rivets = _make_sprite(RIVETS_TEX)
-
-
-func _make_sprite(tex: Texture2D) -> Sprite2D:
-	var s := Sprite2D.new()
-	s.texture = tex
-	s.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	s.position = BODY_CENTER
-	add_child(s)
-	return s
+	U.setup_root(self)
+	show_behind_parent = true ## ışık sütunu + yer ışığı karakterin arkasında
+	_seed = randi() % 10000
+	_shell = Sprite2D.new()
+	_shell.texture = SHELL_TEX
+	_shell.hframes = 6
+	_shell.position = Vector2(0.0, SHELL_Y)
+	_shell.z_index = 2
+	_shell.visible = false
+	add_child(_shell)
+	_front = U.front_layer(self, _draw_front)
 
 
 func _process(delta: float) -> void:
 	_t += delta
-	if _t >= _duration + FADE_OUT:
+	if _t >= _inv + FADE:
 		queue_free()
 		return
-	for p in _plus:
-		p[2] += delta
-		if p[2] > 0.0:
-			p[0] += p[1] * delta
-
-	var fade: float = clampf((_duration + FADE_OUT - _t) / FADE_OUT, 0.0, 1.0)
-	var open: float = clampf(_t / 0.25, 0.0, 1.0) * fade
-	_dome_fill.scale = Vector2.ONE * open
-	_dome_fill.modulate.a = open
-	_ring1.rotation = _t * RING1_SPIN
-	_ring1.scale = Vector2.ONE * open
-	_ring1.modulate.a = open
-	_ring2.rotation = _t * RING2_SPIN
-	_ring2.scale = Vector2.ONE * open
-	_ring2.modulate.a = open
-	_ring3.rotation = _t * RING3_SPIN
-	_ring3.scale = Vector2.ONE * open
-	_ring3.modulate.a = open
-	_rivets.rotation = _t * RIVET_SPIN
-	_rivets.scale = Vector2.ONE * open
-	_rivets.modulate.a = open
-
+	var tt: float = _t
+	if tt >= 0.25:
+		var s: float = U.ease_out((tt - 0.25) / 0.2)
+		var fade: float = clampf((_inv + FADE - tt) / FADE, 0.0, 1.0)
+		_shell.visible = true
+		if s < 0.999:
+			_shell.frame = clampi(int(roundf(s * 4.0)) - 1, 0, 3)
+		else:
+			var br: float = 0.6 * sin(TAU * 0.8 * tt)
+			_shell.frame = 4 if br < -0.3 else (5 if br > 0.3 else 3)
+		_shell.modulate.a = U.band(fade, 4)
 	queue_redraw()
+	_front.queue_redraw()
+
+
+func _shaft_geom() -> Vector2:
+	## (alt kenar y, genişlik çarpanı); sütun yoksa genişlik 0
+	var tt: float = _t
+	if tt >= 0.75:
+		return Vector2(-1.0, 0.0)
+	if tt < 0.18:
+		return Vector2(lerpf(SHAFT_TOP, -1.0, U.ease_in(tt / 0.18)), 1.0)
+	return Vector2(-1.0, 1.0 if tt < 0.42 else 1.0 - U.ease_io((tt - 0.42) / 0.33))
+
+
+func _shaft(ci: CanvasItem, hw: float, col: Color, al: float, bot: float) -> void:
+	var w: float = roundf(hw)
+	if w < 1.0 or al <= 0.0:
+		return
+	var segs: Array = [[SHAFT_TOP, SHAFT_TOP + 22.0, 0.34], [SHAFT_TOP + 22.0, SHAFT_TOP + 44.0, 0.67], [SHAFT_TOP + 44.0, bot, 1.0]]
+	for sg in segs:
+		var ya: float = float(sg[0])
+		var yb: float = minf(float(sg[1]), bot)
+		if yb - ya >= 1.0:
+			ci.draw_rect(Rect2(-w, roundf(ya), 2.0 * w, roundf(yb) - roundf(ya)), U.with_a(col, al * float(sg[2])))
+	U.ellipse(ci, 0.0, bot, hw, maxf(1.0, hw * 0.45), U.with_a(col, al))
 
 
 func _draw() -> void:
-	## Şifa halkaları (ilk 0.7sn) - 1 texel kalınlık, prosedürel (tek seferlik, ucuz)
-	if _t < 0.7:
-		var pk: float = _t / 0.7
-		PixelDraw.ring(self, BODY_CENTER, 8.0 + pk * 110.0, Color(0.55, 1.0, 0.65, 1.0 - pk), 1)
-		PixelDraw.ring(self, BODY_CENTER, 4.0 + pk * 74.0, Color(1.0, 0.92, 0.5, 0.9 * (1.0 - pk)), 1, 3, 3, _t * 24.0)
-		if _t < 0.1:
-			PixelDraw.disc_dither(self, BODY_CENTER, 40.0, Color(1.0, 1.0, 0.85, 0.6), int(_t * 60.0), 1)
-	## Yükselen küçük "+" işaretleri (merkez + 4 tek pikselli kol)
-	var texel: float = PixelDraw.TEXEL
-	for p in _plus:
-		if float(p[2]) < 0.0:
+	var tt: float = _t
+	var g: Vector2 = _shaft_geom()
+	if g.y > 0.0:
+		_shaft(self, 9.0 * g.y, U.HEAL3, 0.20, g.x)
+		_shaft(self, 5.5 * g.y, U.GOLD3, 0.40, g.x)
+		_shaft(self, 2.5 * g.y, U.CREAM, 0.80, g.x)
+	if tt >= 0.18 and tt < 0.9:
+		var k: float = (tt - 0.18) / 0.72
+		U.frame(self, GLOW_TEX, 1, 0, 0.0, 0.0, U.with_a(Color.WHITE, U.band(0.6 * (1.0 - k), 4) / 0.6))
+		for j in range(2):
+			var kk: float = (tt - 0.18 - 0.12 * j) / 0.5
+			if kk >= 0.0 and kk < 1.0:
+				var rx: float = 5.0 + 21.0 * U.ease_out(kk)
+				U.frame(self, RING_TEX, 23, int(roundf(rx)) - 4, 0.0, 0.0, U.with_a(U.HEAL3 if j == 1 else U.GOLD3, U.band(0.9 * (1.0 - kk), 4)))
+
+
+func _draw_front() -> void:
+	var tt: float = _t
+	var g: Vector2 = _shaft_geom()
+	if g.y > 0.0:
+		_shaft(_front, 9.0 * g.y, U.GOLD4, 0.12, g.x)
+		if tt > 0.16 and tt < 0.40:
+			_shaft(_front, 2.5 * g.y, U.CREAM, 0.30, g.x)
+	if tt > _inv + 0.1:
+		return
+	for j in range(3):
+		var ph: float = (tt - 0.35 + float(j) * 0.42) / 1.25
+		if ph < 0.0:
 			continue
-		var k2: float = float(p[2]) / float(p[3])
-		if k2 >= 1.0:
-			continue
-		var col: Color = Color(1.0, 0.45, 0.6, 1.0 - k2) if bool(p[4]) else Color(0.55, 1.0, 0.65, 1.0 - k2)
-		var c: Vector2 = p[0]
-		PixelDraw.px(self, c, 1, col)
-		PixelDraw.px(self, c + Vector2(texel, 0), 1, col)
-		PixelDraw.px(self, c - Vector2(texel, 0), 1, col)
-		PixelDraw.px(self, c + Vector2(0, texel), 1, col)
-		PixelDraw.px(self, c - Vector2(0, texel), 1, col)
+		var cyc: int = int(ph)
+		var q: float = ph - float(cyc)
+		var mx: float = (U.hash01(_seed + j * 5 + cyc * 17) - 0.5) * 20.0
+		var my: float = -8.0 - q * 28.0
+		var k: int = int(roundf(2.0 * sin(PI * q)))
+		U.sparkle(_front, mx, my, k, U.CREAM, U.HEAL3 if (j + cyc) % 2 == 1 else U.GOLD3, 0.9)

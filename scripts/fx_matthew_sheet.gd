@@ -34,6 +34,7 @@ const CameraShakeScript: GDScript = preload("res://scripts/camera_shake.gd")
 
 
 func _ready() -> void:
+	CameraShakeScript.mark_fx_origin(self) ## madde 711: başkasının kopyası mı (sarsıntı yalnız kasterde)
 	z_index = z
 	if shake_trauma > 0.0:
 		call_deferred("_shake") ## konum add_child'dan sonra verilebilir: sarsıntı bir kare sonra
@@ -70,6 +71,8 @@ func _play_sound(path: String, db: float, pitch: float) -> AudioStreamPlayer2D:
 
 
 func _shake() -> void:
+	if CameraShakeScript.is_remote_fx(self): ## madde 711: müttefikin yeteneği bu ekranı sallamaz (darbeler dahil)
+		return
 	var at: Vector2 = global_position
 	CameraShakeScript.add_at(at, shake_trauma, shake_radius)
 	if shake_pulses <= 0 or not is_inside_tree():

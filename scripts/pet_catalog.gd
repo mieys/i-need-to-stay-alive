@@ -7,14 +7,14 @@ extends RefCounted
 ##  - kopek: eski Matthew köpeği (player_pet.gd) - yakındaki yaratıklara saldırır, hasar/saldırı hızı/kritik sahibin statlarından.
 ##  - papagan: eski Korsan papağanı (korsan_parrot.gd) - yakındaki ağaçları 3-4 sn gagalayıp yere eşya düşürür (yiyecek / kalkan orbu / mıknatıs / silah parçacığı, değerliler nadir) + LUCK_BONUS şans.
 ##  - kelebek: Kelebek Ruhu (kelebek_ruhu.gd) - KELEBEK_ATTACK_SPEED saldırı hızı + sahibin İLK silahının vurduğu düşmana pembe lazer
-##    atışı (saldırı gücünün KELEBEK_DAMAGE_RATIO kadarı); kuklası ilk olayında kurulur (remote_player.gd kelebek_ruhu_event).
+##    atışı (hedefin mevcut canının KELEBEK_CURRENT_HP_PERCENT'i, boss/elitte KELEBEK_BOSS_CURRENT_HP_PERCENT); kuklası ilk olayında kurulur (remote_player.gd kelebek_ruhu_event).
 ##  - peri: Peri (peri_pet.gd) - sahibin canı eksikken PERI_HEAL_INTERVAL saniyede bir can basar (saldırı gücünün PERI_HEAL_RATIO
 ##    kadarı ya da azami canının PERI_HEAL_MAX_HP_RATIO'su, hangisi büyükse); kuklası ilk olayında kurulur (remote_player.gd peri_event).
 ##  - kirpi: Kirpi (kirpi_pet.gd) - sahibine saldıran yaratıklar sahibinin azami kalkanının KIRPI_REFLECT_RATIO'su kadar hasar alır, kalkan
 ##    varken alınan hasar KIRPI_SHIELD_REDUCTION azalır (player.gd _kirpi_on_hit); dikenleri sahibin görüşünde yaratık varsa açık, yoksa
 ##    kapalı (sadece görsel). Kuklası ilk olayında kurulur (remote_player.gd kirpi_event).
 
-##  - slime: Minik Cadı (iyi slime, slime_pet.gd; madde 509) - +SLIME_AP_PERCENT saldırı gücü (player.gd pet_ap_percent, _refresh_item_ap_percent);
+##  - slime: Minik Cadı (iyi slime, slime_pet.gd; madde 509) - ulti bekleme süresi -SLIME_ULT_CDR (player.gd get_pet_ult_cd_mult; 2026-11-15 saldırı gücü payının yerine);
 ##    sahibi ULTİSİNİ (R) kullanınca, bekleme dolduysa kulakları parlayıp büyü yapar: SLIME_BUFF_TIME sn can/hasar/boyut/menzil +SLIME_BUFF_PERCENT
 ##    (player.gd apply_slime_buff; menzil ince çizgiyle görünür, slime_range_ring.gd). Bekleme SLIME_COOLDOWN.
 ##  - hayalet: Hayalet (hayalet_pet.gd, yarı opak; madde 509) - +HAYALET_DODGE sıvışma; sahibin canı HAYALET_HP_THRESHOLD altına düşünce,
@@ -28,10 +28,15 @@ const NAMES := {"kopek": "Köpek", "papagan": "Papağan", "kelebek": "Kelebek Ru
 const LUCK_BONUS := 10.0
 ## Kelebek Ruhu: saldırı hızı eşyalarla AYNI toplanan havuza girer (item_fire_rate_percent gibi 0.10 = "+%10 saldırı hızı").
 const KELEBEK_ATTACK_SPEED := 0.10
-## Lazer atışının hasarı = sahibin saldırı gücü (damage_bonus) x bu oran.
-const KELEBEK_DAMAGE_RATIO := 0.20
+## Lazer atışının hasarı = hedefin MEVCUT canı x bu oran (2026-11-15 kullanıcı: saldırı gücünün %20'si yerine; boss/elitte az, normalde çok etkili).
+## Saldırı gücüne bakmaz; varışta okunur (silah vuruşundan sonraki can). Canavarlaştırma Özütü (weapon.gd _item_hit_bonus) ile aynı "health" alanı.
+const KELEBEK_CURRENT_HP_PERCENT := 0.06
+const KELEBEK_BOSS_CURRENT_HP_PERCENT := 0.006 ## boss VE elit
 ## Aynı yaratığa en sık bu aralıkla atış (ışın/alev gibi sık vuran silahlarda atış yağmuru olmasın; her atış istemcide host'a bir RPC).
+## 2026-11-15: önce 0,2 -> 0,5 denendi, aynı gün kullanıcı 0,2'ye geri aldı (normal yaratıkta güçlü olsun; hızlı silahta en çok ~%27/sn
+## mevcut can). Boss/elitte saniyede bir ayrı kalır.
 const KELEBEK_SHOT_INTERVAL := 0.2
+const KELEBEK_BOSS_SHOT_INTERVAL := 1.0
 ## Peri: can %100'ün altındayken bu aralıkla can basar; miktar = sahibin saldırı gücü (damage_bonus) x oran.
 const PERI_HEAL_INTERVAL := 6.0
 const PERI_HEAL_RATIO := 0.10
@@ -44,10 +49,10 @@ const KIRPI_REFLECT_RATIO := 0.12
 const KIRPI_SHIELD_REDUCTION := 0.08
 ## Minik Cadı (iyi slime): kalıcı saldırı gücü yüzdesi (item_ap_percent ile AYNI havuz: damage_bonus'u okuyan her yer etkin değeri görür).
 ## Ulti büyüsü: SLIME_BUFF_TIME sn boyunca azami can, saldırı gücü (= hasar), karakter boyu ve silah menzili +SLIME_BUFF_PERCENT.
-const SLIME_AP_PERCENT := 0.08 ## 2026-11-14 denge turu: 0,05 -> 0,08
+const SLIME_ULT_CDR := 0.15 ## 2026-11-15 kullanıcı: kalıcı +%8 saldırı gücü kalktı -> ulti bekleme süresi -%15 (cooldown_reduction sınırı dışında, çarpımsal)
 const SLIME_BUFF_PERCENT := 0.15
 const SLIME_BUFF_TIME := 8.0
-const SLIME_COOLDOWN := 90.0 ## 2026-11-09 kullanıcı: 120 -> 90 (madde 513)
+const SLIME_COOLDOWN := 60.0 ## 2026-11-15 kullanıcı: 90 -> 60 (önce 2026-11-09 120 -> 90, madde 513)
 ## Hayalet: sıvışma stat olarak eklenir (kart/eşya sıvışmasıyla aynı sınır). Can bu oranın altına düşünce kaplar.
 const HAYALET_DODGE := 0.05
 const HAYALET_HP_THRESHOLD := 0.25
@@ -56,10 +61,10 @@ const HAYALET_COOLDOWN := 80.0 ## 2026-11-09 kullanıcı: 90 -> 80 (madde 513)
 const DESCRIPTIONS := {
 	"kopek": "Yakındaki yaratıklara saldırır. Statları senin statlarınla aynıdır.",
 	"papagan": "Ağaçları gagalayıp yere eşya düşürür (yiyecek, kalkan, nadiren mıknatıs/parçacık). +10 şans verir.",
-	"kelebek": "+%10 saldırı hızı. İlk silahının vurduğuna lazer atar (%20 saldırı gücü).",
+	"kelebek": "+%10 saldırı hızı. İlk silahının vurduğuna lazer atar (mevcut canının %6'sı, boss ve elitlere %0,6).",
 	"peri": "Canın eksikken 6 saniyede bir can basar (saldırı gücünün %10'u ya da azami canının %1,5'i, hangisi büyükse).",
 	"kirpi": "Saldıran yaratıklar mana kalkanı gücünün %12'si kadar hasar alır. Mana kalkanın varken %8 az hasar alırsın.",
-	"slime": "+%8 saldırı gücü. Ultini kullanınca büyü yapar: 8 sn canın, hasarın, boyun ve menzilin %15 artar. (90 sn bekleme)",
+	"slime": "Ulti bekleme süren %15 azalır (bekleme süresi azaltma sınırından ayrı hesaplanır). Ultini kullanınca büyü yapar: 8 sn canın, hasarın, boyun ve menzilin %15 artar. (60 sn bekleme)",
 	"hayalet": "+%5 sıvışma. Canın %25'in altına düşünce üstünü kaplar: 8 sn görünmez ve dokunulmaz olursun. (80 sn bekleme)",
 }
 ## Ikon: oyundaki hayvanın kendi sprite karesi (yeni sanat yok) - bkz. icon().

@@ -183,8 +183,8 @@ func _d_mode_box() -> PanelContainer:
 	head.add_child(back)
 	v.add_child(head)
 	var chips := DK.h(8)
-	chips.add_child(DK.chip(DK.G_GLOBE, "İnternet + LAN" if NetworkManager.is_online_available() else "Sadece LAN", DK.C_DIM))
-	chips.add_child(DK.chip(DK.G_PERSON, Loc.t("%d-%d kişi") % [NetworkManager.ROOM_MIN_PLAYERS, NetworkManager.MAX_PLAYERS], DK.C_DIM))
+	chips.add_child(DK.chip(DK.I_ONLINE, "İnternet + LAN" if NetworkManager.is_online_available() else "Sadece LAN", DK.C_DIM))
+	chips.add_child(DK.chip(DK.I_PLAYERS, Loc.t("%d-%d kişi") % [NetworkManager.ROOM_MIN_PLAYERS, NetworkManager.MAX_PLAYERS], DK.C_DIM))
 	v.add_child(chips)
 	_status_label = DK.wrap("", DK.FS_LABEL, DK.C_DIM, D_LEFT.size.x - 28, 3)
 	v.add_child(_status_label)
@@ -320,9 +320,9 @@ func _d_col_size(c: Control, i: int) -> void:
 
 
 ## Glif + yazı hücresi (sabit genişlikte).
-func _d_cell(i: int, pat: Array, t: String, col: Color) -> HBoxContainer:
+func _d_cell(i: int, tex: Texture2D, t: String, col: Color) -> HBoxContainer:
 	var hb := DK.h(8)
-	hb.add_child(DK.glyph(pat, col, 3))
+	hb.add_child(DK.room_icon(tex)) ## oda ikonları Raven 16x16 (madde 757)
 	var l := DK.lbl(t, DK.FS_LABEL, col)
 	l.clip_text = true
 	l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -347,11 +347,11 @@ func _d_room_row(r: Dictionary) -> Button:
 	var nm := DK.lbl(_room_title(r), DK.FS_BODY, DK.C_ACCENT if open else (DK.C_DIM if muted else DK.C_TEXT))
 	_d_col_size(nm, 0)
 	cols.add_child(nm)
-	cols.add_child(_d_cell(1, DK.G_CROWN, str(r["host_name"]), DK.C_DIM))
-	cols.add_child(_d_cell(2, DK.G_PERSON, "%d/%d" % [int(r["players"]), int(r["max_players"])], DK.C_BAD if full else DK.C_TEXT))
-	cols.add_child(_d_cell(3, DK.G_GLOBE, "İnternet" if r["kind"] == "online" else "LAN", DK.C_DIM))
+	cols.add_child(_d_cell(1, DK.I_HOST, str(r["host_name"]), DK.C_DIM))
+	cols.add_child(_d_cell(2, DK.I_PLAYERS, "%d/%d" % [int(r["players"]), int(r["max_players"])], DK.C_BAD if full else DK.C_TEXT))
+	cols.add_child(_d_cell(3, DK.I_ONLINE, "İnternet" if r["kind"] == "online" else "LAN", DK.C_DIM))
 	var locked: bool = bool(r["locked"])
-	cols.add_child(_d_cell(4, DK.G_LOCK if locked else DK.G_OPEN, "Şifreli" if locked else "Açık", DK.C_PRICE if locked else DK.C_DIM))
+	cols.add_child(_d_cell(4, DK.I_LOCKED if locked else DK.I_OPEN, "Şifreli" if locked else "Şifresiz", DK.C_PRICE if locked else DK.C_DIM))
 	var status: String = "Oyunda" if in_game else ("Dolu" if full else "Lobide")
 	var st := DK.lbl(status, DK.FS_LABEL, DK.C_PRICE if in_game else (DK.C_BAD if full else DK.C_GOOD))
 	_d_col_size(st, 5)
@@ -367,7 +367,7 @@ func _d_password_row(r: Dictionary) -> PanelContainer:
 	var box := DK.box(DK.C_INSET, DK.C_ACCENT_DK, 12)
 	var v := DK.v(6)
 	var row := DK.h(12)
-	row.add_child(DK.glyph(DK.G_LOCK, DK.C_PRICE, 3))
+	row.add_child(DK.room_icon(DK.I_LOCKED))
 	row.add_child(DK.lbl("Şifre:", DK.FS_LABEL, DK.C_TEXT))
 	_pw_input = _d_input("", "Oda şifresi", PASSWORD_MAX_LEN)
 	_pw_input.secret = true
@@ -397,7 +397,7 @@ func _d_empty(msg: String, searching: bool) -> Control:
 	var v := DK.v(10)
 	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	v.add_child(DK.sp(0, 180))
-	var g := DK.glyph(DK.G_GLOBE if searching else DK.G_PERSON, DK.C_LINE_HI, 6)
+	var g := DK.room_icon(DK.I_ONLINE if searching else DK.I_PLAYERS, 3)
 	g.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	v.add_child(g)
 	v.add_child(DK.lbl(msg, DK.FS_BODY, DK.C_DIM, HORIZONTAL_ALIGNMENT_CENTER))
@@ -410,7 +410,7 @@ func _d_empty(msg: String, searching: bool) -> Control:
 func _d_ip_box() -> PanelContainer:
 	var box := DK.box(DK.C_PANEL, DK.C_LINE, 14)
 	var row := DK.h(12)
-	row.add_child(DK.glyph(DK.G_GLOBE, DK.C_DIM, 3))
+	row.add_child(DK.room_icon(DK.I_ONLINE))
 	row.add_child(DK.lbl("Listede yok mu? IP ile katıl:", DK.FS_LABEL, DK.C_DIM))
 	_ip_input = _d_input("", "192.168.1.50:7777", 64)
 	_ip_input.text_submitted.connect(func(_t: String) -> void: _on_ip_join_pressed())

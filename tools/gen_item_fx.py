@@ -78,117 +78,6 @@ def shield_shape(im, cx, cy, w, h, pal, a=1.0):
 
 # ---------------------------------------------------------------- Zaman Kıran: buzlu saat kadranı açılır, akrep geri döner,
 # kadran buz kıymıklarına dağılır (ölümsüzlük + donma anı)
-def time_freeze():
-    frames = []
-    n = 14
-    S = 60
-    cx, cy = S / 2, S / 2 - 2
-    rnd = random.Random(7)
-    shards = [(rnd.uniform(0, TAU), rnd.uniform(0.8, 1.2)) for _ in range(12)]
-    for i in range(n):
-        t = i / (n - 1)
-        im = new(S, S)
-        if i <= 8:
-            g = ease_out(min(1.0, i / 4.0))
-            r = 8 + 16 * g
-            fade = 1.0 if i < 7 else 0.8
-            thick_ring(im, cx, cy, r, 3.0, ICE, fade, 0.92)
-            # 12 saat işareti
-            for k in range(12):
-                a = TAU * k / 12
-                x = cx + math.cos(a) * (r - 4.5)
-                y = cy + math.sin(a) * (r - 4.5) * 0.92
-                plot(im, x, y, GOLD[3] if k % 3 == 0 else ICE[3], fade)
-            # akrep/yelkovan geri sarar
-            ang = -math.pi / 2 - t * TAU * 1.6
-            line(im, cx, cy, cx + math.cos(ang) * (r - 6), cy + math.sin(ang) * (r - 6) * 0.92, ICE[4], fade)
-            ang2 = -math.pi / 2 - t * TAU * 0.4
-            line(im, cx, cy, cx + math.cos(ang2) * (r - 10), cy + math.sin(ang2) * (r - 10) * 0.92, GOLD[3], fade)
-            disc(im, cx, cy, 1.5, ICE[4], fade)
-            if i in (1, 2):
-                disc(im, cx, cy, 6 - i, ICE[4], 0.8)
-        if i >= 6:
-            u = (i - 6) / (n - 7)
-            for (a, sp) in shards:
-                d = 22 + 12 * ease_out(u) * sp
-                x = cx + math.cos(a) * d
-                y = cy + math.sin(a) * d * 0.92
-                ln = max(0.0, 3.0 * (1.0 - u))
-                line(im, x, y, x + math.cos(a) * ln, y + math.sin(a) * ln * 0.92, ICE[3] if u < 0.5 else ICE[2], 1.0 - 0.6 * u)
-                if u < 0.4:
-                    plot(im, x, y, ICE[4], 1.0)
-        outline(im, ICE[0], 0.8)
-        frames.append(im)
-    save("time_freeze", frames, fps=14.0)
-
-
-# ---------------------------------------------------------------- Güneşin İradesi: arkada güneş diski + ışınlar, öne altın kalkan
-def sun_will():
-    frames = []
-    n = 14
-    S = 64
-    cx, cy = S / 2, S / 2 - 4
-    for i in range(n):
-        t = i / (n - 1)
-        im = new(S, S)
-        g = ease_out(min(1.0, i / 5.0))
-        fade = 1.0 if t < 0.65 else max(0.0, 1.0 - (t - 0.65) / 0.35)
-        rays = 12
-        for k in range(rays):
-            a = TAU * k / rays + t * 0.6
-            r0 = 9 * g
-            r1 = (16 + (6 if k % 2 == 0 else 2)) * g + 6 * t
-            w = 2.2 if k % 2 == 0 else 1.4
-            for s in range(int(r1 - r0) + 1):
-                rr = r0 + s
-                taper = 1.0 - s / max(1.0, r1 - r0)
-                x = cx + math.cos(a) * rr
-                y = cy + math.sin(a) * rr
-                disc(im, x, y, max(0.5, w * taper), SUN[3] if s < (r1 - r0) * 0.6 else SUN[2], fade)
-        disc(im, cx, cy, 8.5 * g, SUN[2], fade)
-        disc(im, cx - 1.5, cy - 1.5, 6.0 * g, SUN[3], fade)
-        disc(im, cx - 2.5, cy - 2.5, 2.5 * g, SUN[4], fade)
-        if i >= 3:
-            u = min(1.0, (i - 3) / 3.0)
-            shield_shape(im, cx, cy + 12, 6 * u, 7 * u, GOLD, fade)
-        if i in (0, 1):
-            disc(im, cx, cy, 5 + 3 * i, SUN[4], 1.0)
-        outline(im, SUN[0], 0.8 * fade)
-        frames.append(im)
-    save("sun_will", frames, fps=14.0)
-
-
-# ---------------------------------------------------------------- Ölüm Eşiği: mavi kalkan arması parlar, halka dalgası, kırıntılar
-def death_threshold():
-    frames = []
-    n = 12
-    S = 52
-    cx, cy = S / 2, S / 2 - 2
-    rnd = random.Random(3)
-    bits = [(rnd.uniform(0, TAU), rnd.uniform(0.7, 1.2)) for _ in range(9)]
-    for i in range(n):
-        t = i / (n - 1)
-        im = new(S, S)
-        g = ease_out(min(1.0, i / 3.0))
-        fade = 1.0 if t < 0.6 else max(0.0, 1.0 - (t - 0.6) / 0.4)
-        r = 10 + 13 * ease_out(t)
-        thick_ring(im, cx, cy, r, max(1.0, 3.0 * (1.0 - t)), SHIELD, fade * 0.9, 0.85,
-                   gap_fn=(lambda a, tt=t: tt > 0.5 and math.sin(a * 5 + 1.3) > 1.6 - 2.2 * tt))
-        if i < 9:
-            shield_shape(im, cx, cy, 7 * g, 9 * g, SHIELD, 1.0 if i < 7 else 0.55)
-        if i >= 6:
-            u = (i - 6) / (n - 7)
-            for (a, sp) in bits:
-                d = 8 + 14 * u * sp
-                plot(im, cx + math.cos(a) * d, cy + math.sin(a) * d * 0.85, SHIELD[3], 1.0 - u)
-        if i == 1:
-            disc(im, cx, cy, 9, SHIELD[4], 0.8)
-        outline(im, SHIELD[0], 0.8 * fade)
-        frames.append(im)
-    save("death_threshold", frames, fps=16.0)
-
-
-# ---------------------------------------------------------------- Aegis: gövdeden yukarı süzülen 3 küçük kalkan kıvılcımı
 def aegis():
     frames = []
     n = 10
@@ -405,7 +294,8 @@ def azrail_mark():
     save("azrail_mark", frames, fps=16.0)
 
 
-ALL = [time_freeze, sun_will, death_threshold, aegis, phoenix, crimson_harvest, kings_chalice, blood_shield, light_guard,
+## time_freeze / sun_will / death_threshold silindi (madde 742: kodla çizilen fx_item_eclipse / sun_halo / antler_arch)
+ALL = [aegis, phoenix, crimson_harvest, kings_chalice, blood_shield, light_guard,
        azrail_mark]
 
 if __name__ == "__main__":

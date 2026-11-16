@@ -32,6 +32,8 @@ var _pulse_time: float = 0.0
 ## okuma) hiç değişmez.
 var name_override: String = ""
 var desc_override: String = ""
+## desc_override'ın kısa hâli (madde 756): Shift basılı değilken gösterilir; boşsa desc_override.
+var short_override: String = ""
 ## >= 0 ise ipucundaki bekleme süresi (taban, sn) bu - yeteneğin kendi zamanlama tablosu yerine (Shaman golem formunda Q/E'nin
 ## form hâlleri kendi sayaçlarıyla çalışır, bkz. player.gd get_hud_skill_override / hud.gd _apply_hud_skill_override).
 var cooldown_override: float = -1.0
@@ -126,6 +128,9 @@ func _on_mouse_entered() -> void:
 		var pn: Array = _split_passive_name(desc)
 		title = str(def.get("passive_name", pn[0] if pn[0] != "" else def.get("name", "Pasif Yetenek")))
 		desc = pn[1]
+		if not _tooltip_shift: ## kısa metin (madde 756); başlık yine uzun metindeki addan
+			var sp: Array = _split_passive_name(tr(Characters.short_desc(def, "passive")))
+			desc = sp[1]
 		keybind_text = ""
 		kind_fallback = "PASİF"
 	elif name == "SkillIcon":
@@ -133,8 +138,10 @@ func _on_mouse_entered() -> void:
 		if not name_override.is_empty():
 			title = name_override
 		desc = def.get("skill_desc", "Aktif yetenek açıklaması bulunmuyor.") as String
+		if not _tooltip_shift:
+			desc = Characters.short_desc(def, "skill")
 		if not desc_override.is_empty():
-			desc = desc_override
+			desc = desc_override if _tooltip_shift or short_override.is_empty() else short_override
 		keybind_text = GameManager.get_action_hint_label("skill")
 
 		var base_cd: float = 20.0
@@ -158,7 +165,7 @@ func _on_mouse_entered() -> void:
 		## "Bekleme Süresi Azaltma" statından etkilenmez (kullanıcı isteği) - bu yüzden "taban" karşılaştırması yok.
 		var spirit_def: Dictionary = SpiritualSkillsScript.get_def(GameManager.selected_spiritual)
 		title = str(spirit_def.get("name", "Ruhani Yetenek"))
-		desc = str(spirit_def.get("desc", ""))
+		desc = str(spirit_def.get("desc", "")) if _tooltip_shift else SpiritualSkillsScript.short_desc(GameManager.selected_spiritual)
 		kind_fallback = "RUHANİ"
 		if bool(spirit_def.get("active", false)):
 			keybind_text = GameManager.get_action_hint_label("skill4")
@@ -176,8 +183,10 @@ func _on_mouse_entered() -> void:
 		if not name_override.is_empty():
 			title = name_override
 		desc = def.get("skill3_desc", "3. yetenek açıklaması bulunmuyor.") as String
+		if not _tooltip_shift:
+			desc = Characters.short_desc(def, "skill3")
 		if not desc_override.is_empty():
-			desc = desc_override
+			desc = desc_override if _tooltip_shift or short_override.is_empty() else short_override
 		keybind_text = GameManager.get_action_hint_label("skill3")
 		kind_fallback = "ULTİ"
 
@@ -213,8 +222,10 @@ func _on_mouse_entered() -> void:
 		if not name_override.is_empty():
 			title = name_override
 		desc = def.get("skill2_desc", "Temel yetenek açıklaması bulunmuyor.") as String
+		if not _tooltip_shift:
+			desc = Characters.short_desc(def, "skill2")
 		if not desc_override.is_empty():
-			desc = desc_override
+			desc = desc_override if _tooltip_shift or short_override.is_empty() else short_override
 		keybind_text = GameManager.get_action_hint_label("skill2")
 		kind_fallback = "TEMEL"
 
@@ -362,9 +373,12 @@ func _on_mouse_entered() -> void:
 		stats_well.add_child(lbl_detail)
 		_detail_label = lbl_detail
 		_detail_t = DETAIL_REFRESH
-	else:
+	## Shift basılı değilken altta tek satır ipucu (madde 756: Shift = ayrıntılı açıklama; Q/E/R'de ayrıca bu oyundaki etkisi).
+	if not _tooltip_shift:
 		var lbl_hint: RichTextLabel = HudTooltip.make_rich(MenuKit.FS_SMALL, HudTheme.DIM)
-		lbl_hint.text = tr("%s basılı tut: bu oyundaki etkisi") % ("[color=#%s]Shift[/color]" % HudTheme.TEXT.to_html(false))
+		var pf: bool = slot == DamageStats.SLOT_P or slot == DamageStats.SLOT_F
+		var hint_fmt: String = tr("%s basılı tut: ayrıntılı açıklama") if pf else tr("%s basılı tut: ayrıntı ve bu oyundaki etkisi")
+		lbl_hint.text = hint_fmt % ("[color=#%s]Shift[/color]" % HudTheme.TEXT.to_html(false))
 		vbox.add_child(lbl_hint)
 
 	hud_layer.add_child(tooltip_panel)

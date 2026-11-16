@@ -7,7 +7,12 @@ const SwordSwingMath := preload("res://scripts/sword_swing_math.gd")
 
 
 func test_every_weapon_has_a_crit_style() -> void:
+	## Kritiği kendi saldırı matematiğinde oynayanlar (STYLES'a girmez): Mızrak = mizrak_thrust_math.gd play(crit),
+	## Kalkan = kalkan_bash_math.gd play(crit) / spawn_ghosts(crit). (2026-11-16)
+	var own_crit := ["mizrak", "kalkan"]
 	for key in EnchantPool.WEAPON_ICONS:
+		if own_crit.has(str(key)):
+			continue
 		assert(WeaponCritAnim.kind_of(str(key)) != "", "%s silahının kritik animasyonu yok (STYLES'a ekle)" % key)
 
 

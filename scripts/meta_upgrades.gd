@@ -25,7 +25,7 @@ const FLAT := "flat"
 const COUNT := "count"
 
 ## Her satır: id, name, desc, icon (stat_icon.gd ICON_PATHS anahtarı, "" = ikonsuz), max (seviye sayısı), per (seviye başı etki), unit,
-## first (1. seviye bedeli), step (her seviyede bedele eklenen).
+## first (1. seviye bedeli), step (her seviyede bedele eklenen). İsteğe bağlı "short": dar yerde (seçim ekranı orta paneli) gösterilen kısa ad.
 const LIST: Array = [
 	{"id": "pickup", "name": "Toplama Mesafesi", "desc": "Altın, XP ve eşyaları daha uzaktan toplarsın.", "icon": "pickup_range",
 		"max": 10, "per": 0.08, "unit": PCT, "first": 10, "step": 6},
@@ -45,7 +45,8 @@ const LIST: Array = [
 	## 2026-11-08 (kullanıcı: "can çalma da aynı şekilde çok zayıf"): seviye başı %0,2 -> %1,5 (10 seviyede %2 -> %15 isabet başına +1 can şansı).
 	## Eski toplam = tek bir 1. kademe kart (%2), yani diğer geliştirmelerin 1/3-1/5'i; yeni = kart T1 x7,5 / T4 x1,9 (Saldırı Gücü 5x / 2,6x, Kalkan Yenilenmesi 5x / 2x),
 	## fiyat (740) Can Yenilenmesi'nden (510) pahalı olduğu için biraz daha yüksek. Genel can çalma kuralı (LIFESTEAL_HEAL 1, alan %33) DEĞİŞMEDİ.
-	{"id": "lifesteal", "name": "Can Çalma", "desc": "Verdiğin hasarın bir kısmı sana can olarak döner.", "icon": "lifesteal",
+	## "1" GameManager.LIFESTEAL_HEAL ile aynı olmalı (cila A5; doğru anlatım stats_panel.gd'de de var)
+	{"id": "lifesteal", "name": "Can Çalma", "desc": "Her isabette bu ihtimalle 1 can yenilersin (alan hasarında etkisi %33).", "icon": "lifesteal",
 		"max": 10, "per": 0.015, "unit": PCT, "first": 20, "step": 12},
 	{"id": "speed", "name": "Hareket Hızı", "desc": "Daha hızlı koşarsın.", "icon": "speed",
 		"max": 8, "per": 0.015, "unit": PCT, "first": 20, "step": 12},
@@ -53,7 +54,7 @@ const LIST: Array = [
 		"max": 8, "per": 0.04, "unit": PCT, "first": 18, "step": 10},
 	{"id": "shield_regen", "name": "Kalkan Yenilenmesi", "desc": "Mana kalkanın saniyede daha çok yenilenir.", "icon": "shield_regen",
 		"max": 10, "per": 0.4, "unit": FLAT, "first": 15, "step": 8},
-	{"id": "heal_power", "name": "İyileştirme ve Kalkan Gücü", "desc": "Sağladığın tüm can ve kalkan büyür.", "icon": "heal_power",
+	{"id": "heal_power", "name": "İyileştirme ve Kalkan Gücü", "short": "Şifa Gücü", "desc": "Sağladığın tüm can ve kalkan büyür.", "icon": "heal_power",
 		"max": 8, "per": 0.025, "unit": PCT, "first": 25, "step": 14},
 	{"id": "crit_chance", "name": "Kritik Oran", "desc": "Kritik vuruş şansın artar.", "icon": "crit_chance",
 		"max": 10, "per": 0.01, "unit": PCT, "first": 20, "step": 11},
@@ -67,7 +68,7 @@ const LIST: Array = [
 		"max": 5, "per": 0.02, "unit": PCT, "first": 45, "step": 35},
 	{"id": "free_reroll", "name": "Ücretsiz Karıştırma", "desc": "Her level atlama kartında karıştırmanın ilki bedava.", "icon": "free_reroll",
 		"max": 1, "per": 1.0, "unit": COUNT, "first": 300, "step": 0},
-	{"id": "evo_reroll", "name": "Evrim Karıştırma", "desc": "Oyun başına ücretsiz evrim kartı karıştırma hakkın 1'den 2'ye çıkar.", "icon": "evo_reroll",
+	{"id": "evo_reroll", "name": "Evrim Karıştırma", "short": "Evrim Yenile", "desc": "Oyun başına ücretsiz evrim kartı karıştırma hakkın 1'den 2'ye çıkar.", "icon": "evo_reroll",
 		"max": 1, "per": 1.0, "unit": COUNT, "first": 300, "step": 0},
 	{"id": "revive", "name": "Dirilme Hakkı", "desc": "Her koşuya +1 dirilme hakkıyla başlarsın.", "icon": "revive",
 		"max": 1, "per": 1.0, "unit": COUNT, "first": 600, "step": 0},

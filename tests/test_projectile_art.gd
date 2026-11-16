@@ -36,7 +36,8 @@ func test_every_art_projectile_gets_new_body_and_trail() -> void:
 		var has_trail: bool = int(cfg["tf"]) > 0 ## Zehir Asası damlası (madde 410): iz şeridi yok, damlalar poison_drip_fx.gd
 		assert(body != null and (trail != null) == has_trail, "%s: gövde + iz" % key)
 		assert(not body.visible and (trail == null or not trail.visible), "%s: yön belli olana dek gizli" % key)
-		assert(is_equal_approx(body.scale.x, WeaponTierArt.PUPPET_ICON_SCALE), "%s: gövde silah pikselinde" % key)
+		## madde 749: "wpx" (Kaos / Kabarcık 1 dünya px) yoksa silah pikseli
+		assert(is_equal_approx(body.scale.x, WeaponTierArt.PUPPET_ICON_SCALE * ProjectileArt.world_px(key) / ProjectileArt.WORLD_PX), "%s: gövde pikseli" % key)
 		var tex: Texture2D = _body_tex(body)
 		assert(tex.resource_path == ProjectileArt.DIR + str(cfg["name"]) + "_govde.png", "%s: yeni gövde dokusu" % key)
 		assert(tex.get_width() % int(cfg["bf"]) == 0 and (tex.get_width() / int(cfg["bf"])) % 2 == 1 and tex.get_height() % 2 == 1,
@@ -64,18 +65,19 @@ func test_body_faces_flight_direction_despite_weapon_offset() -> void:
 		var body: Node2D = p.get("_art_body")
 		var trail: AnimatedSprite2D = p.get("_trail")
 		assert(body.visible and (trail == null or trail.visible), "%s: ilk adımda açılır" % key)
-		assert(absf(angle_difference(body.global_rotation, dir.angle())) < 0.001, "%s: gövde uçuş yönünde" % key)
+		var want: float = dir.angle() if ProjectileArt.rotates(key) else 0.0 ## madde 749: Kabarcık dönmez
+		assert(absf(angle_difference(body.global_rotation, want)) < 0.001, "%s: gövde uçuş yönünde (dönmeyen dik)" % key)
 		if trail != null: ## Zehir Asası damlasının (dart_projectile, madde 410) iz şeridi yok
 			assert(absf(angle_difference(trail.global_rotation, dir.angle())) < 0.001, "%s: iz uçuş yönünde" % key)
-			assert(is_equal_approx(trail.global_scale.x, ProjectileArt.WORLD_PX), "%s: iz silah pikselinde (global)" % key)
+			assert(is_equal_approx(trail.global_scale.x, ProjectileArt.world_px(key)), "%s: iz kendi pikselinde (global)" % key)
 		if is_instance_valid(p):
 			p.queue_free()
 
 
 func test_particle_styles_and_mapping() -> void:
 	var map: Dictionary = ProjectileScript.get_script_constant_map()["PARTICLE_TRAILS"]
-	assert(not map.has("dart_projectile") and map["arcane_projectile"] == "arcane_c" and map["ice_bolt_projectile"] == "buz_c",
-			"yeni parçacık stilleri bağlı (Zehir Asası damlaları poison_drip_fx.gd, madde 410)")
+	assert(not map.has("dart_projectile") and not map.has("arcane_projectile") and map["ice_bolt_projectile"] == "buz_c",
+			"parçacık stilleri: Zehir pufu poison_drip_fx.gd, Arcane Kaos yırtık izi sayfada (madde 749)")
 	for st in ["zehir_damla", "arcane_c", "buz_c", "fisek_kivilcim", "fisek_duman"]:
 		var cfg: Dictionary = ParticleTrail.STYLES[st]
 		var cell: int = int(cfg["cell"])

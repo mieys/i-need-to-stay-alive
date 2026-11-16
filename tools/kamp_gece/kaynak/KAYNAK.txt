@@ -1,0 +1,5 @@
+Craftpix "Night Camp Pixel Art Pack with NPC Characters" (craftpix-net-137589), kullanıcının verdiği arşivden (2026-11-15).
+Lisans: License.txt (https://craftpix.net/file-licenses/). Yalnız kullanılan dosyalar kopyalandı:
+- Bonfire.png  (PNG/Ruins_bonfire_fit1/Bonfire.png)  - 6 kare x 48x80 kamp ateşi
+- Objects.png  (PNG/Objects.png)                     - eşyalar (kılıç, çanta, kese...)
+Kullanan: tools/proto_20261115/kamp_menu/gen_kamp_kareler.py -> assets/ui/ana_menu/gece_kamp_atesi*.png, kamp_esya_*.png (ana menü sahnesi).

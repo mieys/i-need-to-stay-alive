@@ -1,6 +1,8 @@
 extends Node2D
 
 ## ZEHİR ASASI "A - Zehir Damlası" damlaları (madde 410; prototip tools/proto_20261106/zehir_asasi_proto.py, kullanıcı seçimi A).
+## MADDE 749 (2026-11-16, kullanıcı "B - Kabarcık"ı seçti): mermi izi artık PUF (trail_puff), isabet fx_hit_kabarcik.tscn (projectile.gd
+## impact_scene), sıçrama kabarcık + bulut + kırılma (aşağıda). trail_drop / splash duruyor (testler; asa ucu damlası tip_drop hâlâ A).
 ## - Mermi izi (projectile.gd, dart_projectile): uçan damlanın kuyruğundan TRAIL_RATE/sn damla kopar, yerçekimiyle uçuşun ALTINDAKİ
 ##   zemine düşer ve küçük gölcük olur. Merminin yerden yüksekliği bilinmez (uzak kopyada sahip yok, konum _ready'den sonra gelir):
 ##   iki tarafta AYNI sabit model - silahtan çıkışta H_START, H_BLEND px uçunca H_END (hedefin gövdesi) (`trail_height`).
@@ -43,7 +45,25 @@ const SPLASH_N := 6
 const SPLASH_BODY := 10.0 ## isabet noktası ayak hizasındaysa (kaster mermiyi yaratığın konumuna ışınlar) gövdenin bu kadar üstünden
 ## Sıçrayan Zehir (madde 592): cesetten hedefe yay çizen damla = asanın mermi gövdesi (aynı doku/piksel), uçuş yönüne döner, varınca
 ## normal isabetin taç sıçraması. Gövde hizasından kalkar/iner (SPLASH_BODY), tepe yüksekliği mesafeyle (LEAP_ARC_*).
-const LEAP_BODY := preload("res://assets/weapons/mermi/zehir_govde.png")
+## Madde 749 (Zehir Asası "B - Kabarcık", kullanıcı seçimi 2026-11-16; sayfalar tools/gen_asa_efekt_fx.py, 1 sanat px = 1 dünya birimi):
+## sıçrayan damla artık asanın KABARCIĞI (dönmez, esner), arkasında kabaran puflar; kalkışta cesetten temiz zehir bulutu, varışta normal
+## isabetin kırılması (fx_hit_kabarcik.tscn). Gölcük / taç sıçraması sıçramada yok.
+const LEAP_BODY := preload("res://assets/weapons/mermi/kabarcik_govde.png")
+const LEAP_BODY_FRAMES := 6
+const LEAP_BODY_FPS := 18.0
+const LEAP_WPX := 1.0
+const HitScene := preload("res://scenes/fx_hit_kabarcik.tscn")
+const CloudScene := preload("res://scenes/fx_zehir_bulut.tscn")
+## Kabarcık mermisinin izi (madde 749): kuyrukta doğan, yukarı süzülürken kabarıp düz alfa basamaklarıyla sönen puflar (yerde kalmaz).
+const PUFF_TEX := preload("res://assets/fx/poison/kabarcik_puf.png")
+const PUFF_CELL := 10
+const PUFF_CELLS := 6 ## r 1,5 -> 4 (hücre başına)
+const PUFF_RATE := 20.0 ## puf / sn
+const PUFF_BACK := 4.0
+const PUFF_LIFE := 0.35
+const PUFF_ALPHA := 0.45
+const PUFF_RISE := 6.0 ## dünya px/sn yukarı
+const MAX_PUFFS := 160
 const LEAP_ARC_K := 0.3
 const LEAP_ARC_MIN := 10.0
 const LEAP_ARC_MAX := 28.0
@@ -51,7 +71,8 @@ const MAX_LEAPS := 24
 
 var _drops: Array = [] ## {g: Vector2, z, vz, vx, k}
 var _puddles: Array = [] ## {p: Vector2, t, life, k}
-var _leaps: Array = [] ## {a: Vector2, b: Vector2, t, dur, arc}
+var _leaps: Array = [] ## {a: Vector2, b: Vector2, t, dur, arc, acc}
+var _puffs: Array = [] ## {g: Vector2, t}
 var _ground: Node2D = null
 
 
@@ -71,6 +92,14 @@ static func trail_drop(tree: SceneTree, from: Vector2, dir: Vector2, traveled: f
 	var gy: float = from.y + trail_height(traveled)
 	var vy: float = dir.y * 40.0 + randf_range(0.0, 20.0)
 	m.call("_add", Vector2(from.x + randf_range(-1.0, 1.0), gy), gy - from.y, -vy, dir.x * 40.0, K_DROP)
+
+
+## Kabarcık mermisinin puf izi (madde 749): at = kuyruk (dünya).
+static func trail_puff(tree: SceneTree, at: Vector2) -> void:
+	var m := _mgr(tree)
+	if m == null:
+		return
+	m.call("_add_puff", at)
 
 
 ## Uçuşun altındaki zeminin mermiden uzaklığı (sabit model, bkz. üst not).
@@ -169,8 +198,26 @@ func _add_puddle(p: Vector2, k: int, life: float) -> void:
 func _add_leap(a: Vector2, b: Vector2, dur: float) -> void:
 	if _leaps.size() >= MAX_LEAPS:
 		_leaps.pop_front()
-	_leaps.append({"a": a, "b": b, "t": 0.0, "dur": dur, "arc": leap_arc(a, b)})
+	_leaps.append({"a": a, "b": b, "t": 0.0, "dur": dur, "arc": leap_arc(a, b), "acc": 0.0})
+	_spawn_scene(CloudScene, Vector2(a.x, a.y - SPLASH_BODY)) ## zehirli ölüm: cesetten temiz zehir bulutu (madde 749)
 	set_process(true)
+
+
+func _add_puff(g: Vector2) -> void:
+	if _puffs.size() >= MAX_PUFFS:
+		_puffs.pop_front()
+	_puffs.append({"g": g, "t": 0.0})
+	set_process(true)
+
+
+## Tek seferlik isabet / bulut sahnesi (fx_animation.gd kendini siler). leap() her makinede RPC'den çağrıldığı için yerel yeterli.
+func _spawn_scene(ps: PackedScene, at: Vector2) -> void:
+	var parent: Node = get_parent()
+	if parent == null or ps == null:
+		return
+	var fx: Node2D = ps.instantiate() as Node2D
+	parent.add_child(fx)
+	fx.global_position = at
 
 
 func _process(delta: float) -> void:
@@ -197,7 +244,21 @@ func _process(delta: float) -> void:
 		if float(l["t"]) >= float(l["dur"]):
 			_leaps.remove_at(i)
 			var b: Vector2 = l["b"]
-			splash(get_tree(), b, b.y) ## varış = normal isabetin taç sıçraması (ek düğüm yok)
+			_spawn_scene(HitScene, Vector2(b.x, b.y - SPLASH_BODY)) ## varış = normal isabetin kırılması (madde 749)
+			continue
+		## yolda puf izi (mermiyle aynı sıklık)
+		l["acc"] = float(l["acc"]) + PUFF_RATE * delta
+		if float(l["acc"]) >= 1.0:
+			l["acc"] = float(l["acc"]) - 1.0
+			var u: float = clampf(float(l["t"]) / float(l["dur"]), 0.0, 1.0)
+			_add_puff(leap_point(l["a"], l["b"], float(l["arc"]), u))
+		i += 1
+	i = 0
+	while i < _puffs.size():
+		var pf: Dictionary = _puffs[i]
+		pf["t"] = float(pf["t"]) + delta
+		if float(pf["t"]) >= PUFF_LIFE:
+			_puffs.remove_at(i)
 			continue
 		i += 1
 	i = 0
@@ -211,7 +272,7 @@ func _process(delta: float) -> void:
 	queue_redraw()
 	if is_instance_valid(_ground):
 		_ground.queue_redraw()
-	if _drops.is_empty() and _puddles.is_empty() and _leaps.is_empty():
+	if _drops.is_empty() and _puddles.is_empty() and _leaps.is_empty() and _puffs.is_empty():
 		set_process(false)
 
 
@@ -222,19 +283,27 @@ func _draw() -> void:
 			k = K_FAST
 		var g: Vector2 = d["g"]
 		_blit(self, Vector2(g.x, g.y - float(d["z"])), k, 1.0)
+	for pf in _puffs:
+		var f: float = float(pf["t"]) / PUFF_LIFE
+		var a: float = ceilf(PUFF_ALPHA * (1.0 - f) * 12.0 - 0.0001) / 12.0 ## düz alfa basamakları (titreşim yok)
+		if a <= 0.0:
+			continue
+		var cell: int = clampi(int(f * PUFF_CELLS), 0, PUFF_CELLS - 1)
+		var g2: Vector2 = pf["g"]
+		var csz: Vector2 = Vector2(PUFF_CELL, PUFF_CELL) * LEAP_WPX
+		var tl: Vector2 = ((Vector2(g2.x, g2.y - PUFF_RISE * float(pf["t"])) - csz * 0.5) * 2.0).round() * 0.5
+		draw_texture_rect_region(PUFF_TEX, Rect2(tl, csz), Rect2(cell * PUFF_CELL, 0, PUFF_CELL, PUFF_CELL), Color(1, 1, 1, a))
 	if _leaps.is_empty():
 		return
-	var sz: Vector2 = LEAP_BODY.get_size() * WORLD_PX
+	var fw: float = LEAP_BODY.get_width() / float(LEAP_BODY_FRAMES)
+	var fh: float = LEAP_BODY.get_height()
+	var sz: Vector2 = Vector2(fw, fh) * LEAP_WPX
 	for l in _leaps:
-		var a: Vector2 = l["a"]
-		var b: Vector2 = l["b"]
-		var arc: float = float(l["arc"])
 		var u: float = clampf(float(l["t"]) / float(l["dur"]), 0.0, 1.0)
-		var at: Vector2 = leap_point(a, b, arc, u)
-		var tangent: Vector2 = (b - a) + Vector2(0.0, -arc * 4.0 * (1.0 - 2.0 * u))
-		draw_set_transform((at * 2.0).round() * 0.5, tangent.angle() if tangent.length_squared() > 0.01 else 0.0, Vector2.ONE)
-		draw_texture_rect(LEAP_BODY, Rect2(-sz * 0.5, sz), false)
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		var at: Vector2 = leap_point(l["a"], l["b"], float(l["arc"]), u)
+		var fi: int = int(float(l["t"]) * LEAP_BODY_FPS) % LEAP_BODY_FRAMES
+		## kabarcık dönmez (parlaması hep sol üstte, mermiyle aynı)
+		draw_texture_rect_region(LEAP_BODY, Rect2(((at - sz * 0.5) * 2.0).round() * 0.5, sz), Rect2(fi * fw, 0, fw, fh))
 
 
 func _draw_puddles(layer: CanvasItem) -> void:
@@ -265,3 +334,7 @@ func puddle_count() -> int:
 
 func leap_count() -> int:
 	return _leaps.size()
+
+
+func puff_count() -> int:
+	return _puffs.size()

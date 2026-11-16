@@ -13,10 +13,6 @@ const LIGHTS := [
 	["kucuk_mesale", Vector2(1175.5, 908.0)],
 	["kazan_1", Vector2(960.0, 3373.9)],
 	["kucuk_mesale", Vector2(871.5, 3372.0)],
-	["mesale", Vector2(3256.0, 2894.0)],
-	["mesale", Vector2(3416.0, 2894.0)],
-	["mesale", Vector2(3240.0, 2990.0)],
-	["mesale", Vector2(3432.0, 2990.0)],
 	["kucuk_mesale", Vector2(2999.5, 1820.0)],
 ]
 ## Ateş böceği alanları (gece): [merkez, yarıçap] - göl kıyıları, gölcükler, sazlık

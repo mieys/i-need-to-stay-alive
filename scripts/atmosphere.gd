@@ -31,6 +31,8 @@ const AudioBuses := preload("res://scripts/audio_buses.gd")
 const NightGlowScript := preload("res://scripts/night_glow.gd")
 const GlowCatalog := preload("res://scripts/night_glow_catalog.gd")
 const MapProfilesScript := preload("res://scripts/map_profiles.gd")
+const KumFirtinasi := preload("res://scripts/kum_firtinasi.gd")
+const SandstormScript := preload("res://scripts/weather_sandstorm.gd")
 
 const GROUP := &"atmosphere"
 const SYNC_INTERVAL := 4.0
@@ -81,6 +83,9 @@ var rain_intensity: float = 0.0
 var wind_intensity: float = 0.0
 ## Sağanak şiddeti (0..1) - yağmur/rüzgarın ÜSTÜNE ek kararma, daha yoğun yağmur ve yıldırım (bkz. weather_storm.gd).
 var storm_intensity: float = 0.0
+## KUM FIRTINASI şiddeti (0..1, madde 718, kum_firtinasi.gd): yalnız kum fırtınalı haritada (Altın Kumlar) Sağanak yuvası bunu yürütür;
+## o haritada yağmur / sağanak / yıldırım sıfır kalır. Ekran katmanı weather_sandstorm.gd, yerel oyuncunun yavaşlaması set_kum_firtinasi.
+var sand_intensity: float = 0.0
 var wind_angle: float = 0.0
 ## Debug menüsü: saati hızlandırır (1 = normal). Host'ta ayarlanır, istemcilere de gider.
 var debug_time_scale: float = 1.0
@@ -98,6 +103,8 @@ var _grade: Dictionary = {}
 var _overlay: CanvasLayer = null
 var _rain: Node2D = null
 var _snowfall: bool = false ## Ayaz Dağı: _rain düğümü kar çizer (weather_snow.gd)
+var _sandstorm_map: bool = false ## Altın Kumlar: Sağanak = kum fırtınası (map_profiles "kum_firtinasi")
+var _sand_layer: CanvasLayer = null
 var _wind: Node2D = null
 var _storm: Node = null
 var _rain_player: AudioStreamPlayer = null
@@ -122,6 +129,7 @@ func _ready() -> void:
 	_rain.name = "Rain"
 	## Ayaz Dağı (kış, map_profiles "kar_yagisi"): yağmur yerine kar - aynı set_intensity arayüzü, yağmur sesi çalmaz (_update_sounds).
 	_snowfall = MapProfilesScript.snowfall()
+	_sandstorm_map = MapProfilesScript.sandstorm()
 	_rain.set_script(SnowScript if _snowfall else RainScript)
 	add_child(_rain)
 	_wind = Node2D.new()
@@ -147,6 +155,7 @@ func _ready() -> void:
 		rain_intensity = float(migrated.get("ri", rain_intensity))
 		wind_intensity = float(migrated.get("wi", wind_intensity))
 		storm_intensity = float(migrated.get("si", storm_intensity))
+		sand_intensity = float(migrated.get("ki", sand_intensity))
 		wind_angle = float(migrated.get("wa", wind_angle))
 		_weather_remaining = float(migrated.get("wr", _weather_remaining))
 	get_tree().node_added.connect(_on_node_added)
@@ -165,6 +174,16 @@ func create_overlay_layer() -> CanvasLayer:
 	_overlay.name = "AtmosphereOverlay"
 	_overlay.set_script(OverlayScript)
 	return _overlay
+
+
+## main.gd çağırır: kum fırtınası ekran katmanı (yalnız kum fırtınalı haritada; yoksa null). main.gd onu renk geçişinin hemen önüne koyar.
+func create_sand_layer() -> CanvasLayer:
+	if not _sandstorm_map:
+		return null
+	_sand_layer = CanvasLayer.new()
+	_sand_layer.name = "KumFirtinasi"
+	_sand_layer.set_script(SandstormScript)
+	return _sand_layer
 
 
 ## vision_fog.gd'nin görüş yarıçapı çarpanı (1.0 gündüz -> NIGHT_VISION_MULT gece, kademeli; şu an 1.0 = gece daralmaz).
@@ -221,10 +240,11 @@ func _process(delta: float) -> void:
 			_time_fix = 0.0
 
 	var fade_step: float = delta / AtmosphereMath.WEATHER_FADE_TIME
-	var targets: Vector3 = AtmosphereMath.weather_targets(weather)
+	var targets: Vector4 = KumFirtinasi.targets(AtmosphereMath.weather_targets(weather), weather == AtmosphereMath.Weather.STORM, _sandstorm_map)
 	rain_intensity = move_toward(rain_intensity, targets.x, fade_step)
 	wind_intensity = move_toward(wind_intensity, targets.y, fade_step)
 	storm_intensity = move_toward(storm_intensity, targets.z, fade_step)
+	sand_intensity = move_toward(sand_intensity, targets.w, fade_step)
 
 	var indoors: bool = _local_player_indoors()
 	_storm.call("set_storm", storm_intensity, indoors)
@@ -237,14 +257,23 @@ func _process(delta: float) -> void:
 		_rain.call("set_outdoor", outdoor_k)
 	_wind.call("set_wind", wind_intensity * outdoor_k, wind_angle, outdoor_k, storm_intensity)
 	_gust_t += delta
-	_update_sounds((0.0 if _snowfall else rain_intensity) * outdoor_k, wind_intensity * outdoor_k, storm_intensity * outdoor_k)
+	## Kum fırtınası (madde 718): fırtına uğultusu sağanakla aynı katman; ekran katmanı + yerel oyuncunun yavaşlaması (ev içi / zindanda 0).
+	var gale: float = maxf(storm_intensity, sand_intensity)
+	_update_sounds((0.0 if _snowfall else rain_intensity) * outdoor_k, wind_intensity * outdoor_k, gale * outdoor_k)
+	if _sandstorm_map:
+		var sand_k: float = sand_intensity * outdoor_k
+		if _sand_layer and is_instance_valid(_sand_layer):
+			_sand_layer.call("set_sand", sand_k, wind_angle)
+		var p: Node = get_tree().get_first_node_in_group("player")
+		if p and p.has_method("set_kum_firtinasi"):
+			p.call("set_kum_firtinasi", sand_k)
 	_update_map_atmosphere()
 
 
 func _process_weather_authority(delta: float) -> void:
 	_weather_remaining -= delta
 	if _weather_remaining <= 0.0:
-		## Altın Kumlar (çöl): yağmur / sağanak yok (map_profiles "hava_donusum"); diğer haritalarda aynı
+		## Altın Kumlar (çöl): yağmur yok (map_profiles "hava_donusum"), Sağanak = kum fırtınası (madde 718); diğer haritalarda aynı
 		weather = MapProfilesScript.map_weather(AtmosphereMath.pick_weather(randf()))
 		_weather_remaining = randf_range(AtmosphereMath.WEATHER_MIN_DURATION, AtmosphereMath.WEATHER_MAX_DURATION)
 		if weather != AtmosphereMath.Weather.CLEAR:
@@ -269,6 +298,7 @@ func _state() -> Dictionary:
 		"ri": rain_intensity,
 		"wi": wind_intensity,
 		"si": storm_intensity,
+		"ki": sand_intensity,
 		"wa": wind_angle,
 		"wr": _weather_remaining,
 		"ts": debug_time_scale,
@@ -308,6 +338,9 @@ func _on_state_received(state: Dictionary) -> void:
 	var si: float = float(state.get("si", storm_intensity))
 	if not _received_first_sync or absf(si - storm_intensity) > INTENSITY_SNAP:
 		storm_intensity = si
+	var ki: float = float(state.get("ki", sand_intensity))
+	if not _received_first_sync or absf(ki - sand_intensity) > INTENSITY_SNAP:
+		sand_intensity = ki
 	if not _received_first_sync or absf(ri - rain_intensity) > INTENSITY_SNAP:
 		rain_intensity = ri
 	if not _received_first_sync or absf(wi - wind_intensity) > INTENSITY_SNAP:
@@ -357,7 +390,7 @@ func debug_set_time_scale(scale: float) -> bool:
 
 func debug_describe() -> String:
 	return "%s (%d:%02d / 10:00) - %s" % [AtmosphereMath.phase_name(cycle_time), int(cycle_time) / 60, int(cycle_time) % 60,
-			AtmosphereMath.WEATHER_NAMES[weather]]
+			("Kum Fırtınası" if _sandstorm_map and weather == AtmosphereMath.Weather.STORM else AtmosphereMath.WEATHER_NAMES[weather])]
 
 
 ## ------------------------------------------------------------------ Gece ışıklarının otomatik takılması
@@ -510,7 +543,7 @@ func _find_map_refs() -> void:
 ## Bitki sallanma çarpanı (1 = sakin hava). TEK kaynak: sallantı.gdshader materyalleri (aşağıda) VE sway_plants.gd'nin
 ## sallanan otları bunu okur.
 func get_sway_multiplier() -> float:
-	return lerpf(1.0, SWAY_WINDY_MULT, wind_intensity) * lerpf(1.0, SWAY_STORM_MULT / SWAY_WINDY_MULT, storm_intensity)
+	return lerpf(1.0, SWAY_WINDY_MULT, wind_intensity) * lerpf(1.0, SWAY_STORM_MULT / SWAY_WINDY_MULT, maxf(storm_intensity, sand_intensity))
 
 
 func _update_map_atmosphere() -> void:

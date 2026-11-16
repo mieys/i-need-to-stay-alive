@@ -37,3 +37,6 @@ tools/gorev_goruntu/out/
 # Dünya haritası ara çıktıları (madde 606): tam çözünürlüklü harita çizimleri ~40 MB, tools/dunya_haritasi/uret.ps1 yeniden üretir
 tools/dunya_haritasi/out/
 tools/tanitim/out/sahne1_tr.mp4
+
+# Godot capture/proto kosularinin user:// ciktisi (shader cache vb.) - uretilebilir, bazi yollar Windows yol siniri asiyor (2026-11-16)
+**/out/appdata/

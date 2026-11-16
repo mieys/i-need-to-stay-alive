@@ -36,11 +36,13 @@ const SPOTS := {
 	15: ["bataklik", 1090.0, 950.0, 150.0, 0], ## Hazel: cadı oyuğu
 }
 
+## Silah kliplerinde KULLANILMAYAN karakterler (kullanıcı 2026-11-15: "necromancerı kullanma bu testlerde").
+const WEAPON_EXCLUDED_CHARS := [11]
 ## Silah -> temasına uyan karakterler (silah modunda bunlardan rastgele, kullanım sayısı en az olanlar arasından, art arda aynı karakter olmadan).
 const WEAPON_POOLS := {
-	"dagger": [5, 13, 1], "fire_staff": [4, 12, 15], "lightning_staff": [3, 4, 12], "tabanca": [8, 9, 1], "tuftuf": [15, 11, 2],
-	"tufek": [8, 1, 9], "arcane": [4, 10, 11], "yay": [8, 2, 5], "crossbow": [5, 1, 7], "boomerang": [5, 3, 1], "buz_asasi": [4, 10, 14],
-	"fisek": [9, 1], "pence": [11, 14, 13], "topuz": [7, 12, 1], "uzunkilic": [7, 1, 10], "gokkusagi": [2, 10, 4], "mizrak": [7, 12, 1],
+	"dagger": [5, 13, 1], "fire_staff": [4, 12, 15], "lightning_staff": [3, 4, 12], "tabanca": [8, 9, 1], "tuftuf": [15, 2],
+	"tufek": [8, 1, 9], "arcane": [4, 10, 15], "yay": [8, 2, 5], "crossbow": [5, 1, 7], "boomerang": [5, 3, 1], "buz_asasi": [4, 10, 14],
+	"fisek": [9, 1], "pence": [14, 13], "topuz": [7, 12, 1], "uzunkilic": [7, 1, 10], "gokkusagi": [2, 10, 4], "mizrak": [7, 12, 1],
 	"kalkan": [7, 10], "yinyang": [14, 4, 10], "pompali": [9, 1, 8], "makineli": [1, 8, 9],
 }
 ## Silah modunda nokta değişikliği: hedefler suya / dekorun arkasına düşmesin (Elara köprüsü -> ana harita çayırı, Flint kumsala,
@@ -51,10 +53,78 @@ const WEAPON_SPOT_OVERRIDE := {
 	12: ["kis", 1185.0, 1035.0, 150.0, 0],
 }
 ## Hedefler oyuncuya göre (dünya birimi; yakın dövüş menzili ~55): sağ, sol, alt - sudan kaçınmak için yukarı yok.
-const TARGET_OFFSETS := [Vector2(48, 6), Vector2(-44, 14), Vector2(4, 46)]
+const TARGET_OFFSETS := [Vector2(48, 6), Vector2(-44, 14), Vector2(4, 46)] ## (eski duran hedefler; kaçış modunda kullanılmıyor)
+## KAÇIŞ (kullanıcı 2026-11-15: "karakterler sabit duruyor, yaratıklardan kaçıyormuş gibi görünmeli"): karakter koşar (gerçek hareket girdisi,
+## engelden kaçan yönlendirme), arkasından ölümsüz yaratıklar kovalar, silahlar onlara ateş eder. Kovalayanlar oyuncudan biraz yavaş (CHASE_K).
+## Kovalayanlar HARİTAYA göre (kullanıcı 2026-11-15: "hep aynı yaratıklar olmasın"): her klip kendi haritasının havuzundan tohumlu rastgele 3-4 tür
+## seçer. Gerçek canla (ölürler -> öldürmeyle tetiklenen silah özellikleri çalışır), azaldıkça arkadan yenisi gelir (ALIVE_TARGET).
+const MAP_MELEE := {
+	"ana": ["slime1", "goblin1", "gnoll1", "rat1", "mantar1", "ork1", "zombie1", "agac1"],
+	"bataklik": ["pelte1", "zombie1", "mantar1", "kertenkele1", "hayalet1", "slime2", "rat1"],
+	"col": ["kertenkele1", "iskelet1", "golem1", "rat1", "goblin1", "zombie1"],
+	"kis": ["iskelet1", "gnoll1", "ork1", "golem1", "hayalet1", "yarasa1", "goblin1"],
+	"batik_nekropol": ["iskelet1", "zombie1", "hayalet1", "yarasa1", "vampire1", "rat1"],
+}
+## Gerçek menzilli yaratıklar (is_ranged = true; kendi mermilerini atar): Kalkan klibinde bunlar ateş eder, kalkan bloklar.
+const RANGED_CREATURES := ["rontgen1", "demon1", "iblis1"]
+const ALIVE_TARGET := 6
+## Kovalayan canı = saldırı gücü x bu (2-3 isabette ölür): öldürmeyle tetiklenen özellikler (Seri Parmak, Sıçrayan Zehir, Kırık Buz parçalanması)
+## klipte gerçekten çalışsın (kullanıcı 2026-11-15: "silahların özelliklerinin aktifleştiğinden emin ol").
+const CHASER_HP_AP := 3.0
+## Silaha göre can çarpanı: Gökkuşağı özelliği (Göz Kamaştırma) ışın AYNI düşmanda 3 sn tutulunca -> düşman ~4 sn dayanmalı; Buz Asası (Kırık Buz:
+## her 2. isabet dondurur, donmuşken ölen parçalanır) isabeti zayıf -> 3. isabette ölsün.
+const WEAPON_HP_AP := {"gokkusagi": 6.0, "buz_asasi": 1.5, "dagger": 5.0, "tabanca": 0.9} ## tabanca (Seri Parmak): her atış öldürsün -> 3 sn içinde 2+ yığın
+## Bıçak (Kanayan Kesikler): 2 sn içinde art arda 3 isabet -> patlama; hedef 3. isabette hâlâ CANLI olmalı (ölüde kanama silinir) ve
+## kovalayanlar yakın dövüş menzilinde kalmalı -> can 6 x SG, kovalama hızı oyuncuyla eşit.
+const WEAPON_CHASE_K := {"dagger": 1.03, "buz_asasi": 1.0}
+## Bıçak: kovalayanlar yakın dövüş menzilinde (~55 birim) başlasın (yelpaze mesafesi x0,45) ve hafif hızlı yetişsin.
+const WEAPON_FAN_SCALE := {"dagger": 0.45}
+## Yeniden doğma mesafesi (varsayılan 100-140, ekran kenarından koşarak girer): kovalayanın oyuncu hızında olduğu kliplerde yakın doğsun ki menzile girsin.
+const WEAPON_RESPAWN_DIST := {"buz_asasi": [45.0, 60.0], "dagger": [40.0, 60.0]}
+## Buz: donmuş yaratık durur, oyuncu koşarsa 3. mermi uzar ve 1,5 sn donmayı kaçırır -> düşman donmuşken oyuncu durup bitirir (kiting).
+const PAUSE_ON_FROZEN := ["buz_asasi"] ## buz: tek kovalayan sabit mesafede -> isabet aralığı = atış aralığı 1,43 sn < donma 1,5 sn
+## Buz Asası: donmuş düşmanı bilerek hedeflemez (donmamışlara dağıtır) ve öldüren isabet dondurmaz -> parçalanma için TEK kovalayan: 1. isabet
+## yavaşlatır, 2. dondurur (1,5 sn), 3. (1,43 sn sonra, hâlâ donmuş) öldürür -> parçalanır. Diğer silahlarda ALIVE_TARGET.
+const WEAPON_ALIVE := {"buz_asasi": 1}
+const CHASE_K := 0.93 ## kovalayan hızı / oyuncu hızı (yaratık _ready'de hızı 0,528 x 0,9 x 1,05 ile çarpar - önceden bölünür)
+const ENEMY_SPEED_MUL := 0.528 * 0.9 * 1.05
+const RUN_LOOK := [12.0, 24.0, 36.0]
 const WEAPON_ZOOM := 6.0
-const WEAPON_SEC := 5.0
-const KALKAN_SEC := 8.0
+const WEAPON_SEC := 6.0 ## (eski sabit süre; artık kanıt + kuyruk: CLIP_MIN/CLIP_MAX/PROOF_TAIL)
+## KLİP SÜRESİ ÖZELLİK KANITINA GÖRE (kullanıcı 2026-11-16: "bazı silahlar işini yapamadan klip kesilmiş"): kayıt, silahın özelliği TRAIT_PROOF
+## koşullarını (kayıt başından beri) sağlayana kadar sürer, sonra PROOF_TAIL sn daha (düşen balista, kıvılcım yağmuru, cirit uçuşu, sersemleme bitsin);
+## en az CLIP_MIN, en çok CLIP_MAX. Koşullar: ["add", düğüm anahtarı, adet] (_drain_added sayacı), ["var", özellik değişkeni, artış],
+## ["cur", değişken, şimdiki değer], ["pierce", adet] (silah isabeti - atış).
+const CLIP_MIN := 5.0
+const CLIP_MAX := 12.0
+const PROOF_TAIL := 2.0
+## Klibin ilk 0,7 sn'sindeki tetiklenme kanıt sayılmaz (birleşik videoda 0,3 sn karartmanın altında / klibin en başında kalıyordu):
+## sayaçlar bu andan itibaren yeniden başlar.
+const PROOF_LEAD := 0.7
+const TRAIT_PROOF := {
+	"dagger": [["add", "fx_enchant_pixel:ring", 1]],
+	"fire_staff": [["add", "fx_burn_status", 3]],
+	"lightning_staff": [["add", "fx_lightning_chain", 6]],
+	"tabanca": [["cur", "_stacks", 2]],
+	"tuftuf": [["var", "leaps", 1]],
+	"tufek": [["pierce", 2]],
+	"arcane": [["add", "fx_enchant_pixel:ring", 1]], ## yankı işareti (halka); 0,8 sn sonra ikinci küre - kuyruk kapsar
+	"yay": [["var", "attacks", 4]],
+	"crossbow": [["var", "drops", 1]],
+	"boomerang": [["var", "bounces", 4]],
+	"buz_asasi": [["add", "fx_enchant_sprite:crystal_burst", 1]],
+	"fisek": [["add", "fx_enchant_sprite:mini_pop", 8]],
+	"pence": [["add", "fx_enchant_sprite:shuriken_hit", 8]],
+	"topuz": [["add", "fx_enchant_sprite:seismic_ring", 1]],
+	"uzunkilic": [["add", "enchant_area:blade", 1]],
+	"gokkusagi": [["add", "fx_enchant_sprite:rainbow_dazzle", 1]],
+	"mizrak": [["var", "throws", 1]],
+	"kalkan": [["add", "fx_evo_burst", 5], ["var", "bashes", 1]],
+	"yinyang": [["add", "yinyang_light", 3]],
+	"pompali": [["var", "volleys", 3]],
+	"makineli": [["var", "attacks", 20]],
+}
+const KALKAN_SEC := 7.0
 const PLAYER_SCREEN := Vector2(640, 620) ## silah modunda karakterin ekran konumu
 ## Kalkan klibi: karakter aşağıda, atıcı sol üstte (kalkanın baş üstü yuvasına doğru gelen atış kalkanın hemen önünde söner).
 const PLAYER_SCREEN_KALKAN := Vector2(700, 850)
@@ -69,6 +139,31 @@ var _ht: GDScript = null
 var _mute: Array = []
 var _keep: Array = [] ## silah modunda bizim koyduğumuz yaratıklar (diğerleri temizlenir)
 var _pscreen: Vector2 = PLAYER_SCREEN
+var _run_dir: Vector2 = Vector2.LEFT
+var _run_t: float = 0.0
+var _base_dir: Vector2 = Vector2.LEFT
+var _clip_melee: Array = [] ## bu klibin kovalayan türleri
+var _rng := RandomNumberGenerator.new()
+var _added: Array = [] ## kayıt sırasında sahneye eklenen düğümler (özellik efekti kanıtı)
+var _added_count: Dictionary = {}
+var _log_on: bool = false
+var _chaser_hp: float = 0.0
+var _chase_k: float = CHASE_K
+var _clip_key: String = ""
+var _eb: Object = null ## klibin silah özellik betiği (enchant_behavior)
+var _eb_base: Dictionary = {}
+var _hits_base: int = 0
+var _cur_f: int = -1 ## kayıttaki kare (olay günlüğü: ses eşleşmesi kontrolü)
+var _events: Dictionary = {}
+var _rec_t0: int = 0
+## GERÇEK ZAMANLI YAKALAMA (KK_RT=1, 2026-11-16): bazı silah özellikleri pencerelerini GERÇEK saatle tutar (Time.get_ticks_msec: Bıçak kombosu
+## 2 sn, Buz donma kaydı 1,5 sn, Seri Parmak yığını 3 sn, Gökkuşağı tutma, Zehir kaydı). Sabit kare hızlı yakalamada kare başına ~100 ms
+## gerçek süre geçtiği için (oyun 3 kat yavaş) bu pencereler 3 kat daralıp özellik HİÇ tetiklenmiyordu. Gerçek zamanlı modda oyun normal
+## hızında koşar; her 33,3 ms'de bir kare alınır (gecikirse atlanan kare aynı görüntüyle doldurulur -> ses ile eş), JPG kodlaması iş
+## parçacığında; ses Master veriyolundaki AudioEffectRecord ile gerçek zamanlı kaydedilir (klasöre audio.wav).
+var _rt: bool = OS.get_environment("KK_RT") == "1"
+var _rec_fx: AudioEffectRecord = null
+const FRAME_US := 1000000.0 / 30.0 ## pistin yönü (yönlendirme buna sadık kalır)
 
 
 func _pre_draw() -> void:
@@ -224,6 +319,15 @@ func _setup_camera(center_world: Vector2, zoom: float) -> Camera2D:
 	cam.offset = center_world - _player.global_position
 	cam.force_update_scroll()
 	return cam
+
+
+func _setup_cam_limits() -> void:
+	var cam: Camera2D = _player.get_node_or_null("Camera2D")
+	if cam:
+		cam.limit_left = -10000000
+		cam.limit_top = -10000000
+		cam.limit_right = 10000000
+		cam.limit_bottom = 10000000
 
 
 func _shot(path: String) -> void:
@@ -490,7 +594,7 @@ func _weapon_plan() -> Array:
 		var seen: Dictionary = {}
 		for it in plan:
 			seen[it[1]] = true
-		if seen.size() >= SPOTS.size():
+		if seen.size() >= SPOTS.size() - WEAPON_EXCLUDED_CHARS.size():
 			print("PLAN SEED ", base + t)
 			break
 	return plan
@@ -518,15 +622,289 @@ func _weapon_plan_seed(seed_value: int) -> Array:
 	return plan
 
 
-func _spawn_creature(scene_path: String, pos: Vector2) -> Node2D:
+func _spawn_creature(scene_path: String, pos: Vector2, world_speed: float = 0.0, immortal: bool = true) -> Node2D:
 	var e: Node2D = (load(scene_path) as PackedScene).instantiate()
-	e.set("speed", 0.0)
-	e.set("max_health", 1.0e9)
+	e.set("speed", world_speed / ENEMY_SPEED_MUL) ## _ready çarpanı önceden bölünür -> dünya biriminde istenen hız
+	if immortal:
+		e.set("max_health", 1.0e9)
+	elif _chaser_hp > 0.0:
+		e.set("max_health", _chaser_hp)
 	_main.add_child(e)
 	e.global_position = pos
-	e.set("health", 1.0e9)
+	if immortal:
+		e.set("health", 1.0e9)
 	_keep.append(e)
 	return e
+
+
+static func _creature_path(id: String) -> String:
+	return "res://scenes/creatures/enemy_%s.tscn" % id
+
+
+## Ölen / silinen (bizim koyduğumuz) yaratık sayısı.
+func _dead_count() -> int:
+	var c: int = 0
+	for e in _keep:
+		if not is_instance_valid(e) or e.get("is_dead") == true:
+			c += 1
+	return c
+
+
+## Silahın özellik betiğindeki sayaçlar (sıfır olmayan int/float betik değişkenleri: leaps, bounces, throws, drops, attacks, _stacks...).
+func _trait_counters() -> String:
+	var parts: PackedStringArray = PackedStringArray()
+	for c in _player.get_children():
+		var eb: Variant = c.get("enchant_behavior")
+		if not (eb is Object) or not is_instance_valid(eb):
+			continue
+		parts.append(str((eb as Object).get_script().resource_path).get_file().get_basename())
+		for pr in (eb as Object).get_property_list():
+			if int(pr["usage"]) & PROPERTY_USAGE_SCRIPT_VARIABLE and (int(pr["type"]) == TYPE_INT or int(pr["type"]) == TYPE_FLOAT):
+				var v: Variant = (eb as Object).get(pr["name"])
+				if v != null and float(v) != 0.0 and not str(pr["name"]).ends_with("msec"):
+					parts.append("%s=%s" % [pr["name"], str(v)])
+	return " ".join(parts)
+
+
+func _find_eb() -> Object:
+	for c in _player.get_children():
+		var eb: Variant = c.get("enchant_behavior")
+		if eb is Object and is_instance_valid(eb):
+			return eb
+	return null
+
+
+func _eb_val(name: String) -> float:
+	if _eb == null or not is_instance_valid(_eb):
+		return 0.0
+	var v: Variant = _eb.get(name)
+	return float(v) if v != null else 0.0
+
+
+func _w_hits(key: String) -> int:
+	var dealt: Dictionary = (load("res://scripts/balance_log.gd") as GDScript).call("dealt_snapshot")
+	var row: Variant = dealt.get("w:" + key, null)
+	return int((row as Array)[1]) if row is Array else 0
+
+
+func _proof_ok(key: String) -> bool:
+	for cond in TRAIT_PROOF.get(key, []):
+		match str(cond[0]):
+			"add":
+				if int(_added_count.get(cond[1], 0)) < int(cond[2]):
+					return false
+			"var":
+				if _eb_val(cond[1]) - float(_eb_base.get(cond[1], 0.0)) < float(cond[2]):
+					return false
+			"cur":
+				if _eb_val(cond[1]) < float(cond[2]):
+					return false
+			"pierce":
+				var shots: float = _eb_val("attacks") - float(_eb_base.get("attacks", 0.0))
+				if float(_w_hits(key) - _hits_base) - shots < float(cond[1]):
+					return false
+	return true
+
+
+## İş parçacığında: ilk yola JPG yaz, atlanan kare yuvalarına aynı dosyayı kopyala.
+func _save_jpgs(img: Image, paths: PackedStringArray) -> void:
+	img.save_jpg(paths[0], 0.95)
+	for i in range(1, paths.size()):
+		DirAccess.copy_absolute(paths[0], paths[i])
+
+
+func _rec_start() -> void:
+	if _rec_fx == null:
+		_rec_fx = AudioEffectRecord.new()
+	var bus: int = 0
+	var found: bool = false
+	for i in AudioServer.get_bus_effect_count(bus):
+		if AudioServer.get_bus_effect(bus, i) == _rec_fx:
+			found = true
+	if not found:
+		AudioServer.add_bus_effect(bus, _rec_fx)
+	_rec_fx.set_recording_active(true)
+
+
+func _rec_stop(path: String) -> void:
+	if _rec_fx == null:
+		return
+	_rec_fx.set_recording_active(false)
+	var w: AudioStreamWAV = _rec_fx.get_recording()
+	if w != null:
+		w.save_to_wav(path)
+		print("WAV ", path, " len=", w.get_length(), " rate=", w.mix_rate)
+	else:
+		print("WARN WAV YOK ", path)
+
+
+func _alive_chasers() -> int:
+	var c: int = 0
+	for e in _keep:
+		if is_instance_valid(e) and e.get("is_dead") != true and not bool(e.get("is_ranged")):
+			c += 1
+	return c
+
+
+## Arkadan yeni kovalayan: kaçış yönünün 100-140 birim gerisi, +-55 yan (ekranın arka kenarından koşarak girer).
+func _spawn_chaser_behind(psp: float) -> void:
+	var perp: Vector2 = Vector2(-_run_dir.y, _run_dir.x)
+	for t in 8:
+		var rd: Array = WEAPON_RESPAWN_DIST.get(_clip_key, [100.0, 140.0])
+		var q: Vector2 = _player.global_position - _run_dir * _rng.randf_range(float(rd[0]), float(rd[1])) + perp * _rng.randf_range(-55.0, 55.0)
+		if not _blocked(q):
+			_spawn_creature(_creature_path(_clip_melee[_rng.randi_range(0, _clip_melee.size() - 1)]), q, psp * _chase_k, false)
+			return
+
+
+## Hasar sayıları / altın "+N" yazıları gizli (kullanıcı 2026-11-15); kayıt sırasında eklenen düğümler özellik kanıtı için sayılır.
+func _on_node_added(n: Node) -> void:
+	var sc: Variant = n.get_script()
+	if sc == null:
+		return
+	var file: String = str((sc as Script).resource_path).get_file()
+	if file == "damage_numbers.gd" or file == "gold_gain_popup.gd" or file == "floating_text.gd": ## sayı yazıları (hasar, altın, "+N saldırı gücü")
+		if n is CanvasItem:
+			(n as CanvasItem).visible = false
+			_mute.append(n)
+		return
+	if _log_on:
+		_added.append(n)
+
+
+## Bu karede eklenenlerin betik + tür/sayfa adını say (düğüm çoğu zaman kısa ömürlü: aynı karede okunur).
+func _drain_added() -> void:
+	for n in _added:
+		if not is_instance_valid(n):
+			continue
+		var sc: Variant = n.get_script()
+		var file: String = str((sc as Script).resource_path).get_file().get_basename() if sc != null else n.get_class()
+		if file in ["enemy", "xp_orb", "creature_blood", "gold_coin", "ground_shadow", "shadow_blob", "night_glow"]:
+			continue
+		var k: String = file
+		for prop in ["kind", "sheet", "_sheet", "fx_kind"]:
+			var v: Variant = n.get(prop)
+			if v is String and str(v) != "":
+				k += ":" + str(v)
+		var d: Variant = n.get("data")
+		if d is Dictionary and (d as Dictionary).has("sheet"):
+			k += ":" + str((d as Dictionary)["sheet"])
+		_added_count[k] = int(_added_count.get(k, 0)) + 1
+		if k in ["fx_evo_burst", "firework_projectile", "fx_enchant_sprite:ballista", "fx_enchant_sprite:seismic_ring"] and _cur_f >= 0:
+			(_events.get_or_add(k, []) as Array).append(_cur_f)
+	_added.clear()
+
+
+func _added_summary() -> String:
+	var keys: Array = _added_count.keys()
+	keys.sort_custom(func(a: String, b: String) -> bool: return int(_added_count[a]) > int(_added_count[b]))
+	var parts: PackedStringArray = PackedStringArray()
+	for k in keys.slice(0, 18):
+		parts.append("%s=%d" % [k, int(_added_count[k])])
+	return ", ".join(parts)
+
+
+## ------------------------------------------------------------------ kaçış (oyuncu koşar, yaratıklar kovalar)
+func _blocked(p: Vector2) -> bool:
+	return bool(_gm.call("is_position_blocked_by_walls", p))
+
+
+func _clear_ahead(p: Vector2, d: Vector2) -> bool:
+	var perp := Vector2(-d.y, d.x) * 7.0
+	for k in RUN_LOOK:
+		var q: Vector2 = p + d * float(k)
+		if _blocked(q) or _blocked(q + perp) or _blocked(q - perp):
+			return false
+	return true
+
+
+func _clear_len(p: Vector2, d: Vector2, max_len: float) -> float:
+	var l: float = 0.0
+	while l < max_len:
+		if _blocked(p + d * (l + 8.0)):
+			return l
+		l += 8.0
+	return l
+
+
+## KOŞU PİSTİ: tema noktasının çevresinde (+-160, 16'lık ızgara) sola doğru açık ve 3 şerit genişliğinde en uzun yol; yoksa sağa. Dekor
+## arasında çıkmaz sokağa girip kadrajdan kaybolmasın (Kalkan/Aldric harabe kayalarında, Flint kayaya giriyordu).
+func _find_runway(spot: Vector2, need: float) -> Array:
+	var best: Array = [spot, Vector2.LEFT]
+	var best_s: float = -1.0e9
+	for d in [Vector2.LEFT, Vector2.RIGHT]:
+		for gy in range(-10, 11):
+			for gx in range(-10, 11):
+				var q: Vector2 = spot + Vector2(gx * 16, gy * 16)
+				if _blocked(q):
+					continue
+				var l: float = need
+				for side in [-14.0, 0.0, 14.0]:
+					l = minf(l, _clear_len(q + Vector2(0, side), d, need))
+					if l < best_s * 0.5:
+						break
+				var sc: float = l - 0.25 * q.distance_to(spot) - (120.0 if d == Vector2.RIGHT else 0.0)
+				if sc > best_s:
+					best_s = sc
+					best = [q, d]
+	print("RUNWAY spot=", spot, " -> ", best, " score=", best_s, " need=", need)
+	return best
+
+
+## Başlangıç yönü: 16 yönden en uzun açık yol (sola yakın olanlar tercih: kovalayanlar sağda, panelin önünde görünür).
+func _pick_run_dir(p: Vector2, need: float) -> Vector2:
+	var best: Vector2 = Vector2.LEFT
+	var best_s: float = -1.0e9
+	for i in 16:
+		var d: Vector2 = Vector2.LEFT.rotated(TAU * float(i) / 16.0)
+		var sc: float = minf(_clear_len(p, d, need), need) + 90.0 * (-d.x)
+		if sc > best_s:
+			best_s = sc
+			best = d
+	return best
+
+
+## Her kare: kovalayanlardan uzağa (ağırlık 0,3) + mevcut yön; önü kapalıysa en yakın açık açıya döner; hafif zikzak. Gerçek hareket girdisi basılır
+## (player.gd kendi yürüme/koşma klibini, yönünü, Matthew izi vb. oynar).
+func _steer(delta: float) -> void:
+	_run_t += delta
+	var p: Vector2 = _player.global_position
+	var away: Vector2 = Vector2.ZERO
+	var cnt: int = 0
+	for e in _keep:
+		if is_instance_valid(e):
+			away += p - (e as Node2D).global_position
+			cnt += 1
+	var pref: Vector2 = _run_dir
+	if cnt > 0 and away.length() > 1.0:
+		pref = (_run_dir * 0.75 + _base_dir * 0.15 + away.normalized() * 0.1).normalized()
+	var choice: Vector2 = pref
+	for a in [0, 20, -20, 40, -40, 65, -65, 90, -90, 120, -120, 160, -160]:
+		var d: Vector2 = pref.rotated(deg_to_rad(float(a)))
+		if _clear_ahead(p, d):
+			choice = d
+			break
+	_run_dir = _run_dir.slerp(choice, 0.3).normalized()
+	var perp: Vector2 = Vector2(-_run_dir.y, _run_dir.x)
+	if _clip_key in PAUSE_ON_FROZEN:
+		for e in _keep:
+			if is_instance_valid(e) and e.get("is_frozen") == true and e.get("is_dead") != true:
+				_set_move(Vector2.ZERO)
+				return
+	_set_move((_run_dir + perp * sin(_run_t * 2.3) * 0.22).normalized())
+
+
+func _set_move(v: Vector2) -> void:
+	for pair in [["move_left", -v.x], ["move_right", v.x], ["move_up", -v.y], ["move_down", v.y]]:
+		if float(pair[1]) > 0.01:
+			Input.action_press(pair[0], float(pair[1]))
+		else:
+			Input.action_release(pair[0])
+
+
+func _player_speed() -> float:
+	var sp: float = float(_player.get("speed")) if _player.get("speed") != null else 82.0
+	return sp if sp > 20.0 and sp < 200.0 else 82.0
 
 
 ## Haritanın kendi yaratıkları (zindan odaları, kamplar...) kadraja girip oyuncuya saldırmasın: bizimkiler dışındakiler silinir.
@@ -570,66 +948,206 @@ func _weapons() -> void:
 		_hide_hud()
 		_pose_player(cid, true)
 		_pscreen = PLAYER_SCREEN_KALKAN if key == "kalkan" else PLAYER_SCREEN
-		## Kendi kameramız (oyuncunun kamerası sarsıntı/harita sınırıyla oynar; sarsıntı delta eklediği için bunda da çalışır).
-		var cam := Camera2D.new()
-		cam.zoom = Vector2(_zoom, _zoom)
-		cam.position_smoothing_enabled = false
-		_main.add_child(cam)
-		cam.global_position = _player.global_position + (SCREEN * 0.5 - _pscreen) / _zoom
+		_gm.set("team_xp_needed", 1.0e12) ## öldürmeler XP verir: level atlama kartı klibi bölmesin
+		var ap_v: Variant = _player.get("damage_bonus")
+		_chase_k = float(WEAPON_CHASE_K.get(key, CHASE_K))
+		_clip_key = key
+		_chaser_hp = float(WEAPON_HP_AP.get(key, CHASER_HP_AP)) * maxf(6.0, float(ap_v) if ap_v != null else 10.0)
+		var dn: Variant = (load("res://scripts/damage_numbers.gd") as GDScript).call("get_instance", self)
+		if dn is CanvasItem:
+			(dn as CanvasItem).visible = false
+			_mute.append(dn)
+		if not node_added.is_connected(_on_node_added):
+			node_added.connect(_on_node_added)
+		_rng.seed = hash(key) ^ (20261115 + int(OS.get_environment("KK_RNG")) if OS.get_environment("KK_RNG") != "" else 20261115) ## KK_RNG: yeniden deneme
+		var pool: Array = (MAP_MELEE.get(s[0], MAP_MELEE["ana"]) as Array).duplicate()
+		_clip_melee.clear()
+		while _clip_melee.size() < mini(4, pool.size()):
+			var pick: String = pool.pop_at(_rng.randi_range(0, pool.size() - 1))
+			_clip_melee.append(pick)
+		## Oyuncunun KENDİ kamerası (çocuk düğüm: fizik interpolasyonuyla koşan oyuncuyu titremeden izler); ofset dünya biriminde, sınırlar her karede açılır.
+		_set_move(Vector2.ZERO)
+		var cam: Camera2D = _setup_camera(_player.global_position + (SCREEN * 0.5 - _pscreen) / _zoom, _zoom)
 		cam.make_current()
 		var kalkan: bool = key == "kalkan"
 		var shooter: Node2D = null
-		var shooter_pos := Vector2.ZERO
+		var shooter_rel := Vector2.ZERO
 		_keep.clear()
+		var psp: float = _player_speed()
+		var clip_len: float = (KALKAN_SEC if kalkan else WEAPON_SEC) + 1.0
+		var rw: Array = _find_runway(_player.global_position, psp * clip_len)
+		_player.global_position = rw[0]
+		_run_dir = rw[1]
+		_base_dir = rw[1]
+		_run_t = 0.0
+		var perp0: Vector2 = Vector2(-_run_dir.y, _run_dir.x)
+		## Kovalayanlar arkada yelpaze: 45-80 birim geride, +-40 yanda (engelli noktaya düşen atlanır).
+		var spawned: int = 0
+		var alive_t: int = int(WEAPON_ALIVE.get(key, 3 if kalkan else ALIVE_TARGET))
+		var fan: Array = [[50.0, 0.0], [62.0, 30.0], [70.0, -32.0], [84.0, 12.0], [92.0, -12.0], [58.0, -55.0], [66.0, 52.0]]
+		for f_ in fan:
+			if spawned >= mini(5, alive_t):
+				break
+			var q: Vector2 = _player.global_position - _run_dir * float(f_[0]) * float(WEAPON_FAN_SCALE.get(key, 1.0)) + perp0 * float(f_[1]) * float(WEAPON_FAN_SCALE.get(key, 1.0))
+			if _blocked(q):
+				continue
+			_spawn_creature(_creature_path(_clip_melee[spawned % _clip_melee.size()]), q, psp * _chase_k, false)
+			spawned += 1
+		var shooters: Array = []
 		if kalkan:
-			shooter = _spawn_creature("res://scenes/creatures/enemy_iskelet1.tscn", _player.global_position + Vector2(-50, -106)) ## sol üst, kalkan menzilinin (110) DIŞINDA -> kalkan saldırmaz, siper duruşunda bloklar
-		else:
-			for o in TARGET_OFFSETS:
-				_spawn_creature("res://scenes/creatures/enemy_slime1.tscn", _player.global_position + o)
-		for k in 4:
-			await _frames(15)
-			_hide_hud()
-			_clear_others()
+			## GERÇEK menzilli yaratıklar (kullanıcı 2026-11-15): kendi mermilerini atarlar; oyuncu hızında kovalar (menzilde kalsınlar), ölümsüz.
+			## Kalkan siper duruşunda atışlarını karşılar, menzile giren kovalayanları döver.
+			var rpool: Array = RANGED_CREATURES.duplicate()
+			for r_ in [[95.0, -60.0], [105.0, 55.0]]:
+				var rq: Vector2 = _player.global_position - _run_dir * float(r_[0]) + perp0 * float(r_[1])
+				if _blocked(rq):
+					rq = _player.global_position - _run_dir * float(r_[0])
+				var rid: String = rpool.pop_at(_rng.randi_range(0, rpool.size() - 1))
+				shooters.append(_spawn_creature(_creature_path(rid), rq, psp * 1.05, true))
+		print("RUN ", key, " dir=", _run_dir, " speed=", psp, " chasers=", spawned, " types=", _clip_melee, " ranged=", shooters.map(func(x: Node) -> String: return str(x.name)))
+		if _rt:
+			Engine.max_fps = 60
+			DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+		var w0: int = Time.get_ticks_msec()
+		var wlast: int = w0
+		var wsteps: int = 0
+		while (_rt and Time.get_ticks_msec() - w0 < 2000) or (not _rt and wsteps < 60):
+			var wnow: int = Time.get_ticks_msec()
+			var wdt: float = (wnow - wlast) / 1000.0 if _rt else 1.0 / FPS
+			wlast = wnow
+			if (_rt and wnow - w0 >= 1000) or (not _rt and wsteps >= 30):
+				_steer(wdt)
+			if wsteps % 6 == 0 and _alive_chasers() < alive_t:
+				_spawn_chaser_behind(psp)
+			if wsteps % 15 == 14:
+				_hide_hud()
+				_clear_others()
+			wsteps += 1
+			await process_frame
+		_hide_hud()
+		_clear_others()
 		var wname: String = _tr(str(cat.call("display_name", key)))
 		var cname: String = _tr(str((load("res://scripts/characters.gd") as GDScript).get_def(cid).get("name", "")))
 		var ui: CanvasLayer = _build_weapon_ui(cid, key, wname)
 		var dirname: String = "%02d_%s_%s" % [idx, wname.replace(" ", ""), cname]
 		print("WEAPON ", dirname)
-		var n: int = int((KALKAN_SEC if kalkan else WEAPON_SEC) * FPS)
+		var n: int = int(CLIP_MAX * FPS) ## üst sınır; gerçek bitiş kanıt + kuyruk
+		var min_f: int = int((KALKAN_SEC if kalkan else CLIP_MIN) * FPS)
 		var dir: String = _out.path_join(dirname)
 		if not still:
 			DirAccess.make_dir_recursive_absolute(dir)
-		for f in n:
-			if f % 10 == 0:
+		_added.clear()
+		_added_count.clear()
+		_log_on = true
+		var dead0: int = _dead_count()
+		_eb = _find_eb()
+		_eb_base.clear()
+		for vn in ["attacks", "leaps", "drops", "bounces", "throws", "bashes", "volleys"]:
+			_eb_base[vn] = _eb_val(vn)
+		_hits_base = _w_hits(key)
+		var proof_f: int = -1
+		var lead_done: bool = false
+		_events.clear()
+		_rec_t0 = Time.get_ticks_msec()
+		var p0: int = -1
+		var p_last: int = -1
+		var saved: int = 0
+		var t0_us: int = Time.get_ticks_usec()
+		var last_us: int = t0_us
+		var cap_idx: int = 0
+		var tasks: Array = []
+		var it: int = 0
+		var next_hud_us: int = 0
+		var next_clear_us: int = 0
+		var next_spawn_us: int = 0
+		if _rt and not still:
+			_rec_start()
+			t0_us = Time.get_ticks_usec()
+			last_us = t0_us
+		for f_it in 100000:
+			var now_us: int = Time.get_ticks_usec()
+			var f: int = int(float(now_us - t0_us) / FRAME_US) if _rt else f_it
+			var step_dt: float = float(now_us - last_us) / 1000000.0 if _rt else 1.0 / FPS
+			last_us = now_us
+			if f >= n:
+				break
+			_cur_f = f
+			if not lead_done and f >= int(PROOF_LEAD * FPS):
+				lead_done = true
+				_drain_added()
+				_added_count.clear()
+				for vn in ["attacks", "leaps", "drops", "bounces", "throws", "bashes", "volleys"]:
+					_eb_base[vn] = _eb_val(vn)
+				_hits_base = _w_hits(key)
+			if lead_done and proof_f < 0 and _proof_ok(key):
+				proof_f = f
+				print("PROOF ", key, " f=", f)
+			if proof_f >= 0 and f >= maxi(min_f, proof_f + int(PROOF_TAIL * FPS)):
+				break
+			if (_rt and now_us >= next_hud_us) or (not _rt and f % 10 == 0):
 				_hide_hud()
-			if f % 5 == 0:
+				next_hud_us = now_us + 330000
+			if (_rt and now_us >= next_clear_us) or (not _rt and f % 5 == 0):
 				_clear_others()
+				next_clear_us = now_us + 160000
+			if ((_rt and now_us >= next_spawn_us) or (not _rt and f % 6 == 0)) and _alive_chasers() < alive_t:
+				_spawn_chaser_behind(psp)
+				next_spawn_us = now_us + 200000
+			_drain_added()
 			if kalkan and OS.get_environment("KK_DIAG") == "1" and f % 30 == 0:
 				print("DIAG f=", f, " valid=", is_instance_valid(shooter), " ", (str(shooter.global_position) + " vis=" + str(shooter.is_visible_in_tree()) + " mod=" + str(shooter.modulate) + " hp=" + str(shooter.get("health")) + " st=" + str(shooter.get("_state")) + " kids=" + str(shooter.get_children().map(func(c: Node) -> String: return c.name + ":" + str(c.visible if c is CanvasItem else "-")))) if is_instance_valid(shooter) else "")
-			if kalkan and is_instance_valid(shooter):
-				if shooter_pos == Vector2.ZERO:
-					shooter_pos = shooter.global_position
-				shooter.global_position = shooter_pos ## geri tepme / itilme kadrajdan çıkarmasın
-			if kalkan and is_instance_valid(shooter) and f % 13 == 0 and f < n - 20:
-				_fire_at_player(shooter.global_position + Vector2(8, -14))
-			if kalkan and f == 140:
-				_spawn_creature("res://scenes/creatures/enemy_slime1.tscn", _player.global_position + Vector2(-26, -44)) ## kalkan şimdi döver (atışla aynı yönde)
-			if still and f == 52:
+			_steer(step_dt)
+			_setup_cam_limits()
+			if OS.get_environment("KK_DIAG") == "1" and f % 30 == 0:
+				var dmin: float = 1.0e9
+				for e in _keep:
+					if is_instance_valid(e) and e != shooter:
+						dmin = minf(dmin, (e as Node2D).global_position.distance_to(_player.global_position))
+				print("RUNDIAG ", key, " f=", f, " p=", _player.global_position, " dir=", _run_dir, " nearest=", dmin)
+			if still and (f == 20 or f == n - 10):
 				await RenderingServer.frame_post_draw
-				root.get_texture().get_image().save_png(_out.path_join("wstill_%s.png" % key))
+				root.get_texture().get_image().save_png(_out.path_join("wstill_%s_%s.png" % [key, "a" if f == 20 else "b"]))
 				print("SHOT wstill_", key)
-				if not kalkan:
-					break
-			if still and kalkan and f == 175:
+			if not still and _rt:
 				await RenderingServer.frame_post_draw
-				root.get_texture().get_image().save_png(_out.path_join("wstill_%s_b.png" % key))
-				break
-			if not still:
+				var idx_now: int = mini(n - 1, int(float(Time.get_ticks_usec() - t0_us) / FRAME_US))
+				if idx_now >= cap_idx:
+					var paths := PackedStringArray()
+					for j in range(cap_idx, idx_now + 1):
+						paths.append(dir.path_join("f_%04d.jpg" % j))
+					tasks.append(WorkerThreadPool.add_task(_save_jpgs.bind(root.get_texture().get_image(), paths)))
+					cap_idx = idx_now + 1
+					saved = cap_idx
+			elif not still:
 				await RenderingServer.frame_post_draw
 				root.get_texture().get_image().save_jpg(dir.path_join("f_%04d.jpg" % f), 0.95)
+				## SES (kullanıcı 2026-11-16): Movie Maker AVI'sinden bu klibin sesi kesilecek - AVI karesi k = oyun karesi k + 1.
+				if p0 < 0:
+					p0 = Engine.get_process_frames()
+				p_last = Engine.get_process_frames()
+				saved = f + 1
 			await process_frame
+		_set_move(Vector2.ZERO)
+		if _rt and not still:
+			_rec_stop(dir.path_join("audio.wav"))
+			for t in tasks:
+				WorkerThreadPool.wait_for_task_completion(t)
+		_drain_added()
+		_log_on = false
+		if proof_f < 0:
+			print("WARN PROOF YOK ", key, " (", CLIP_MAX, " sn içinde özellik kanıtı gelmedi)")
+		if not still and p0 >= 0 and not _rt:
+			var af := FileAccess.open(dir.path_join("audio.json"), FileAccess.WRITE)
+			af.store_string(JSON.stringify({"p0": p0, "p_last": p_last, "frames": saved, "fps": FPS, "proof_f": proof_f}))
+			af.close()
+		var dealt: Dictionary = (load("res://scripts/balance_log.gd") as GDScript).call("dealt_snapshot")
+		var wrow: Variant = dealt.get("w:" + key, null)
+		print("EVENTS ", dirname, " ", _events, " real_ms_per_frame=", (Time.get_ticks_msec() - _rec_t0) / maxf(1.0, float(saved)))
+		_cur_f = -1
+		print("TRAIT ", dirname, " | kills=", _dead_count() - dead0, " hp=", _chaser_hp, " w_hits=", (wrow as Array)[1] if wrow is Array else "-",
+				" | ", _trait_counters(), " | ", _added_summary())
 		if not still:
-			print("CLIP ", dirname, " frames=", n)
+			print("CLIP ", dirname, " frames=", saved, " unique=", tasks.size() if _rt else saved)
 		ui.queue_free()
 
 
@@ -641,16 +1159,10 @@ func _build_weapon_ui(cid: int, key: String, wname: String) -> CanvasLayer:
 	ui.layer = 120
 	ui.set_meta("kk_ui", true)
 	root.add_child(ui)
-	var name_l: Label = _label(_tr(str(def.get("name", ""))), 64, _ht.get("ACCENT"), 15)
-	name_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	name_l.size = Vector2(600, 80)
-	name_l.position = Vector2(_pscreen.x - 300, _pscreen.y - 24.0 * _zoom - 92.0)
-	name_l.modulate.a = 0.0
-	ui.add_child(name_l)
-	name_l.create_tween().tween_property(name_l, "modulate:a", 1.0, 0.4).set_delay(0.1)
+	## Karakter adı YOK (kullanıcı 2026-11-16: "karakterlerin ismi yazmasın"); yalnız sağ üstte silah.
 
 	var row := Control.new()
-	row.position = Vector2(1180, 540 - 90)
+	row.position = Vector2(1180, 70) ## sağ üst: kovalayanlar oyuncu hizasında (y 620) arkada, panel onları örtmesin
 	row.modulate.a = 0.0
 	ui.add_child(row)
 	var icon_px: float = 144.0

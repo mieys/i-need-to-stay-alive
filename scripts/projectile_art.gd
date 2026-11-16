@@ -17,17 +17,24 @@ const LAUNCH_FPS := 30.0
 
 ## sahne adı -> doku adı (<ad>_govde.png / <ad>_iz.png), gövde kare sayısı + fps, iz "fly" kare sayısı + fps, iz offset.x (izin baş
 ## pikseli gövde pivotunun gerisinde; gen_mermi_sprites.py sonunda yazdırılan tabloyla AYNI olmalı - kare boyu dokudan okunur).
+## İsteğe bağlı (madde 749): "wpx" = doku pikseli kaç DÜNYA birimi (yoksa WORLD_PX 0,575; Kaos/Kabarcık 1,0 = prototip yoğunluğu),
+## "rot": false = gövde uçuş yönüne DÖNMEZ (kabarcığın parlaması hep sol üstte), "muzzle" = atış anında merminin çıktığı yerde
+## (asanın ucu) bir kez oynayan sahne (kaster + uzak kopya aynı betik -> iki tarafta da, ek RPC yok), "impact_body" = isabet
+## sahnesi yaratığın gövde hizasında (projectile.gd impact_point; küçük 1 px pikselli isabetler ayakta kalmasın).
 const ART := {
 	"arrow_projectile": {"name": "ok", "bf": 1, "bfps": 1.0, "tf": 2, "tfps": 25.0, "tox": -21.5},
-	## Zehir Asası (eski Tüftüf) "A - Zehir Damlası" (madde 410, tools/gen_zehir_damla_fx.py): iz şeridi YOK (tf 0) - iz kuyruktan kopup
-	## yere düşen damlalar (poison_drip_fx.gd). Eski bambu dart dokuları (dart_govde/dart_iz) duruyor, kullanılmıyor.
-	"dart_projectile": {"name": "zehir", "bf": 1, "bfps": 1.0, "tf": 0, "tfps": 1.0, "tox": 0.0},
+	## Zehir Asası "B - Kabarcık" (madde 749, kullanıcı seçimi 2026-11-16; tools/gen_asa_efekt_fx.py): esneyen zehir kabarcığı, iz şeridi
+	## YOK (tf 0) - iz arkada kalıp kabaran yumuşak puflar (poison_drip_fx.gd trail_puff). Eski "zehir" damla dokusu (madde 410) duruyor.
+	"dart_projectile": {"name": "kabarcik", "bf": 6, "bfps": 18.0, "tf": 0, "tfps": 1.0, "tox": 0.0, "wpx": 1.0, "rot": false,
+		"muzzle": "res://scenes/fx_namlu_kabarcik.tscn", "impact_body": true},
 	"tabanca_projectile": {"name": "tabanca", "bf": 1, "bfps": 1.0, "tf": 2, "tfps": 25.0, "tox": -16.5},
 	"tufek_projectile": {"name": "tufek", "bf": 1, "bfps": 1.0, "tf": 2, "tfps": 25.0, "tox": -30.5},
 	## Pompalı saçması (madde 448): 4x4 yuvarlak, iz YOK (salvo başına 6+ mermi: iz şeritleri karmaşa yapardı).
 	"pompali_projectile": {"name": "pompali", "bf": 1, "bfps": 1.0, "tf": 0, "tfps": 1.0, "tox": 0.0},
 	"makineli_projectile": {"name": "tabanca", "bf": 1, "bfps": 1.0, "tf": 2, "tfps": 25.0, "tox": -16.5}, ## madde 652: Tabanca mermisi
-	"arcane_projectile": {"name": "arcane", "bf": 4, "bfps": 14.0, "tf": 4, "tfps": 14.0, "tox": -23.5},
+	## Arcane "C - Kaos Yarığı" (madde 749, kullanıcı seçimi 2026-11-16): kara çekirdek + pembe kenar, kıvılcımlı; kopuk yırtık izi.
+	"arcane_projectile": {"name": "kaos", "bf": 4, "bfps": 16.0, "tf": 4, "tfps": 20.0, "tox": -18.0, "wpx": 1.0,
+		"muzzle": "res://scenes/fx_namlu_kaos.tscn", "impact_body": true},
 	"ice_bolt_projectile": {"name": "buz", "bf": 4, "bfps": 12.0, "tf": 2, "tfps": 12.0, "tox": -23.5},
 }
 
@@ -44,6 +51,26 @@ static var _cache: Dictionary = {}
 
 static func has_art(scene_key: String) -> bool:
 	return ART.has(scene_key)
+
+
+## Doku pikseli kaç dünya birimi (madde 749 "wpx"; yoksa silah pikseli WORLD_PX).
+static func world_px(scene_key: String) -> float:
+	return float((ART.get(scene_key, {}) as Dictionary).get("wpx", WORLD_PX))
+
+
+## Gövde uçuş yönüne döner mi (madde 749 "rot").
+static func rotates(scene_key: String) -> bool:
+	return bool((ART.get(scene_key, {}) as Dictionary).get("rot", true))
+
+
+## İsabet sahnesi gövde hizasında mı (madde 749 "impact_body"; projectile.gd impact_point).
+static func impact_on_body(scene_key: String) -> bool:
+	return bool((ART.get(scene_key, {}) as Dictionary).get("impact_body", false))
+
+
+## Atış anında namluda bir kez oynayan sahne yolu ("" = yok).
+static func muzzle_path(scene_key: String) -> String:
+	return str((ART.get(scene_key, {}) as Dictionary).get("muzzle", ""))
 
 
 static func _frames(tex: Texture2D, n: int, anims: Array) -> SpriteFrames:
@@ -108,13 +135,24 @@ static func apply(proj: Node2D, scene_key: String, trail_tint: Color = Color.WHI
 		anim.offset = Vector2.ZERO
 		anim.centered = true
 		body = anim
+	elif bullet and int(cfg["bf"]) > 1:
+		## Çok kareli gövde ama sahnede tek kareli "Bullet" var (madde 749 Kabarcık, dart_projectile): yanına aynı yerde
+		## AnimatedSprite2D, eski Sprite2D gizli kalır.
+		var art := AnimatedSprite2D.new()
+		art.name = "ArtBody"
+		art.sprite_frames = body_frames(scene_key)
+		art.centered = true
+		bullet.visible = false
+		proj.add_child(art)
+		art.play("fly")
+		body = art
 	elif bullet:
 		bullet.texture = load(DIR + str(cfg["name"]) + "_govde.png")
 		bullet.offset = Vector2.ZERO
 		bullet.centered = true
 		body = bullet
 	if body:
-		body.scale = Vector2.ONE * WeaponTierArt.PUPPET_ICON_SCALE
+		body.scale = Vector2.ONE * WeaponTierArt.PUPPET_ICON_SCALE * (world_px(scene_key) / WORLD_PX)
 		body.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		body.visible = false
 	if int(cfg["tf"]) <= 0:

@@ -40,7 +40,11 @@ const ENEMY_SHIELD_PEN := 0.5
 const PLAYER_DAMAGE_RATIO := 0.12
 ## Yıldırım ekranda/yakında ise ekran flaşı + ses; uzaktaysa (bu kadar birimden) sadece ses.
 const FLASH_RANGE := 1100.0
-const FLASH_DECAY := 3.2
+## Madde 711 (2026-11-15, göz yorgunluğu): eskiden flaş 1,0 + 0,12 sn sonra ikinci 0,75 (çift parlama), sönüm 3,2/sn - fırtınada
+## 3,5-8 sn'de bir tüm ekran FLASH_AMBIENT'e (1,3) sıçrıyordu. Şimdi TEK, yumuşak parlama: tepe 0,35 (fırtına kararmasını kabaca
+## gündüze geri açar, gündüzden parlak olmaz), sönüm 1,4/sn (~0,25 sn). Uzak gök gürültüsü parlaması 0,2-0,35 -> 0,08-0,14.
+const FLASH_PEAK := 0.35
+const FLASH_DECAY := 1.4
 ## Kozmetik uzak gök gürültüsü aralığı (sn).
 const DISTANT_MIN_INTERVAL := 6.0
 const DISTANT_MAX_INTERVAL := 14.0
@@ -154,8 +158,7 @@ func _on_strike_landed(pos: Vector2) -> void:
 	CameraShakeScript.add_at(pos, 0.5, 1400.0) ## kamera sarsıntısı (uzaktaki yıldırım azalır, bkz. camera_shake.gd)
 	var cam := get_viewport().get_camera_2d()
 	if cam and cam.get_screen_center_position().distance_to(pos) <= FLASH_RANGE:
-		flash = 1.0
-		_flash_queue = [[0.12, 0.75]]
+		flash = maxf(flash, FLASH_PEAK)
 
 
 static func in_strike_area(point: Vector2, center: Vector2) -> bool:
@@ -193,7 +196,7 @@ func _update_flash(delta: float) -> void:
 
 func _distant_thunder() -> void:
 	## Yıldırımsız uzak gürültü + hafif gökyüzü parlaması (flaş gürültüden biraz önce - ışık sesten hızlı).
-	flash = maxf(flash, randf_range(0.2, 0.35))
+	flash = maxf(flash, randf_range(0.08, 0.14))
 	var path: String = DISTANT_SOUNDS[randi() % DISTANT_SOUNDS.size()]
 	var player: AudioStreamPlayer = null
 	for dp in _distant_players:

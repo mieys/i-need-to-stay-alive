@@ -120,6 +120,12 @@ const PATHS: Array[String] = [
 	"res://assets/fx/enchant/flame_shower_fire_sheet.png",
 	"res://assets/fx/enchant/flamethrower_fire_frames.tres", ## elle (madde 639): Ateş Asası alevi
 	"res://assets/fx/enchant/flamethrower_fire_sheet.png", ## elle (madde 639)
+	"res://assets/fx/enchant/void_rift_open_frames.tres",
+	"res://assets/fx/enchant/void_rift_open_sheet.png",
+	"res://assets/fx/enchant/void_rift_pop_45_frames.tres", ## elle (madde 749): Arcane yarık patlaması 0,8 sn sonra - toplayıcı beklemez
+	"res://assets/fx/enchant/void_rift_pop_45_sheet.png", ## elle (madde 749)
+	"res://assets/fx/enchant/void_rift_pop_60_frames.tres", ## elle (madde 749): Geniş Yankı
+	"res://assets/fx/enchant/void_rift_pop_60_sheet.png", ## elle (madde 749)
 	"res://assets/fx/gonca/seed_end.png", ## elle (madde 682): boss efekti / durum ikonu - toplayıcı bossları çağırmaz
 	"res://assets/fx/gonca/seed_loop.png", ## elle (madde 682): boss efekti / durum ikonu - toplayıcı bossları çağırmaz
 	"res://assets/fx/hadime/cukur/cukur_buyuk_on.tres",
@@ -150,6 +156,10 @@ const PATHS: Array[String] = [
 	"res://assets/fx/hadime/levitate_sheet.png",
 	"res://assets/fx/hadime/nightmare_aura_frames.tres",
 	"res://assets/fx/hadime/nightmare_aura_sheet.png",
+	"res://assets/fx/hit_effects/asa/kabarcik_namlu_frames.tres",
+	"res://assets/fx/hit_effects/asa/kabarcik_namlu_sheet.png",
+	"res://assets/fx/hit_effects/asa/kaos_namlu_frames.tres",
+	"res://assets/fx/hit_effects/asa/kaos_namlu_sheet.png",
 	"res://assets/fx/korsan/puff_dust_frames.tres",
 	"res://assets/fx/korsan/puff_dust_sheet.png",
 	"res://assets/fx/korsan/puff_smoke_frames.tres",
@@ -182,6 +192,17 @@ const PATHS: Array[String] = [
 	"res://assets/fx/vampir_donusum/in_ground.png",
 	"res://assets/fx/vampir_donusum/out_front.png",
 	"res://assets/fx/vampir_donusum/out_ground.png",
+	"res://assets/pets/necro_iskelet/archer_frames.tres",
+	"res://assets/pets/necro_iskelet/archer_sheet.png",
+	"res://assets/pets/necro_iskelet/common_frames.tres",
+	"res://assets/pets/necro_iskelet/common_sheet.png",
+	"res://assets/pets/necro_iskelet/fx/arrow.png",
+	"res://assets/pets/necro_iskelet/ghost_armored_frames.tres",
+	"res://assets/pets/necro_iskelet/ghost_armored_sheet.png",
+	"res://assets/pets/necro_iskelet/ghost_captain_frames.tres",
+	"res://assets/pets/necro_iskelet/ghost_captain_sheet.png",
+	"res://assets/pets/necro_iskelet/ghost_common_frames.tres",
+	"res://assets/pets/necro_iskelet/ghost_common_sheet.png",
 	"res://assets/skills/buyucu_skill_hortum_icon.png",
 	"res://assets/skills/buyucu_skill_meteor_icon.png",
 	"res://assets/skills/cadi_iksir_1_icon.png",
@@ -197,6 +218,7 @@ const PATHS: Array[String] = [
 	"res://assets/ui/status/bat.png",
 	"res://assets/ui/status/petrify.png", ## elle (madde 682): boss efekti / durum ikonu - toplayıcı bossları çağırmaz
 	"res://assets/ui/status/poison.png", ## elle (madde 682): boss efekti / durum ikonu - toplayıcı bossları çağırmaz
+	"res://assets/ui/status/sandstorm.png", ## elle (madde 718): kum fırtınası durum ikonu - toplayıcı çöl havasını beklemez
 	"res://assets/ui/status/shield_slow.png",
 	"res://assets/ui/status/speed.png",
 	"res://assets/ui/status/stone_slow.png", ## elle (madde 682): boss efekti / durum ikonu - toplayıcı bossları çağırmaz
@@ -206,6 +228,8 @@ const PATHS: Array[String] = [
 	"res://assets/weapons/mermi/buz_govde.png",
 	"res://assets/weapons/mermi/buz_iz.png",
 	"res://assets/weapons/mermi/fisek_alev.png",
+	"res://assets/weapons/mermi/kaos_govde.png",
+	"res://assets/weapons/mermi/kaos_iz.png",
 	"res://assets/weapons/mermi/ok_govde.png",
 	"res://assets/weapons/mermi/ok_iz.png",
 	"res://assets/weapons/mermi/pompali_govde.png", ## madde 448 (ProjectileArt load())
@@ -229,6 +253,7 @@ const PATHS: Array[String] = [
 	"res://assets/weapons/yeni/yay_d5.png",
 	"res://assets/weapons/yeni/yildirim_asasi.png",
 	"res://scenes/fx_buyucu_surge_wave.tscn",
+	"res://scenes/fx_frost_chill_status.tscn",
 	"res://scenes/fx_hadime_black_hole.tscn",
 	"res://scenes/fx_hadime_curse.tscn",
 	"res://scenes/fx_hadime_curse_impact.tscn",
@@ -237,8 +262,15 @@ const PATHS: Array[String] = [
 	"res://scenes/fx_hadime_levitate.tscn",
 	"res://scenes/fx_hadime_nightmare.tscn",
 	"res://scenes/fx_hit_mini_spark.tscn",
+	"res://scenes/fx_item_bone_fangs.tscn",
+	"res://scenes/fx_item_death_threshold.tscn",
+	"res://scenes/fx_item_fear_heart.tscn",
+	"res://scenes/fx_item_sun_will.tscn",
+	"res://scenes/fx_item_time_freeze.tscn",
 	"res://scenes/fx_korsan_puff_dust.tscn",
 	"res://scenes/fx_korsan_puff_smoke.tscn",
+	"res://scenes/fx_namlu_kabarcik.tscn",
+	"res://scenes/fx_namlu_kaos.tscn",
 	"res://scenes/fx_petrify.tscn", ## elle (madde 682): boss efekti / durum ikonu - toplayıcı bossları çağırmaz
 	"res://scenes/fx_shaman_golem_slam.tscn",
 	"res://scenes/fx_shaman_golem_transform.tscn",
@@ -247,11 +279,13 @@ const PATHS: Array[String] = [
 	"res://scripts/cadi_potion_visual.gd",
 	"res://scripts/cadi_smoke.gd",
 	"res://scripts/cadi_zone.gd",
+	"res://scripts/fx_frost_chill_status.gd",
 	"res://scripts/fx_hadime_curse.gd",
 	"res://scripts/fx_hadime_ground_loop.gd",
 	"res://scripts/fx_paladin_barrier.gd",
 	"res://scripts/fx_paladin_overlay.gd",
 	"res://scripts/fx_petrify.gd", ## elle (madde 682): boss efekti / durum ikonu - toplayıcı bossları çağırmaz
+	"res://scripts/fx_ring.gd",
 	"res://scripts/fx_shield_hit.gd",
 	"res://scripts/gonca_drain.gd", ## elle (madde 682): boss efekti / durum ikonu - toplayıcı bossları çağırmaz
 	"res://scripts/gonca_ring.gd", ## elle (madde 682): boss efekti / durum ikonu - toplayıcı bossları çağırmaz
@@ -264,7 +298,10 @@ const PATHS: Array[String] = [
 	"res://scripts/vampir_fx.gd",
 	"res://scripts/weapon_traits/ates_nefesi.gd",
 	"res://scripts/weapon_traits/flamethrower_shape.gd", ## elle (madde 639)
+	"res://scripts/weapon_traits/kirik_buz.gd",
 	"res://scripts/weapon_traits/kizisan_namlu.gd",
+	"res://scripts/weapon_traits/sicrayan_zehir.gd",
+	"res://scripts/weapon_traits/yankilanan_buyu.gd",
 	"res://shaders/hadime_cukur_palet.gdshader",
 	"res://shaders/shield_dome.gdshader",
 ]

@@ -46,6 +46,15 @@ const G_DOTS := ["##..##..##", "##..##..##"]
 const G_X := ["#...#", ".#.#.", "..#..", ".#.#.", "#...#"]
 const G_QMARK := [".####.", "##..##", "....##", "...##.", "..##..", "......", "..##.."]
 const G_OPEN := ["..###..", ".#...#.", ".#.....", "#######", "###.###", "###.###", "#######"]
+## Oda / lobi ikonları: Raven Fantasy Icons 16x16, kullanıcı seçimi (2026-11-16, madde 757): eski çizgi glifler (kilit/küre/kişi/taç)
+## yerine. chip()/room_icon() 2x çizer (lobideki stat ikonlarıyla aynı 32 px). Kaynak fa numaraları: sifreli fa71, sifresiz fa35,
+## internet fa2124, oyuncu fa1905, host fa12.
+const I_LOCKED := preload("res://assets/ui/oda_ikonlari/sifreli.png")
+const I_OPEN := preload("res://assets/ui/oda_ikonlari/sifresiz.png")
+const I_ONLINE := preload("res://assets/ui/oda_ikonlari/internet.png")
+const I_PLAYERS := preload("res://assets/ui/oda_ikonlari/oyuncu.png")
+const I_HOST := preload("res://assets/ui/oda_ikonlari/host.png")
+const ROOM_ICON_K := 2
 
 
 ## Piksel desenli küçük simge ("#" = dolu).
@@ -339,13 +348,21 @@ static func btn_row(b: Button, row: HBoxContainer, center: bool = true) -> Butto
 	return b
 
 
-static func chip(pat: Array, t: String, col: Color, fs: int = FS_LABEL) -> PanelContainer:
+## Oda ikonu (I_* dokuları): tam 2x, en yakın komşu.
+static func room_icon(tex: Texture2D, k: int = ROOM_ICON_K) -> CenterContainer:
+	return icon(tex, float(tex.get_width() * k), false, float(tex.get_height() * k))
+
+
+## pat: glif deseni (Array) ya da oda ikonu dokusu (Texture2D, renkli çizilir; yazı rengi col kalır).
+static func chip(pat: Variant, t: String, col: Color, fs: int = FS_LABEL) -> PanelContainer:
 	var p := box(C_INSET, C_LINE, 6, 2, 4)
 	var st = p.get_theme_stylebox("panel") ## PixelBox (madde 417)
 	st.content_margin_left = 12
 	st.content_margin_right = 14
 	var hb := h(10)
-	if not pat.is_empty():
+	if pat is Texture2D:
+		hb.add_child(room_icon(pat))
+	elif not (pat as Array).is_empty():
 		hb.add_child(glyph(pat, col, 3))
 	hb.add_child(lbl(t, fs, col))
 	p.add_child(hb)

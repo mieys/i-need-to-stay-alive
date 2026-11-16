@@ -84,7 +84,9 @@ void fragment() {
 	}
 	float alpha = a1 + a2;
 	if (alpha <= 0.002) { discard; }
-	float pulse = 0.82 + 0.18 * sin((TIME + phase) * 2.3);
+	// Madde 711 (2026-11-15, göz yorgunluğu): sürekli nefes (0,82-1,0, 2,3 rad/sn) kaldırıldı - kontur karakterle sürekli dolaşıyor,
+	// sabit dursun. Değer eski nabzın ortalaması.
+	float pulse = 0.91;
 	vec3 col = glow_color.rgb * (a1 + 0.55 * a2) / alpha;
 	COLOR = vec4(col, clamp(alpha * pulse * strength, 0.0, 1.0));
 }

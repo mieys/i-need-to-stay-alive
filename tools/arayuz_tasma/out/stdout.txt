@@ -1,0 +1,83 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+[Yaratık sistemi] C++ EnemyWorld
+TASMA_EKRANLAR ana_menu,ayarlar,ayarlar_1,ayarlar_2,rekorlar,ruh_magazasi,karakter_secimi,hud,level_kartlari,evrim,level_pazari,sandik,elit_sandik,duraklatma,envanter
+TASMA SATIR karakter_secimi 1 [tr,en] Control/PanelContainer/VBoxContainer/VBoxContainer/HBoxContainer/VBoxContainer/Label «3sn boyunca tüm silahların dışa dönük olarak etrafında 2 tur atıp süre»
+TASMA TR ruh_magazasi 0 [en] VBoxContainer/HBoxContainer/VBoxContainer/Button/HBoxContainer/VBoxContainer/Label «10/10 açık»
+TASMA TR ruh_magazasi 0 [en] Control/MarginContainer/VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/Label «10 / 10 açık»
+TASMA TR karakter_secimi 0 [en] SoloStack/VBoxContainer/PanelContainer/HBoxContainer/VBoxContainer/HBoxContainer/Label «Öykü»
+TASMA BOY hud 88 [tr,en] Main/HUD/DebugButton «m5x7 88: DEBUG»
+TASMA BOY ayarlar 72 [tr,en] MainMenu/SettingsScreen/TitleSign/Title «m5x7 72: AYARLAR»
+TASMA BOY duraklatma 72 [tr,en] Main/PauseMenu/Root/MainView/TitleSign/Title «m5x7 72: DURAKLATILDI»
+TASMA BOY rekorlar 72 [tr,en] MainMenu/RecordsScreen/TitleSign/Title «m5x7 72: REKORLAR»
+TASMA BOY level_kartlari 56 [tr,en] Main/LevelUpScreen/LevelMarket/CardColumn/HBoxContainer/MarketTitle «m5x7 56: SEVİYE 2»
+TASMA BOY ruh_magazasi 56 [tr,en] VBoxContainer/HBoxContainer/PanelContainer/VBoxContainer/HBoxContainer/VBoxContainer/Label «m5x7 56: Matthew»
+TASMA BOY ruh_magazasi 56 [tr,en] CanvasLayer/Control/MarginContainer/VBoxContainer/HBoxContainer/HBoxContainer/Label «m5x7 56: 12»
+TASMA BOY level_pazari 40 [tr,en] Main/LevelMarketScreen/LevelMarket/MarketContinue/CenterContainer/Text «m5x7 40: DEVAM ET»
+TASMA BOY ruh_magazasi 40 [tr,en] Control/MarginContainer/VBoxContainer/HBoxContainer/PanelContainer/VBoxContainer/Button «m5x7 40: SENDE»
+TASMA BOY ruh_magazasi 40 [tr,en] Control/MarginContainer/VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/Label «m5x7 40: KARAKTERLER»
+TASMA BOY envanter 40 [tr,en] Window/PanelContainer/VBoxContainer/HBoxContainer/PanelContainer/HBoxContainer/Label «m5x7 40: KAHRAMAN ÇANTASI»
+TASMA BOY envanter 40 [tr,en] PanelContainer/VBoxContainer/HBoxContainer/Stage/VBoxContainer/HBoxContainer/Label «m5x7 40: Oakley»
+TASMA BOY hud 29 [tr,en] Main/HUD/CharacterCluster/LevelLabel «m5x7 29: 1»
+TASMA BOY hud 28 [tr,en] Main/HUD/SkillBar/SkillIcon/KeyLabel «m5x7 28: Q»
+TASMA BOY hud 28 [tr,en] Main/HUD/SkillBar/Skill2Icon/KeyLabel «m5x7 28: E»
+TASMA BOY hud 28 [tr,en] Main/HUD/SkillBar/Skill3Icon/KeyLabel «m5x7 28: R»
+TASMA BOY hud 28 [tr,en] Main/HUD/SkillBar/SpiritIcon/KeyLabel «m5x7 28: F»
+TASMA BOY evrim 24 [tr,en] LevelUpScreen/EvoCards/Card1/EvoBody/EvoHead/EvoInfo/EvoSkill «m5x7 24: Arı Sürüsü»
+TASMA BOY evrim 24 [tr,en] LevelUpScreen/EvoCards/Card2/EvoBody/EvoHead/EvoInfo/EvoSkill «m5x7 24: Sarmaşıklar»
+TASMA BOY evrim 24 [tr,en] LevelUpScreen/EvoCards/Card3/EvoBody/EvoHead/EvoInfo/EvoSkill «m5x7 24: Arı Sürüsü»
+TASMA BOY level_pazari 24 [tr,en] LevelMarket/MarketBottom/MarketReroll/CenterContainer/HBoxContainer/Cost/Label «m5x7 24: 3»
+TASMA BOY level_pazari 24 [tr,en] Main/LevelMarketScreen/LevelMarket/MarketBottom/HBoxContainer/BanCount «m5x7 24: YASAK HAKKI 3/3»
+TASMA BOY level_kartlari 24 [tr,en] Main/LevelUpScreen/LevelMarket/CardColumn/LevelCards/VBoxContainer/RerollButton «m5x7 24: Yeniden Karıştır (ÜCRETSİZ)»
+TASMA BOY level_kartlari 24 [tr,en] VBoxContainer/Card3/MarketFace/HBoxContainer/VBoxContainer/Gain/Label «m5x7 24: +50»
+TASMA BOY envanter 24 [tr,en] HBoxContainer/VBoxContainer/PanelContainer/VBoxContainer/HBoxContainer/VBoxContainer/Label «m5x7 24: USTALIK 0/5»
+TASMA BOY envanter 24 [tr,en] VBoxContainer/PanelContainer/VBoxContainer/HBoxContainer/VBoxContainer/HBoxContainer/Label «m5x7 24: KADEME I»
+TASMA BOY envanter 24 [tr,en] VBoxContainer/HBoxContainer/VBoxContainer/PanelContainer/VBoxContainer/HBoxContainer/Label «m5x7 24: 0 / 16 yuva»
+TASMA BOY envanter 24 [tr,en] Window/PanelContainer/VBoxContainer/HBoxContainer/Stage/VBoxContainer/Label «m5x7 24: 0 / 13 XP»
+TASMA BOY envanter 24 [tr,en] VBoxContainer/HBoxContainer/Stage/VBoxContainer/HBoxContainer/PanelContainer/Label «m5x7 24:  Sv 1 »
+TASMA BOY envanter 24 [tr,en] Window/PanelContainer/VBoxContainer/HBoxContainer/Stage/EquipSlots/Label «m5x7 24: MANA KALKANI»
+TASMA BOY envanter 24 [tr,en] Window/PanelContainer/VBoxContainer/HBoxContainer/Stage/WeaponSlots/Label «m5x7 24: Uzunkılıç»
+TASMA BOY envanter 24 [tr,en] PanelContainer/VBoxContainer/HBoxContainer/Stage/WeaponSlots/PanelContainer/Label «m5x7 24:  I »
+TASMA BOY envanter 24 [tr,en] VBoxContainer/HBoxContainer/PanelContainer/VBoxContainer/PanelContainer/HBoxContainer/Label «m5x7 24: Saldırı Gücü»
+TASMA BOY envanter 24 [tr,en] PanelContainer/VBoxContainer/HBoxContainer/PanelContainer/VBoxContainer/HBoxContainer/Label «m5x7 24: SALDIRI»
+TASMA BOY duraklatma 24 [tr,en] Main/PauseMenu/Root/MainView/HBoxContainer/Label «m5x7 24: devam et»
+TASMA BOY duraklatma 24 [tr,en] Main/PauseMenu/Root/MainView/HBoxContainer/PanelContainer/Label «m5x7 24: ESC»
+TASMA BOY duraklatma 24 [tr,en] Root/MainView/MenuPanel/MenuButton/HBoxContainer/VBoxContainer/Label «m5x7 24: Koşu burada biter»
+TASMA BOY duraklatma 24 [tr,en] Root/MainView/MenuPanel/SurrenderButton/HBoxContainer/VBoxContainer/Label «m5x7 24: Koşu burada biter»
+TASMA BOY duraklatma 24 [tr,en] Root/MainView/MenuPanel/RestartButton/HBoxContainer/VBoxContainer/Label «m5x7 24: Aynı karakterle baştan»
+TASMA BOY duraklatma 24 [tr,en] Root/MainView/MenuPanel/SettingsButton/HBoxContainer/VBoxContainer/Label «m5x7 24: Ses, ekran, grafik, tuşlar»
+TASMA BOY duraklatma 24 [tr,en] Root/MainView/MenuPanel/ResumeButton/HBoxContainer/VBoxContainer/Label «m5x7 24: Kaldığın yerden sürdür»
+TASMA BOY elit_sandik 24 [tr,en] Main/ChestMenu/CenterContainer/VBox/CardsContainer/VBoxContainer/Button «m5x7 24: AL»
+TASMA BOY sandik 24 [tr,en] Main/ChestMenu/CenterContainer/VBox/CardsContainer/VBoxContainer/Button «m5x7 24: AL»
+TASMA BOY ana_menu 24 [tr,en] MainMenu/MenuPanel/Button/HBoxContainer/VBoxContainer/Label «m5x7 24: Tek başına hayatta kal»
+TASMA BOY ana_menu 24 [tr,en] MainMenu/PartyLine/Label «m5x7 24: En iyi: Kademe 1 · 1:04»
+TASMA BOY ana_menu 24 [tr,en] MainMenu/DebugButton «m5x7 24: Debug Modu»
+TASMA BOY ayarlar 24 [tr,en] MainMenu/SettingsScreen/CategoryPanel/Button/HBoxContainer/VBoxContainer/Label «m5x7 24: Ses, ekran, arayüz»
+TASMA BOY ayarlar 24 [tr,en] MainMenu/SettingsScreen/CategoryPanel/BackButton/HBoxContainer/VBoxContainer/Label «m5x7 24: Ana menüye dön»
+TASMA BOY ayarlar 24 [tr,en] MainMenu/SettingsScreen/Control/VBoxContainer/HBoxContainer/PanelContainer/Label «m5x7 24: W/S»
+TASMA BOY ayarlar 24 [tr,en] MainMenu/SettingsScreen/Control/VBoxContainer/HBoxContainer/Label «m5x7 24: seç»
+TASMA BOY rekorlar 24 [tr,en] MainMenu/RecordsScreen/CategoryPanel/Button/HBoxContainer/VBoxContainer/Label «m5x7 24: Tek koşu rekorları ve toplamlar»
+TASMA BOY rekorlar 24 [tr,en] MainMenu/RecordsScreen/CategoryPanel/BalanceButton/HBoxContainer/VBoxContainer/Label «m5x7 24: Koşu kayıtları klasörünü aç»
+TASMA BOY rekorlar 24 [tr,en] MainMenu/RecordsScreen/CategoryPanel/BackButton/HBoxContainer/VBoxContainer/Label «m5x7 24: Ana menüye dön»
+TASMA BOY rekorlar 24 [tr,en] MainMenu/RecordsScreen/VBoxContainer/HBoxContainer/PanelContainer/Label «m5x7 24: W/S»
+TASMA BOY rekorlar 24 [tr,en] MainMenu/RecordsScreen/VBoxContainer/HBoxContainer/Label «m5x7 24: kaydır»
+TASMA BOY ruh_magazasi 24 [tr,en] VBoxContainer/HBoxContainer/VBoxContainer/Button/HBoxContainer/VBoxContainer/Label «m5x7 24: 10/10 açık»
+TASMA BOY karakter_secimi 24 [tr,en] CharacterSelect/Control/PanelContainer/VBoxContainer/HBoxContainer/Button «m5x7 24: ANA MENÜ»
+TASMA BOY karakter_secimi 24 [tr,en] Control/PanelContainer/VBoxContainer/HBoxContainer/PanelContainer/HBoxContainer/Label «m5x7 24: Tek oyuncu»
+TASMA BOY karakter_secimi 24 [tr,en] CharacterSelect/Control/PanelContainer/VBoxContainer/Label «m5x7 24: Karakterini, silahını, evcilini ve ruhani yeteneğini seç.»
+TASMA BOY karakter_secimi 24 [tr,en] VBoxContainer/PanelContainer/HBoxContainer/VBoxContainer/HBoxContainer/PanelContainer/Label «m5x7 24: SEN»
+TASMA BOY karakter_secimi 24 [tr,en] SoloStack/VBoxContainer/PanelContainer/HBoxContainer/VBoxContainer/HBoxContainer/Label «m5x7 24: Talon»
+TASMA BOY karakter_secimi 24 [tr,en] CharacterSelect/Control/SoloStack/PanelContainer/VBoxContainer/HBoxContainer/Label «m5x7 24: EN İYİ KOŞULARIN»
+TASMA BOY karakter_secimi 24 [tr,en] CharacterSelect/Control/PanelContainer/VBoxContainer/HBoxContainer/Label «m5x7 24: KARAKTERİNİ SEÇ»
+TASMA BOY karakter_secimi 24 [tr,en] Control/PanelContainer/VBoxContainer/GridContainer/Button/VBoxContainer/Label «m5x7 24: Talon»
+TASMA BOY karakter_secimi 24 [tr,en] Control/PanelContainer/VBoxContainer/HBoxContainer/GridContainer/HBoxContainer/Label «m5x7 24: Can»
+TASMA BOY karakter_secimi 24 [tr,en] Control/PanelContainer/VBoxContainer/VBoxContainer/HBoxContainer/VBoxContainer/Label «m5x7 24: 3sn boyunca tüm silahların dışa dönük olarak etrafında 2 tur »
+TASMA BOY karakter_secimi 24 [tr,en] CharacterSelect/Control/PanelContainer/VBoxContainer/HBoxContainer/VBoxContainer/Label «m5x7 24: YÜKLEMEN»
+TASMA BOY karakter_secimi 24 [tr,en] Control/PanelContainer/VBoxContainer/PanelContainer/VBoxContainer/HBoxContainer/Label «m5x7 24: Yakın Dövüş»
+TASMA BOY karakter_secimi 24 [tr,en] VBoxContainer/PanelContainer/VBoxContainer/GridContainer/HBoxContainer/VBoxContainer/Label «m5x7 24: Saldırı»
+TASMA BOY karakter_secimi 24 [tr,en] CharacterSelect/Control/PanelContainer/VBoxContainer/PanelContainer/VBoxContainer/Label «m5x7 24: Kanayan Kesikler: Her vuruş üst üste binen bir kanama bırakır»
+TASMA BOY karakter_secimi 24 [tr,en] CharacterSelect/Control/VBoxContainer/Label «m5x7 24: Tek oyunculu  ·  Esc: ana menü»
+TASMA BOY level_kartlari 24 [tr,en] VBoxContainer/Card1/MarketFace/HBoxContainer/VBoxContainer/Gain/Label «m5x7 24: +%8 Kritik Oran»
+TASMA BOY level_kartlari 24 [tr,en] VBoxContainer/Card1/MarketFace/HBoxContainer/VBoxContainer/Cost/Label «m5x7 24: -%4.5 Hareket Hızı»
+TASMA BOY level_kartlari 24 [tr,en] VBoxContainer/Card2/MarketFace/HBoxContainer/VBoxContainer/Gain/Label «m5x7 24: +%5»
+TASMA_SAYI 78

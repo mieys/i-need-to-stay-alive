@@ -30,8 +30,10 @@ const SCREEN := Vector2(1920, 1080)
 const COL_W := 560.0
 ## Arka plan sahnesi "Nehir Kenarı Kampı" (2026-11-15): menu_camp_scene.gd (menu_hearth_bg.gd de aynısını kurar).
 const CampScene := preload("res://scripts/menu_camp_scene.gd")
+const BgBlur := preload("res://scripts/menu_bg_blur.gd") ## alt ekranlarda (ayarlar/rekorlar) sahne bulanık, 2026-11-16
 
 var _settings_screen: Control = null
+var _bg_blur: Control = null
 var _records_screen: Control = null
 
 var _start_btn: Button
@@ -47,6 +49,10 @@ var _shard_label: Label = null
 func _ready() -> void:
 	DisplayServer.window_set_title("Potpourri")
 	GameManager.content_unlock_mode = false ## "Debug Modu" düğmesiyle açılan kilit açık modu menüye dönünce biter (madde 614)
+	## TEST HARİTASI (madde 731): menüye dönünce haritanın açtığı debug kapanır, seçim ana haritaya döner (HIZLI BAŞLA test haritasını açmasın).
+	GameManager.leave_test_map()
+	if preload("res://scripts/map_profiles.gd").is_test_map_id(str(GameManager.selected_map)):
+		GameManager.selected_map = preload("res://scripts/map_profiles.gd").DEFAULT_ID
 	theme = MenuKit.theme()
 	_build_scene()
 	if MobileUIScript.enabled:
@@ -81,6 +87,8 @@ func _build_scene() -> void:
 	_stage.add_child(shade)
 	shade.position = Vector2.ZERO
 	shade.size = SCREEN
+	_bg_blur = BgBlur.add_to(layer)
+	_bg_blur.visible = false ## yalnız ayarlar / rekorlar / (telefonda) Ruh Mağazası açıkken: _set_menu_parts_visible
 	layer.resized.connect(_fit_stage.bind(layer))
 	_fit_stage(layer)
 
@@ -290,15 +298,8 @@ func _build_left_panel() -> void:
 	_settings_btn.pressed.connect(_on_settings_pressed)
 	_exit_btn.pressed.connect(_on_exit_pressed)
 
-	## Alt: kamp ateşi başındaki parti yüzleri + en iyi koşu.
-	var bot := DK.h(10)
-	bot.name = "PartyLine"
-	for p: Array in CampScene.PARTY:
-		bot.add_child(DK.icon(_face_tex(int(p[0])), 48))
-	bot.add_child(DK.sp(6))
-	bot.add_child(_lbl(_record_text(), DK.FS_LABEL, C_TAG))
-	add_child(bot)
-	MenuKit.place(bot, Vector2(104, SCREEN.y - 132.0), Vector2(0, 48))
+	## Masaüstünde sol alttaki parti yüzleri + "En iyi" satırı kullanıcı isteğiyle kaldırıldı (2026-11-15); rekor REKORLAR öğesinin alt yazısında.
+	## Debug Modu düğmesi (sol alt) kullanıcı isteğiyle GERİ (2026-11-16: karakter/silah seçimi için lazım, madde 614).
 	_create_debug_mode_button()
 
 
@@ -576,6 +577,8 @@ func _on_settings_closed() -> void:
 
 ## Tam ekran alt ekranlar (ayarlar, rekorlar) açıkken menünün tabelası / öğeleri / parti satırı gizlenir.
 func _set_menu_parts_visible(on: bool) -> void:
+	if is_instance_valid(_bg_blur): ## alt ekran açıkken sahne bulanık (menu_bg_blur.gd), ana menünün kendisinde keskin
+		_bg_blur.visible = not on
 	for n: String in SETTINGS_HIDE:
 		var c := get_node_or_null(n) as CanvasItem
 		if c:

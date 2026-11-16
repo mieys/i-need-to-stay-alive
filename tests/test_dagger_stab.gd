@@ -146,8 +146,11 @@ func test_damage_segments_follow_the_stab_gap() -> void:
 	weapon.call("_dagger_contact", e, e.global_position, true, 90.0, false, 0.0, 0.06)
 	var d1: float = hp0 - float(e.health)
 	assert(d1 > 0.0, "ilk parça temas anında: %.2f" % d1)
-	await get_tree().create_timer(0.03).timeout
-	assert(absf(hp0 - float(e.health) - d1) < d1 * 0.05, "ikinci parça henüz gelmemeli (aralık 0,06)")
+	## Parçalar SceneTree zamanlayıcısıyla gelir: tek bir uzun kare (>= 0,06 sn) ikinci parçayı da getirir. Ara kontrol yalnız
+	## geçen oyun zamanı aralıktan kısayken yapılır (2026-11-16: yüklü makinede bu test arada bir düşüyordu).
+	await get_tree().process_frame
+	if get_process_delta_time() < 0.05:
+		assert(absf(hp0 - float(e.health) - d1) < d1 * 0.05, "ikinci parça henüz gelmemeli (aralık 0,06)")
 	await get_tree().create_timer(0.14).timeout
 	var total: float = hp0 - float(e.health)
 	assert(absf(total / d1 - 3.0) < 0.05, "üç eşit parça: %.2f / %.2f" % [total, d1])

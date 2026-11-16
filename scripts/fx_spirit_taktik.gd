@@ -1,21 +1,26 @@
 extends Node2D
 
-## Ruhani Yetenek "Taktiksel" (F): ışınlandıktan sonraki 3sn'lik +%30 hareket hızı sırasında karakterin ARKASINDA kalan ince
-## turkuaz rüzgâr çizgileri + ayaklarda küçük kıvılcımlar (1 texel detay, bkz. hafıza "Pixel density 48x48").
-## Hareket yönü: yerel oyuncuda `velocity`, uzak kuklada `_network_velocity` (varsa) - durağanken sadece ayak kıvılcımları.
+## Ruhani Yetenek "Taktiksel" (F): ışınlandıktan sonraki 3 sn'lik +%30 hareket hızı. Görünüm = prototip "A Ruh Işığı" (madde 730,
+## kullanıcı seçimi 2026-11-16, madde 734) - eski arkada akan ince çizgiler + ayak pikselleri silindi:
+## hareket ederken her 0,1 sn'de karakterin O ANKİ karesinin turkuaz silüeti dünyada bırakılır ve 0,3 sn'de 3 düz bantla söner
+## (aynı anda en çok 3-4 hayalet). Durunca hayalet bırakılmaz.
+## Hayaletler bu düğümün çocuğu ama her karede dünya konumlarına geri çivilenir (top_level DEĞİL): show_behind_parent sayesinde
+## karakterin ARKASINDA ve onunla aynı derinlik sırasında kalırlar.
+## Hareket yönü: yerel oyuncuda `velocity`, uzak kuklada `_network_velocity` (varsa).
 ## Player/RemotePlayer'ın ÇOCUĞU, sabit ömürlü (DURATION = spiritual_skills.gd TAKTIK_SPEED_TIME).
 
-const PixelDraw := preload("res://scripts/pixel_draw.gd")
+const U := preload("res://scripts/spirit_fx_util.gd")
 const SpiritualSkillsScript: GDScript = preload("res://scripts/spiritual_skills.gd")
 
-const BODY_CENTER := Vector2(0, -4)
-const FADE_OUT := 0.35
+const EVERY := 0.1
+const GHOST_LIFE := 0.3
+const GHOST_ALPHA := 0.42
 
 var _t: float = 0.0
 var _duration: float = SpiritualSkillsScript.TAKTIK_SPEED_TIME
 var _host: Node2D = null
-var _streaks: Array = [] ## [offset_from_body, length, age, life]
 var _acc: float = 0.0
+var _ghosts: Array = [] ## [Sprite2D, dünya konumu, yaş]
 
 
 func _ready() -> void:
@@ -25,46 +30,46 @@ func _ready() -> void:
 	_host = get_parent() as Node2D
 
 
-func _move_dir() -> Vector2:
+func _moving() -> bool:
 	if _host == null or not is_instance_valid(_host):
-		return Vector2.ZERO
+		return false
 	var v: Vector2 = Vector2.ZERO
 	if "velocity" in _host:
 		v = _host.velocity
 	elif "_network_velocity" in _host:
 		v = _host._network_velocity
-	return v.normalized() if v.length() > 20.0 else Vector2.ZERO
+	return v.length() > 20.0
 
 
 func _process(delta: float) -> void:
 	_t += delta
-	if _t >= _duration + FADE_OUT:
-		queue_free()
-		return
-	var dir: Vector2 = _move_dir()
-	if _t < _duration and dir != Vector2.ZERO:
+	if _t < _duration and _moving():
 		_acc += delta
-		while _acc > 0.03:
-			_acc -= 0.03
-			var perp := Vector2(-dir.y, dir.x)
-			_streaks.append([BODY_CENTER + perp * randf_range(-16.0, 16.0) - dir * randf_range(4.0, 14.0), randf_range(12.0, 28.0), 0.0, randf_range(0.18, 0.32), -dir])
-	for s in _streaks:
-		s[2] += delta
-	_streaks = _streaks.filter(func(s): return float(s[2]) < float(s[3]))
-	queue_redraw()
+		if _acc >= EVERY:
+			_acc = 0.0
+			_drop()
+	else:
+		_acc = EVERY ## yeniden hareket edince ilk hayalet hemen düşsün
+	for gh in _ghosts:
+		gh[2] = float(gh[2]) + delta
+		var g: Sprite2D = gh[0]
+		if is_instance_valid(g):
+			g.global_position = gh[1]
+			g.self_modulate.a = U.band(GHOST_ALPHA * (1.0 - float(gh[2]) / GHOST_LIFE), 3)
+	for gh in _ghosts:
+		if float(gh[2]) >= GHOST_LIFE and is_instance_valid(gh[0]):
+			(gh[0] as Node).queue_free()
+	_ghosts = _ghosts.filter(func(gh: Array) -> bool: return float(gh[2]) < GHOST_LIFE)
+	if _t >= _duration and _ghosts.is_empty():
+		queue_free()
 
 
-func _draw() -> void:
-	var fade: float = clampf((_duration + FADE_OUT - _t) / FADE_OUT, 0.0, 1.0)
-	for s in _streaks:
-		var k: float = float(s[2]) / float(s[3])
-		var back: Vector2 = s[4]
-		var head: Vector2 = s[0] + back * (float(s[1]) * k * 0.5)
-		var tail: Vector2 = head + back * float(s[1]) * (1.0 - k * 0.4)
-		PixelDraw.line(self, head, tail, Color(0.65, 0.95, 1.0, (1.0 - k) * 0.85 * fade), 1)
-	## Ayaklarda küçük kıvılcımlar
-	var seed_i: int = int(_t * 20.0)
-	for i in range(3):
-		var x: float = (PixelDraw.hash01(seed_i * 3 + i) - 0.5) * 30.0
-		var y: float = 26.0 - PixelDraw.hash01(seed_i * 7 + i + 5) * 6.0
-		PixelDraw.px(self, Vector2(x, y), 1, Color(0.8, 1.0, 1.0, 0.7 * fade))
+func _drop() -> void:
+	var spr: AnimatedSprite2D = U.host_sprite(_host)
+	var g: Sprite2D = U.make_ghost(spr, U.with_a(U.WIND3, GHOST_ALPHA))
+	if g == null:
+		return
+	add_child(g)
+	g.global_position = spr.global_position
+	g.global_scale = spr.global_scale
+	_ghosts.append([g, spr.global_position, 0.0])

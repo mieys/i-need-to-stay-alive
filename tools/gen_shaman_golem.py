@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
-"""Shaman R - Elemental Golem formu: pixel-art golem sprite sayfasi + shaman_frames.tres klipleri + 3 yetenek ikonu.
+"""Shaman R - Elemental Golem formu: golem sprite sayfasi + shaman_frames.tres klipleri (+ istenirse 3 eski yetenek ikonu).
 
-Kullanici istegi (2026-09-30): "20 saniyeliğine dev bir elemental goleme dönüşür (bunun için pixel art bir golem
+2026-11-16 (madde 722, kullanicinin prototip secimi "D olsun"): VARSAYILAN sayfa artik KODLA CIZILMEZ - oyundaki Golem 3
+paketinin (zindan avcisi "Boynuzlu Bekci", piksel sanatci cizimi) yalniz TONU donmus hali (mavi -> yosun yesili, YIQ'da I/Q
+dondurme = parlaklik birebir; kirmizi tac + kor gogus mavi ton araliginin disinda kalir). Ayrinti: asagidaki "Golem 3 paketi"
+bolumu. Asagidaki eski kodla-cizim (tas + boynuz golem, 2026-09-30) `--eski` ile hala uretilebilir. Ikonlar madde 541'den beri
+paket ikonlari: make_icons yalniz `--ikon` ile calisir (eskiden her calismada ikonlari ezerdi).
+
+ESKI CIZIM - kullanici istegi (2026-09-30): "20 saniyeliğine dev bir elemental goleme dönüşür (bunun için pixel art bir golem
 hazırlaman gerekiyor vuruş animasyonu atlama animasyonu idle ve 4 direction olmalı)".
 
 Tasarim (Shaman'in kendi dilinden: geyik boynuzu, zeytin yesili pelerin, toprak tonlari; totemlerin ruh atesi):
@@ -24,10 +30,11 @@ Klipler (satir = klip * 4 + yon; yonler DIR_ROWS sirasinda: down, left, right(=l
 Zamanlama sabitleri (darbe/inis ani) scripts/shaman_golem_math.gd ile AYNI olmali (SLAM_FPS/SLAM_IMPACT_FRAME,
 JUMP_FRAME_DURATIONS/JUMP_LAND_FRAME).
 
-Kullanim (repo kokunden):  python tools/gen_shaman_golem.py [--preview onizleme.png]
+Kullanim (repo kokunden):  python tools/gen_shaman_golem.py [--eski] [--ikon] [--preview onizleme.png]
   -> assets/characters/shaman/golem_sheet.png, shaman_frames.tres'e golem_* klipleri (eski golem_* klipleri silinip
-     yeniden yazilir; tools/import_character_sheets.py de Shaman'i yeniden uretirken add_golem_clips'i cagirir),
-     assets/skills/shaman_{elemental_golem,sarsici_darbe,golem_sicrayisi}_icon.png
+     yeniden yazilir; tools/import_character_sheets.py de Shaman'i yeniden uretirken add_golem_clips'i cagirir - paket
+     duzeniyle), --ikon: assets/skills/shaman_{elemental_golem,sarsici_darbe,golem_sicrayisi}_icon.png (ESKI cizim ikonlari)
+  --eski secilirse scripts/shaman_golem_math.gd'nin FORM_SPRITE_SCALE'i 1, SLAM_* eski 6 kare degerleri olmali.
   Sonra Godot: --headless --import (ya da editoru ac).
 """
 import math
@@ -35,6 +42,7 @@ import os
 import re
 import sys
 
+import numpy as np
 from PIL import Image, ImageDraw
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -56,6 +64,98 @@ CLIPS = [
     ("golem_jump", 8, False, JUMP_FPS, JUMP_FRAME_DURATIONS),
 ]
 ALIASES = [("golem_slam2", "golem_slam")]
+
+
+# ------------------------------------------------------------------ Golem 3 paketi (VARSAYILAN, 2026-11-16 madde 722 D)
+# Olcu: paketin pikseli yaratiklardaki gibi 1,52325 x EntityScale.SIZE = 1,230 dunya; Shaman sprite'i 0,903 dunya/piksel ->
+# form boyunca sprite ShamanGolemMath.FORM_SPRITE_SCALE (1,362) kat buyur (player.gd _golem_evo_apply + remote_player.gd
+# _apply_shaman_golem_scale). Sprite ortali + DEFS[12] offset (0, -1,8): ayaklar buyumeden sonra insan formunun ayak cizgisine
+# bassin diye paketin en alt ayak pikseli (asagi bakista satir 75) hucre merkezinin (16 - 1,8) / 1,362 + 1,8 = 12,2 px altina
+# konur (insan formunun en alt pikseli: merkez + 16; tests/test_shaman_golem.gd olcer). Paketin gomulu gölgesi (tek renk 40,41,63, alfa 89) silinir: gölgeyi ground_shadow.gd cizer.
+# Ziplama klibi pakette yok: Attack karelerinden (1 comelme, 2 kalkis, 3 tepe x2, 4 inis x2, 5 darbe tozu, 6 toz sonu) +
+# karelere pisirilmis kaldirma (paket pikseli; uzak oyuncu yalniz klip ADINI gorur). Darbe = Attack'in 9 karesi, yumruk yere
+# kare 5'te (pakette beyaz darbe tozu cizili); kare sureleri darbe ANI ve toplam sure eski 6 karelik klip ile AYNI kalsin diye
+# 0,6 / 0,75 (14 fps'te 0,214 / 0,429 sn - oynanis zamanlamasi degismedi).
+PACK_SRC = os.path.join("visuals", "Yaratıklar", "Tüm Yaratıklar", "Golem 3", "PNG", "Golem3", "With_shadow",
+                        "Golem3_%s_with_shadow.png")
+PACK_CELL = 128
+PACK_ROW = {"down": 0, "up": 1, "left": 2, "right": 3}
+PACK_SHADOW_RGB = (40, 41, 63)
+PACK_TINT = (100, 130, 60)  # hedef ton: yosun yesili (prototipte kullanicinin sectigi D)
+PACK_TINT_HUE = (120, 185)  # PIL HSV (0-255) mavi araligi; kirmizi tac / kor gogus disarida
+NEW_CELL_W, NEW_CELL_H = 128, 156
+NEW_OY = 15  # paket hucresinin yeni hucredeki dikey yeri: en alt ayak pikseli 75 -> 90 = merkez 78 + 12
+SLAM_FRAME_DURATIONS = [0.6] * 5 + [0.75] * 4
+JUMP_PACK = [(1, 0), (2, 6), (3, 13), (3, 16), (4, 13), (4, 6), (5, 0), (6, 0)]  # (Attack karesi, kaldirma paket px)
+# (klip, paket sayfasi, [(paket karesi, kaldirma)], dongu, fps, kare sureleri)
+NEW_CLIPS = [
+    ("golem_idle", "Idle", [(i, 0) for i in range(4)], True, 7.0, None),
+    ("golem_walk", "Walk", [(i, 0) for i in range(8)], True, 10.0, None),
+    ("golem_slam", "Attack", [(i, 0) for i in range(9)], False, SLAM_FPS, SLAM_FRAME_DURATIONS),
+    ("golem_jump", "Attack", JUMP_PACK, False, JUMP_FPS, JUMP_FRAME_DURATIONS),
+]
+
+_YIQ = np.array([[0.299, 0.587, 0.114], [0.596, -0.274, -0.322], [0.211, -0.523, 0.312]])
+_YIQ_INV = np.linalg.inv(_YIQ)
+
+
+def _tint_weight(rgba):
+    """Mavi ton araligi icin yumusak 0..1 agirlik (tools/proto_20261109/yetenek_ikon/renk_ayar.hue_band ile ayni kural)."""
+    hsv = np.asarray(Image.fromarray(rgba[..., :3]).convert("HSV")).astype(float)
+    lo, hi = PACK_TINT_HUE
+    c, half = (lo + hi) / 2.0, (hi - lo) / 2.0
+    dist = np.abs(((hsv[..., 0] - c + 128) % 256) - 128)
+    w = np.clip(1 - (dist - half) / 12.0, 0, 1) * np.clip((hsv[..., 1] - 25) / 25.0, 0, 1)
+    return w * (rgba[..., 3] > 0)
+
+
+def _tint_delta(rgba, w):
+    """Agirlikli piksellerin baskin (kroma agirlikli) YIQ acisindan hedef tona donus acisi - Idle sayfasindan BIR kez."""
+    yiq = rgba[..., :3].astype(float) @ _YIQ.T
+    ang = np.arctan2(yiq[..., 2], yiq[..., 1])
+    k = w * np.hypot(yiq[..., 1], yiq[..., 2])
+    src = np.arctan2((k * np.sin(ang)).sum(), (k * np.cos(ang)).sum())
+    _, i, q = np.array(PACK_TINT, float) @ _YIQ.T
+    return np.arctan2(q, i) - src
+
+
+def _tint(rgba, w, delta):
+    yiq = rgba[..., :3].astype(float) @ _YIQ.T
+    ang = np.arctan2(yiq[..., 2], yiq[..., 1]) + delta * w
+    mag = np.hypot(yiq[..., 1], yiq[..., 2])
+    rgb = np.stack([yiq[..., 0], mag * np.cos(ang), mag * np.sin(ang)], axis=-1) @ _YIQ_INV.T
+    out = rgba.copy()
+    out[..., :3] = np.clip(rgb, 0, 255).round().astype(np.uint8)
+    return out
+
+
+def build_pack_sheet():
+    src = {}
+    for clip in ("Idle", "Walk", "Attack"):
+        a = np.asarray(Image.open(os.path.join(ROOT, PACK_SRC % clip)).convert("RGBA")).copy()
+        sh = (a[..., 0] == PACK_SHADOW_RGB[0]) & (a[..., 1] == PACK_SHADOW_RGB[1]) & (a[..., 2] == PACK_SHADOW_RGB[2]) \
+            & (a[..., 3] < 255)
+        a[sh] = 0
+        src[clip] = a
+    delta = _tint_delta(src["Idle"], _tint_weight(src["Idle"]))
+    for clip in src:
+        src[clip] = Image.fromarray(_tint(src[clip], _tint_weight(src[clip]), delta), "RGBA")
+    cols = max(len(fr) for _, _, fr, _, _, _ in NEW_CLIPS)
+    sheet = Image.new("RGBA", (cols * NEW_CELL_W, len(NEW_CLIPS) * 4 * NEW_CELL_H))
+    for ci, (_, sname, frames, _, _, _) in enumerate(NEW_CLIPS):
+        for di, d in enumerate(DIRS):
+            r = PACK_ROW[d]
+            for i, (f, lift) in enumerate(frames):
+                pc = src[sname].crop((f * PACK_CELL, r * PACK_CELL, (f + 1) * PACK_CELL, (r + 1) * PACK_CELL))
+                cell = Image.new("RGBA", (NEW_CELL_W, NEW_CELL_H))
+                cell.paste(pc, ((NEW_CELL_W - PACK_CELL) // 2, NEW_OY - lift), pc)
+                sheet.paste(cell, (i * NEW_CELL_W, (ci * 4 + di) * NEW_CELL_H))
+    return sheet
+
+
+def new_clip_table():
+    """golem_clip_entries'in bekledigi (klip, kare sayisi, dongu, fps, sureler) listesi - paket duzeni."""
+    return [(n, len(fr), loop, fps, durs) for n, _, fr, loop, fps, durs in NEW_CLIPS]
 
 
 def hexc(h, a=255):
@@ -474,17 +574,19 @@ def build_sheet():
 
 
 # ------------------------------------------------------------------ SpriteFrames (shaman_frames.tres)
-def golem_clip_entries(ext_id, first_sub_index):
-    """(sub_resource metinleri, animasyon sozlukleri) - import_character_sheets.py de kullanir."""
+def golem_clip_entries(ext_id, first_sub_index, old=False):
+    """(sub_resource metinleri, animasyon sozlukleri) - import_character_sheets.py de kullanir (varsayilan = paket duzeni)."""
+    clips = CLIPS if old else new_clip_table()
+    cw, ch = (CELL_W, CELL_H) if old else (NEW_CELL_W, NEW_CELL_H)
     subs, anims, ids_by_clip = [], [], {}
     idx = first_sub_index
-    for ci, (clip, count, loop, fps, durs) in enumerate(CLIPS):
+    for ci, (clip, count, loop, fps, durs) in enumerate(clips):
         for di, d in enumerate(DIRS):
             refs = []
             for i in range(count):
                 sid = f"AtlasTexture_golem_{idx}"
                 subs.append(f'[sub_resource type="AtlasTexture" id="{sid}"]\natlas = ExtResource("{ext_id}")\n'
-                            f"region = Rect2({i * CELL_W}, {(ci * 4 + di) * CELL_H}, {CELL_W}, {CELL_H})\n")
+                            f"region = Rect2({i * cw}, {(ci * 4 + di) * ch}, {cw}, {ch})\n")
                 refs.append((sid, 1.0 if durs is None else durs[i]))
                 idx += 1
             ids_by_clip[f"{clip}_{d}"] = (refs, loop, fps)
@@ -502,8 +604,8 @@ def _anim_text(name, refs, loop, fps):
     return '{"frames": [%s],"loop": %s,"name": &"%s","speed": %s}' % (frames, "true" if loop else "false", name, fps)
 
 
-def add_golem_clips(frames_path):
-    """shaman_frames.tres'e golem_* kliplerini ekler (varsa eskilerini once siler) - idempotent."""
+def add_golem_clips(frames_path, old=False):
+    """shaman_frames.tres'e golem_* kliplerini ekler (varsa eskilerini once siler) - idempotent. old = eski kodla-cizim duzeni."""
     with open(frames_path, encoding="utf-8") as f:
         text = f.read()
     sheet_res = "res://" + SHEET_REL
@@ -519,7 +621,7 @@ def add_golem_clips(frames_path):
     ext_id = str(max(ext_ids) + 1 if ext_ids else 1)
     last_ext = list(re.finditer(r'\[ext_resource [^\]]*\]\n', head))[-1]
     head = head[:last_ext.end()] + f'[ext_resource type="Texture2D" path="{sheet_res}" id="{ext_id}"]\n' + head[last_ext.end():]
-    subs, anims = golem_clip_entries(ext_id, 1)
+    subs, anims = golem_clip_entries(ext_id, 1, old)
     res_idx = head.index("[resource]")
     head = head[:res_idx] + "\n".join(subs) + "\n" + head[res_idx:]
     steps = len(re.findall(r'\[ext_resource ', head)) + len(re.findall(r'\[sub_resource ', head)) + 1
@@ -626,13 +728,15 @@ def make_icons():
 
 
 def main():
-    sheet = build_sheet()
+    old = "--eski" in sys.argv
+    sheet = build_sheet() if old else build_pack_sheet()
     out = os.path.join(ROOT, SHEET_REL)
     os.makedirs(os.path.dirname(out), exist_ok=True)
     sheet.save(out)
-    print(f"  {SHEET_REL} {sheet.size}")
-    add_golem_clips(os.path.join(ROOT, FRAMES_REL))
-    make_icons()
+    print(f"  {SHEET_REL} {sheet.size} ({'eski cizim' if old else 'Golem 3 paketi, yosun tonu'})")
+    add_golem_clips(os.path.join(ROOT, FRAMES_REL), old)
+    if "--ikon" in sys.argv:
+        make_icons()
     if "--preview" in sys.argv:
         p = sys.argv[sys.argv.index("--preview") + 1]
         sheet.resize((sheet.width * 2, sheet.height * 2), Image.NEAREST).save(p)

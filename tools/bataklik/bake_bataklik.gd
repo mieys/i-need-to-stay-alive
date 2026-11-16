@@ -5,7 +5,7 @@ extends SceneTree
 ## ayar burada açıkça kurulur (yeniden bake her seferinde aynı sahneyi verir; elle eklemek istenen bir şey bu betiğe yazılmalı):
 ##  - "Yer/Zemin Toprak" + "Yer/Zemin Çimen" + kıyı "Su/Su ayrıntılar 2": scenes/bataklik_zemin.gdshader (çimen + çamur "C - Sakin Doku",
 ##    madde 583; desen kendi paletini taşır, malzemeye yalnız iki taban rengi yazılır);
-##  - "Su/Su": scenes/bataklik_su.gdshader (karo düz mavi; collision mavi pikseli su sayar);
+##  - "Su/Su": ana haritanın scenes/su.gdshader'ı, sabit renk = harita profilinin "su_doku"su (madde 714; karo düz mavi, collision mavi pikseli su sayar);
 ##  - ağaç / ot / çiçek katmanları + "Shader Eklenecek" grubu: ana haritanın (scenes/harita_baked.tscn) AYNI adlı düğümlerinin materyali +
 ##    görünüm özellikleri (y_sort_enabled, texture_filter...) - sallanma parametreleri ana haritayla aynı; "Ağaç 3..7" "Ağaç 0"ınkini alır;
 ##  - "Orman parçaları/Orman parçaları" görünmez engel katmanı (saydam karolar): visible = false (hücre sorguları çalışır, çizim maliyeti yok).
@@ -15,7 +15,6 @@ const TMX_PATH := "res://harita/bataklik.tmx"
 const OUT_PATH := "res://scenes/bataklik_baked.tscn"
 const MAIN_BAKED := "res://scenes/harita_baked.tscn"
 const GROUND_SHADER := "res://scenes/bataklik_zemin.gdshader"
-const WATER_SHADER := "res://scenes/bataklik_su.gdshader"
 const CARRY_FROM_MAIN: PackedStringArray = ["Shader Eklenecek", "Shader Eklenecek/Çiçekler 1", "Shader Eklenecek/Çalılar",
 	"Shader Eklenecek/Çalılar1", "Shader Eklenecek/Animasyonsuz çalılar", "Orman parçaları/Saklanma Çalılığı"]
 const CARRY_PROPS: PackedStringArray = ["y_sort_enabled", "z_index", "z_as_relative", "texture_filter", "light_mask"]
@@ -52,8 +51,17 @@ func _init() -> void:
 			l.use_parent_material = false
 	var water := root.get_node_or_null("Su/Su") as TileMapLayer
 	if water != null:
+		## madde 714: tüm sular ana haritanın su shader'ı (scenes/su.gdshader, sabit renk); renkler harita profilinin "su_doku"sundan
+		var prof: Dictionary = ((load("res://scripts/map_profiles.gd") as GDScript).get("PROFILES") as Dictionary)["bataklik"]
+		## water_fx.gd burada yüklenemez (bake _init'te, autoload'lardan önce; UISound'a başvuruyor) -> make_material'ın aynısı
+		var cfg: Dictionary = prof.get("su_doku", {})
 		var wm := ShaderMaterial.new()
-		wm.shader = load(WATER_SHADER)
+		wm.shader = load("res://scenes/su.gdshader")
+		if cfg.has("renk"):
+			wm.set_shader_parameter("sabit_renk", true)
+			wm.set_shader_parameter("su_rengi", cfg["renk"])
+		if cfg.has("sirt"):
+			wm.set_shader_parameter("sirt_renk", cfg["sirt"])
 		water.material = wm
 		water.use_parent_material = false
 		water.modulate = Color.WHITE

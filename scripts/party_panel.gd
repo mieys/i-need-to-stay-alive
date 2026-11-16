@@ -1209,6 +1209,7 @@ func _refresh_stats_popup() -> void:
 
 		var name_lbl := Label.new()
 		name_lbl.text = str(entry.get("name", "?"))
+		name_lbl.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED ## oyuncu adı çevrilmez ("Can" -> "Health" olmasın, 2026-11-15)
 		name_lbl.clip_text = true
 		name_lbl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		name_lbl.custom_minimum_size = Vector2(110, 0)
@@ -1292,6 +1293,7 @@ func _refresh_stats_tray(entries: Array) -> void:
 
 		var name_lbl := Label.new()
 		name_lbl.text = str(entry.get("name", "?"))
+		name_lbl.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED ## oyuncu adı çevrilmez ("Can" -> "Health" olmasın, 2026-11-15)
 		name_lbl.clip_text = true
 		name_lbl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		name_lbl.custom_minimum_size = Vector2(STATS_NAME_W, 0.0)

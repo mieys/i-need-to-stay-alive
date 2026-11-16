@@ -51,12 +51,13 @@ func test_numbers_match_request() -> void:
 	assert(float(timing[GolemMath.R_SKILL_ID]["duration"]) == GolemMath.DURATION)
 
 
-## Sprite sözleşmesi: her klip 4 yönde, doğru kare sayısıyla; kareler 96x144 (ayak satırı hücre merkezinin 16 px altı -
-## insan formunun 48x48 kareleriyle aynı göreli konum). slam2 = slam'in AYNI kareleri (ağda klip adı değişsin diye).
+## Sprite sözleşmesi: her klip 4 yönde, doğru kare sayısıyla; kareler 128x156 (madde 722: Golem 3 paketi, ayak satırı hücre
+## merkezinin 12 px altı = insan formunun 16 px'i / FORM_SPRITE_SCALE - büyüyünce ayaklar aynı çizgiye basar).
+## slam2 = slam'in AYNI kareleri (ağda klip adı değişsin diye).
 func test_frames_have_all_golem_clips() -> void:
 	var frames: SpriteFrames = load(FRAMES_PATH)
 	assert(frames != null, "shaman_frames.tres yüklenebilmeli (golem_sheet.png import edilmiş olmalı)")
-	var counts := {GolemMath.IDLE: 4, GolemMath.WALK: 6, GolemMath.SLAM: GolemMath.SLAM_FRAMES, GolemMath.SLAM_ALT: GolemMath.SLAM_FRAMES,
+	var counts := {GolemMath.IDLE: 4, GolemMath.WALK: 8, GolemMath.SLAM: GolemMath.SLAM_FRAMES, GolemMath.SLAM_ALT: GolemMath.SLAM_FRAMES,
 		GolemMath.JUMP: GolemMath.JUMP_FRAME_DURATIONS.size()}
 	for prefix: String in counts:
 		for d in ["down", "left", "right", "up"]:
@@ -64,7 +65,23 @@ func test_frames_have_all_golem_clips() -> void:
 			assert(frames.has_animation(clip), "%s klibi olmalı" % clip)
 			assert(frames.get_frame_count(clip) == int(counts[prefix]), "%s kare sayısı" % clip)
 			var tex: Texture2D = frames.get_frame_texture(clip, 0)
-			assert(tex.get_width() == 96 and tex.get_height() == 144, "%s kareleri 96x144 olmalı" % clip)
+			assert(tex.get_width() == 128 and tex.get_height() == 156, "%s kareleri 128x156 olmalı" % clip)
+	assert(GolemMath.SLAM_FRAME_DURATIONS.size() == GolemMath.SLAM_FRAMES)
+	for i in range(GolemMath.SLAM_FRAMES):
+		assert(is_equal_approx(frames.get_frame_duration(GolemMath.SLAM + "down", i), GolemMath.SLAM_FRAME_DURATIONS[i]),
+			"darbe kare süreleri shaman_golem_math.gd ile aynı olmalı")
+	## Gömülü ayak hizası: büyütülmüş golemin ayağı insan formunun ayak çizgisinde (DEFS offset dahil, 1 paket pikseli tolerans).
+	var off_y: float = float(Characters.DEFS[GolemMath.CHAR_ID].get("offset", Vector2.ZERO).y)
+	var img: Image = frames.get_frame_texture(GolemMath.IDLE + "down", 0).get_image()
+	var feet: int = 0
+	for y in range(img.get_height()):
+		for x in range(img.get_width()):
+			if img.get_pixel(x, y).a > 0.5:
+				feet = y
+	var golem_feet: float = (float(feet) - img.get_height() / 2.0 + off_y) * GolemMath.FORM_SPRITE_SCALE
+	assert(absf(golem_feet - (16.0 + off_y)) <= GolemMath.FORM_SPRITE_SCALE, "ayak çizgisi: %s vs %s" % [golem_feet, 16.0 + off_y])
+	## Eski golemden kalma darbe zamanlaması korunmalı (oynanış aynı).
+	assert(absf(GolemMath.slam_impact_time() - 3.0 / 14.0) < 0.001 and absf(GolemMath.slam_total_time() - 6.0 / 14.0) < 0.001)
 	assert(frames.get_animation_loop(GolemMath.IDLE + "down") and frames.get_animation_loop(GolemMath.WALK + "down"))
 	assert(not frames.get_animation_loop(GolemMath.SLAM + "down") and not frames.get_animation_loop(GolemMath.JUMP + "down"))
 	assert(is_equal_approx(frames.get_animation_speed(GolemMath.SLAM + "down"), GolemMath.SLAM_FPS))

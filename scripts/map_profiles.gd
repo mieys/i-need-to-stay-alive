@@ -41,6 +41,32 @@ const MAIN_FEATURES := {
 	## Madde 463: ana haritada zindan YOK (kapılar + üç zindan silindi). Tanımsız bayrak ana haritada AÇIK sayıldığı için açıkça kapalı:
 	## DungeonManager yalnız zindan biçimli haritalarda kurulur (main.gd).
 	"zindan_etkilesim": false,
+	## madde 714 (cila): diğer haritaların FX'i ana haritada AÇIKÇA kapalı - tanımsız bayrak ana haritada açık sayıldığı için Kara Bataklık / Altın Kumlar /
+	## Ayaz Dağı'nın meşale-kulübe ışıkları, ateş böcekleri, ısı noktaları ve dumanları kendi koordinatlarında ana haritaya da kuruluyordu.
+	"bataklik_fx": false,
+	"col_fx": false,
+	"kis_fx": false,
+	## madde 761: gece ateş böcekleri (ates_bocegi_fx.gd; alanlar ana_harita_bocek_meta.gd ANA HARİTANIN koordinatları). Diğer haritalarda
+	## tanımsız = kapalı (Kara Bataklık'ın kendi böcekleri bataklik_fx.gd'de); test haritası "taban"dan açık alır.
+	"ates_bocekleri": true,
+}
+
+## TEST HARİTASI (madde 731, kullanıcı 2026-11-16: "sadece debugmodda seçilebilen bir test haritası butonu ekle; bu haritada hiçbir yaratık doğmayacak
+## fakat debug butonu açık olacak ve oradan istediğimiz yaratığı doğurabileceğiz, bosslar dahil"): ANA HARİTANIN ZEMİNİ (main.tscn'deki Harita, "taban")
+## ama yaratık doğuran her sistem kapalı - kendiliğinden doğuş / boss / gece bossu / sonsuz dalga (enemy_spawner.gd is_test_map kapısı), görevler
+## (WorldEventManager), açılış evi + kuşatma (HouseInterior), kenar bekçisi kampları (GuardCamps), seyyar satıcı. Seçim: dünya haritası ekranındaki
+## "TEST HARİTASI" düğmesi, yalnız debug açılabilen derlemede (test_map_allowed = Godot editörü; exportta düğme yok). Main._enter_tree debug modunu
+## açar (DEBUG düğmesi baştan görünür), hiçbir kayıt / Ruh Kıymığı / anahtar / balans satırı yazılmaz (main.gd _record_skip_reason, balance_log.gd).
+## Ana menüye dönünce ya da yeni koşuda (GameManager.reset) haritanın açtığı debug kapanır, seçim ana haritaya döner.
+const TEST_ID := "test"
+## Doğuş: ana haritanın güneybatı çayırı - 560 px yarıçapta yüzde 93 açık zemin (ağaç / su / bina dışı; ölçüm 2026-11-16), büyük bosslar için yer var.
+const TEST_SPAWN := Vector2(1352, 3496)
+## Test haritasında kapalı olan, ana haritaya özgü sistemler (diğer bayraklar "taban"dan = ana haritadan gelir).
+const TEST_FEATURES := {
+	"ev_acilisi": false,
+	"seyyar_satici": false,
+	"gorevler": false,
+	"kenar_bekcileri": false,
 }
 
 const PROFILES := {
@@ -53,10 +79,26 @@ const PROFILES := {
 		"secilebilir": true,
 		"ozellik": MAIN_FEATURES,
 	},
+	## TEST HARİTASI (madde 731, yukarıdaki TEST_ID notu): seçilebilir DEĞİL (oylama / harita listesi / tek oyunculu satırları görmez), yalnız debug düğmesiyle.
+	## "taban": tanımsız bayrak ve görünüm ana haritanınki (feature() tabana bakar); "onizleme": dünya haritası ekranının resmi ana haritanınki.
+	## Kademe bossu yok: enemy_spawner.gd boss_tiers_for_map test haritasında BOŞ döner ("bosslar" tanımsız olsa ana haritanın tablosu gelirdi).
+	TEST_ID: {
+		"ad": "Test Haritası",
+		"aciklama": "Yalnız debug: hiçbir yaratık kendiliğinden doğmaz; DEBUG menüsünden istenen yaratık ya da boss doğar.",
+		"tur": KIND_ORMAN,
+		"sahne": "",
+		"veri": "",
+		"secilebilir": false,
+		"test_haritasi": true,
+		"taban": DEFAULT_ID,
+		"onizleme": DEFAULT_ID,
+		"dogus": TEST_SPAWN,
+		"ozellik": TEST_FEATURES,
+	},
 	## KARA BATAKLIK (2026-11-09, açık hava; tools/bataklik/gen_bataklik.py + bake_bataklik.gd, oyun alanı 214x214 = ana haritanın %70'i):
 	## katmanları Harita.tmx ADLARINDA -> ana haritanın collision / derinlik / ağaç-ot sallanması / saklanma çalılığı / gün-gece / hava
 	## sistemleri değişmeden çalışır. Ana haritaya özgü adımlar kapalı: renk ayarının başıboş çimen / köprü altı ayıklaması
-	## ("harita_ayiklama"), su dokuları (water_fx.gd, "su_efekti" - bataklık suyu kendi shader'ı), zemin geçişi ("zemin_gecisi").
+	## ("harita_ayiklama"), zemin geçişi ("zemin_gecisi"). Su ana haritanın su shader'ı (madde 714, "su_efekti" + "su_doku": sabit bataklık rengi).
 	## "bataklik_fx": ateş böcekleri + meşale / cadı kulübesi gece ışıkları (bataklik_fx.gd). Doğuş / ışıklar scripts/bataklik_meta.gd'de.
 	"bataklik": {
 		"ad": "Kara Bataklık",
@@ -71,15 +113,28 @@ const PROFILES := {
 		## madde 525 (kullanıcı: "bataklık sularından geçilebilmeli"): su collision'a girmez (terrain_collision.gd), suya giren yürüyen
 		## karakter / yaratık / evcilin ayağı suyun altında görünür (wade_fx.gd, maske assets/map/bataklik_su_derinlik.png).
 		"su_yurunur": true,
+		## Batma + sudan pusu (bataklik_tehlike.gd, swamp_hazards()): "ozellik"te DEĞİL (feature() tanımsız bayrağı ana haritada açık sayar).
+		"bataklik_tehlike": true,
 		"su_maskesi": "res://assets/map/bataklik_su_derinlik.png",
-		"ozellik": {"orman_gorselleri": true, "hava": true, "calilik": true, "gorevler": true, "bataklik_fx": true},
+		## Su = ana haritanın su shader'ı (madde 714; kullanıcı: "tüm sular ana haritadaki su shaderını kullanmalı"), renk setin su karosu #24674b, sırt
+		## eski bataklık pırıltısı. Dokular: `Godot --headless --path . -s tools/gen_su_dokusu.gd -- bataklik`. Ayak örtüsü (wade_fx) aynı "renk"i çizer.
+		## BULANIK SU (2026-11-16, kullanıcı: "biraz daha pis hissetsin ve saydam olsun altındaki toprak görünsün"): "bulanik" sözlüğü varsa
+		## su shader'ı dibi (çamur, batık çakıl / dal) kendisi çizer, sabit su rengi üstüne yarı saydam + balçık bulutları + yüzen yosun
+		## (shaders/su_bulanik.gdshaderinc; anahtar = uniform adı, boş = shader varsayılanları). Renk eski #24674b -> daha bulanık #2b5641.
+		"su_doku": {"mesafe": "res://assets/map/bataklik_su_mesafe.png", "akis": "res://assets/map/bataklik_su_akis.png", "origin": Vector2(560, 336),
+			"size": Vector2(3328, 3392), "renk": Color(0.169, 0.337, 0.255), "sirt": Color(0.561, 0.663, 0.522),
+			"bulanik": {"bulanik_alfa": 0.55},
+			## karolarında setin eski su rengi gömülü katmanlar (kıyı çimeni saçağı altı, nilüfer / mercimek / dalga izi) -> bulanık suya boyanır
+			"su_karolari": ["Su/Su ayrıntılar 2", "Su/Su süsleri"]},
+		"ozellik": {"orman_gorselleri": true, "hava": true, "calilik": true, "gorevler": true, "bataklik_fx": true, "su_efekti": true},
 		## Kademe bossları (madde 682, kullanıcı 2026-11-14: "bu yaratık bataklığın 1. bossu olsun"): K5 Zehirli Gonca (yeni), K10 Banshee.
 		"bosslar": {5: ["gonca1"], 10: ["banshee1"]},
 	},
 	## ALTIN KUMLAR (2026-11-09, çöl, açık hava; tools/col/gen_col.py + bake_col.gd, oyun alanı 243x243 = ana haritanın yüzde 90'ı): Kara
 	## Bataklık gibi Harita.tmx katman adlarında (collision / derinlik / sallanma / saklanma / gün-gece sistemleri değişmeden çalışır) + üst üste
 	## binen kaya yığınları için "Shader Eklenecek/Kayalar 1..3" (depth_occluders OBJECT_LAYERS, terrain_collision PROP_LAYERS). Vaha suyu
-	## yürünmez. "hava_donusum": çölde yağmur yağmaz - hava seçimi Yağmurlu -> Rüzgarlı, Sağanak -> Açık (atmosphere.gd map_weather).
+	## yürünmez. "hava_donusum": çölde yağmur yağmaz - hava seçimi Yağmurlu -> Rüzgarlı (atmosphere.gd map_weather). "kum_firtinasi" (madde 718):
+	## Sağanak yuvası (%15) KUM FIRTINASI - yağmur / yıldırım yok, açık havada %20'ye kadar yavaşlatır (kum_firtinasi.gd, weather_sandstorm.gd).
 	## "col_fx": küre tapınağının gece ışığı (col_fx.gd). Doğuş / ışıklar scripts/col_meta.gd'de (üretilir).
 	"col": {
 		"ad": "Altın Kumlar",
@@ -91,10 +146,12 @@ const PROFILES := {
 		"oyun_alani": ColMeta.PLAY_CELLS,
 		"dogus": ColMeta.SPAWN,
 		"minimap": "res://assets/ui/minimap_col.png",
-		"hava_donusum": {2: 1, 3: 0},
+		"hava_donusum": {2: 1},
+		"kum_firtinasi": true,
 		"cukur_zemin": "kum", ## Hadime Lanet Çukuru toprak tonları (madde 556; yoksa zindan = "tas", diğerleri çimen)
 		## Vaha suyu ana haritanın su shader'ını kullanır (madde 631): kıyı uzaklığı + akış dokuları `-- col` ile pişirilir.
-		"su_doku": {"mesafe": "res://assets/map/col_su_mesafe.png", "akis": "res://assets/map/col_su_akis.png", "origin": Vector2(784, 560), "size": Vector2(3456, 3136)},
+		"su_doku": {"mesafe": "res://assets/map/col_su_mesafe.png", "akis": "res://assets/map/col_su_akis.png", "origin": Vector2(784, 560), "size": Vector2(3456, 3136),
+			"renk": Color(0.243, 0.557, 0.588), "sirt": Color(0.62, 0.86, 0.87)}, ## madde 714: eski col_su.gdshader'ın renkleri, shader artık su.gdshader
 		"ozellik": {"orman_gorselleri": true, "hava": true, "calilik": true, "gorevler": true, "col_fx": true, "su_efekti": true},
 		## Kademe bossları (madde 682, kullanıcı 2026-11-14: "Medusa da çölde final boss olsun"): K5 Yeraltı Canavarı, K10 Medusa (yeni).
 		"bosslar": {5: ["underground1"], 10: ["medusa1"]},
@@ -117,7 +174,13 @@ const PROFILES := {
 		"hava_donusum": {3: 2},
 		"kar_yagisi": true,
 		"cukur_zemin": "kar",
-		"ozellik": {"orman_gorselleri": true, "hava": true, "calilik": true, "gorevler": true, "kis_fx": true},
+		## "soguk": üşüme / ısınma / donma (madde 709, kis_soguk.gd): ateşten 2 dk uzak kalan donmaya başlar; ısı noktaları kis_fx.gd kurar.
+		## "ozellik"te DEĞİL: feature() tanımsız bayrağı ana haritada açık sayar -> cold_climate() yalnız bu anahtara bakar.
+		"soguk": true,
+		## Sıcak kaynağın suyu = ana haritanın su shader'ı (madde 714), ılık turkuaz; buhar kis_fx.gd'de. Donmuş göller ("Yer/Buz") su değil, kis_buz.gdshader.
+		"su_doku": {"mesafe": "res://assets/map/kis_su_mesafe.png", "akis": "res://assets/map/kis_su_akis.png", "origin": Vector2(3984, 1872),
+			"size": Vector2(336, 272), "renk": Color(0.243, 0.596, 0.627), "sirt": Color(0.659, 0.89, 0.863)},
+		"ozellik": {"orman_gorselleri": true, "hava": true, "calilik": true, "gorevler": true, "kis_fx": true, "su_efekti": true},
 		## Kademe bossları (madde 682): ana haritanın K10'undan Üç Kardeş'e yer veren Wendigo buraya geldi (kar / buz efsanesi; kullanıcı: "yeri değiştiren
 		## bossları boşta kalan haritalardan birine gönderirsin"). K5 için boşta boss yok: şimdilik ana haritayla ortak Minotaur.
 		"bosslar": {5: ["minotaur1"], 10: ["wendigo1"]},
@@ -150,7 +213,11 @@ const PROFILES := {
 		"sahne": "res://scenes/zindan/batik_nekropol_baked.tscn",
 		"veri": "res://scenes/zindan/batik_nekropol_data.tres",
 		"secilebilir": true,
-		"ozellik": {"zindan_etkilesim": true, "gorevler": true, "zemin_tasi": true}, ## zemin_tasi: dungeon_floor.gd zemin shader'ı (madde 449)
+		"ozellik": {"zindan_etkilesim": true, "gorevler": true, "zemin_tasi": true, "su_efekti": true}, ## zemin_tasi: dungeon_floor.gd zemin shader'ı (madde 449)
+		## Sarnıç suyu = ana haritanın su shader'ı (madde 714; dungeon_manager.gd bağlar), renk setin dalga karosu #386668; kıyı "Su ayrıntı" katmanları.
+		"su_doku": {"mesafe": "res://assets/map/batik_nekropol_su_mesafe.png", "akis": "res://assets/map/batik_nekropol_su_akis.png", "origin": Vector2(1216, 160),
+			"size": Vector2(2128, 2096), "katman": "Su", "ayrinti": ["Su ayrıntı", "Su ayrıntı 2"],
+			"renk": Color(0.22, 0.4, 0.408), "sirt": Color(0.45, 0.66, 0.64)},
 		## Kademe bossları (madde 682): Bataklık / Çöl'den yeri değişen iki boss buraya geldi (kullanıcı: "yeri değiştiren bossları boşta kalan
 		## haritalardan birine gönderirsin") - mezarlık + kabak + şeytan; K5 Balkabağı Kafa, K10 Uçan Şeytan.
 		"bosslar": {5: ["balkabagi1"], 10: ["ucansetan1"]},
@@ -243,6 +310,21 @@ static func snowfall() -> bool:
 	return bool(current().get("kar_yagisi", false))
 
 
+## Seçili haritada Sağanak yerine kum fırtınası mı (Altın Kumlar, madde 718): atmosphere.gd sand_intensity + weather_sandstorm.gd + yavaşlama.
+static func sandstorm() -> bool:
+	return bool(current().get("kum_firtinasi", false))
+
+
+## Seçili haritada üşüme / ısınma / donma var mı (Ayaz Dağı, madde 709): main.gd kis_soguk.gd'yi kurar. Tanımsız = yok (ana harita dahil).
+static func cold_climate() -> bool:
+	return bool(current().get("soguk", false))
+
+
+## Seçili haritada bataklık tehlikeleri (batma + sudan pusu, bataklik_tehlike.gd) var mı. Tanımsız = yok (ana harita dahil).
+static func swamp_hazards() -> bool:
+	return bool(current().get("bataklik_tehlike", false))
+
+
 ## Oda kur / tek oyunculu ekranında gösterilen haritalar (profil sırasıyla).
 static func selectable_ids() -> Array:
 	var out: Array = []
@@ -281,17 +363,47 @@ static func is_main_map() -> bool:
 	return current_id() == DEFAULT_ID
 
 
+## Seçili harita TEST HARİTASI mı (madde 731): yaratık doğuran sistemler kapalı, kayıt yazılmaz, debug açık.
+static func is_test_map() -> bool:
+	return bool(current().get("test_haritasi", false))
+
+
+static func is_test_map_id(id: String) -> bool:
+	return bool(get_profile(id).get("test_haritasi", false)) if PROFILES.has(id) else false
+
+
+## TEST HARİTASI düğmesi bu derlemede gösterilir mi: yalnız tam debug modunun açılabildiği derleme (Godot editörü, security_guard.gd dev_allowed;
+## dışarı verilen exe'de debug menüsü hiç açılamadığı için düğme de yok - madde 613 hile koruması).
+static func test_map_allowed() -> bool:
+	return GuardScript.dev_allowed()
+
+
+## Dünya haritası ekranında gösterilecek önizleme kimliği (test haritası ana haritanın resmini kullanır).
+static func preview_id(id: String) -> String:
+	return str(get_profile(id).get("onizleme", id))
+
+
 ## Haritaya özgü sistem bu haritada açık mı (tanımsız bayrak: ana haritada açık, diğerlerinde kapalı). Kara Bataklık da açık hava
 ## ("orman" türü) ama ana haritanın ev / satıcı / maden / bekçi sistemleri orada yok: varsayılan TÜRE değil ana harita kimliğine bakar.
+## "taban"lı profil (test haritası): kendi "ozellik"inde olmayan bayrak tabanın kuralıyla çözülür (ana harita zemini = ana haritanın görselleri).
 static func feature(name: String) -> bool:
 	## Oyun modu ezmesi (PvPvE, madde 607: PvP'de açılış evi kapalı) - mod bayrağı haritanınkinden önce.
 	var mode_override: Variant = GameModeScript.feature_override(name)
 	if mode_override != null:
 		return bool(mode_override)
-	var id: String = current_id()
-	var f: Dictionary = (PROFILES.get(id, PROFILES[DEFAULT_ID]) as Dictionary).get("ozellik", {})
+	return profile_feature(current_id(), name)
+
+
+static func profile_feature(id: String, name: String, depth: int = 0) -> bool:
+	if not PROFILES.has(id):
+		id = DEFAULT_ID
+	var p: Dictionary = PROFILES[id]
+	var f: Dictionary = p.get("ozellik", {})
 	if f.has(name):
 		return bool(f[name])
+	var base: String = str(p.get("taban", ""))
+	if base != "" and base != id and PROFILES.has(base) and depth < 4:
+		return profile_feature(base, name, depth + 1)
 	return id == DEFAULT_ID
 
 

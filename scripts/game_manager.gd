@@ -140,8 +140,9 @@ func run_elapsed() -> float:
 ## (bkz. meta_progress.gd debug_open - kayda yazılmaz). Çok oyunculuda açan oyuncu herkese bildirilir (bkz. NetworkManager.announce_debug_action).
 var debug_mode_unlocked: bool = false:
 	set(v):
-		if v and not SecurityGuardScript.dev_allowed():
-			return ## dışarı verilen exe'de debug modu YOK (chat kodu / menü düğmesi / koddan çağrı hiçbiri açamaz; hile koruması 2026-11-12)
+		if v and not SecurityGuardScript.dev_allowed() and not content_unlock_mode:
+			return ## dışarı verilen exe'de debug modu YOK - TEK istisna: menüdeki "Debug Modu" düğmesiyle başlayan oyunda chat kodu (madde 741)
+		_debug_via_content = v and not SecurityGuardScript.dev_allowed()
 		debug_mode_unlocked = v
 		MetaProgressScript.set_debug_open(v)
 		if v:
@@ -155,15 +156,43 @@ var debug_immortal: bool = false
 var content_unlock_mode: bool = false:
 	set(v):
 		content_unlock_mode = v
+		if not v and _debug_via_content: ## kilit açık moddan (exportta) chat koduyla açılan debug, mod bitince (ana menü) kapanır
+			debug_mode_unlocked = false
+			debug_immortal = false
 		MetaProgressScript.set_content_open(v)
 		if v:
 			run_debug_used = true ## koşu ilerleme / anahtar vermesin (debug ile aynı); reset() bayrağa bakarak yeniden kurar
 
 
-## Debug modu bu derlemede açılabilir mi? (Godot editörü ikilisi: true; exe: false) - hud.gd chat kodu + main_menu.gd düğmesi buna bakar.
+## Exportta debug, yalnız content_unlock_mode iken chat koduyla açıldıysa true (madde 741) - mod kapanınca debug da kapansın diye.
+var _debug_via_content: bool = false
+
+
+## Debug modu açılabilir mi? Editör ikilisi: hep true. Exe: yalnız ana menü "Debug Modu" düğmesiyle başlayan oyunda (content_unlock_mode)
+## - orada da DEBUG düğmesi kendiliğinden çıkmaz, chate "baykusseverim" yazmak gerekir (kullanıcı isteği 2026-11-16, madde 741). hud.gd chat kodu bakar.
 func debug_allowed() -> bool:
-	return SecurityGuardScript.dev_allowed()
+	return SecurityGuardScript.dev_allowed() or content_unlock_mode
 var debug_enemy_spawns_enabled: bool = true
+
+## TEST HARİTASI (madde 731, map_profiles.gd TEST_ID): Main._enter_tree çağırır. Koşu ilerleme / anahtar vermez (run_debug_used); debug açılabilen
+## derlemede (editör) debug modu açılır - kendisi açtıysa `test_map_forced_debug` işaretlenir ki koşudan çıkınca (reset / ana menü) geri kapansın
+## (yoksa test haritasından sonraki normal koşu da debug sayılır: DEBUG düğmesi, kayıt yok). Exportlu istemcide debug açılamaz, yalnız işaret kalır.
+var test_map_forced_debug: bool = false
+
+
+func enter_test_map() -> void:
+	run_debug_used = true
+	if SecurityGuardScript.dev_allowed() and not debug_mode_unlocked:
+		debug_mode_unlocked = true
+		test_map_forced_debug = debug_mode_unlocked
+
+
+## Test haritasından çıkış (reset() + ana menü): haritanın açtığı debug kapanır; kullanıcının kendi açtığı (chat kodu) debug'a dokunulmaz.
+func leave_test_map() -> void:
+	if test_map_forced_debug:
+		test_map_forced_debug = false
+		debug_mode_unlocked = false
+		debug_immortal = false
 
 ## DÜZELTME (kullanıcı isteği: "3 dakikada bir açılan dükkan sadece level
 ## atlama ekranından sonra çıkmalı, oyun daha başlamadan öyle açılmalı") -
@@ -1695,6 +1724,7 @@ func reset() -> void:
 	run_victory_shards_given = false
 	run_keys.clear()
 	_key_tiers_given.clear()
+	leave_test_map() ## test haritasının açtığı debug yeni koşuya taşınmasın (madde 731); test haritası yeniden açılırsa Main._enter_tree yine açar
 	run_debug_used = debug_mode_unlocked or content_unlock_mode ## koşu başında debug zaten açıksa (menüden "Debug Modu") koşu işaretli kalır
 	run_clock_origin = 0.0
 	## Önceki oyundan kalma bir seyyar satıcı bölgesi yeni oyuna sızmasın.

@@ -126,6 +126,21 @@ const CAST_TARGET_FROM_CENTER := Vector2(0.0, 31.0) ## cast karesinde şimşeği
 static var _frames_cache: Dictionary = {}
 static var _tex_cache: Dictionary = {}
 
+## HAFİF PARILTI (2026-11-16, kullanıcı: "matthewin tüm yıldırım efektleri hafiften parıldasın (karanlık parıltısı değil, ateş asasının
+## ateşine uyguladığımız türden)"): Ateş Asası alevinin halesi (madde 642, flame_bend.gdshader) düz sprite için shaders/fx_pixel_glow.gdshader'da.
+## Bu dosyadaki TÜM şimşek görselleri takar: make_sprite (isabet, halka, top, dönüşüm, kalkan, kalkan patlaması/nova, çağırma), Q şimşeği
+## (fx_matthew_bolt.gd parçaları), pasif iz (fx_matthew_trail.gd damgaları). Kaster ve kukla aynı betikleri kurduğu için ağda ayrı iş yok.
+## Gece ışığı (night_glow_catalog / NightGlow) ayrı ve aynen duruyor. Ayar ve malzeme TEK yerde: scripts/fx_pixel_glow.gd (Büyücü Arcane
+## Patlama da kullanır, madde 739) - 0 = eski çiğ görünüm.
+const FxPixelGlowScript := preload("res://scripts/fx_pixel_glow.gd")
+const FX_GLOW: float = FxPixelGlowScript.GLOW
+const FX_GLOW_SHADER: Shader = FxPixelGlowScript.SHADER
+
+
+## Parıltı malzemesi (paylaşılan). cell_px: sayfanın tek karesinin boyu (doku pikseli) - komşu kare haleye sızmasın.
+static func glow_material(cell_px: Vector2) -> ShaderMaterial:
+	return FxPixelGlowScript.material(cell_px)
+
 
 ## Efekt dokuları tembel yüklenir (yeni PNG henüz import edilmemişse betiğin derlenmesi bozulmasın; yoksa null).
 static func sheet_texture(kind: String) -> Texture2D:
@@ -176,6 +191,8 @@ static func make_sprite(kind: String, px: float = TEXEL) -> AnimatedSprite2D:
 	spr.centered = true
 	spr.scale = Vector2.ONE * px
 	spr.animation = &"fx"
+	var cfg: Dictionary = SHEETS[kind]
+	spr.material = glow_material(Vector2(float(cfg["fw"]), float(cfg["fh"])))
 	return spr
 
 

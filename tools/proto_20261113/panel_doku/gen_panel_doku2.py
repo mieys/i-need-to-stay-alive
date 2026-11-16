@@ -160,6 +160,8 @@ def corners_h(K, dark=-1.0, light=1.0):  # alfalar panel_doku_capture.gd _draw_f
 
 
 ## OYUN VARLIĞI (madde 662, kullanıcı seçimi E "Akan Damar", saydamlık aynen): python gen_panel_doku2.py --oyun
+## DİKKAT 2026-11-16: oyundaki karo artık R2 "Kabartma Damar" (madde 752, tools/proto_20261116/panel_doku3/gen_panel_doku3.py --oyun r2);
+## bu komut eski E'yi geri yazar - yalnız geri dönmek istenirse koş.
 ## -> assets/ui/panel_doku/ahsap_damar.png = E karosu x3 en yakın komşu (pixel_box.gd 1:1 döşer). Sonra: Godot --headless --path . --import
 GAME_TILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "assets", "ui", "panel_doku", "ahsap_damar.png")
 

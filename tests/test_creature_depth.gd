@@ -354,3 +354,91 @@ func test_cpp_scan_matches_the_gdscript_scan_on_a_real_crowd() -> void:
 	if is_instance_valid(b):
 		b.free()
 	BridgeScript.set("_instance", null)
+
+
+## MÜTTEFİK / EVCİL (2026-11-16, kullanıcı: "hala Y ekseni sorunları var yaratıklar arasında" - oyuncunun önünde z 2'ye çıkan sıçan ÖNÜNDEKİ Minik Cadı'nın
+## üstüne çiziliyordu): müttefik ve yer evcili vekili yaratık gibi havuza girer - oyuncunun önünde örtüşüyorsa ya da yükseltilen yaratığın önündeyse z 2.
+## Oyuncu kuklası ("player_ally" + "remote_players") karakterdir, yükseltilmez.
+func test_allies_and_pets_join_the_depth_rule() -> void:
+	var player := Node2D.new()
+	player.add_to_group("player")
+	_track(player)
+	add_child(player)
+	player.global_position = Vector2(100, 100) ## ayak = 100 + FEET_OFFSET
+	var rat: Node2D = _creature(Vector2(105, 135), false, 96) ## oyuncuyla örtüşür: doğrudan yükselir
+	var pet: Node2D = _creature(Vector2(150, 160), false, 32) ## oyuncuyla yatayda örtüşmez AMA sıçanın önünde ve onunla örtüşür
+	pet.remove_from_group("enemies")
+	pet.add_to_group("ysort_pets")
+	var ally: Node2D = _creature(Vector2(95, 130), false, 32) ## oyuncunun önünde + örtüşür
+	ally.remove_from_group("enemies")
+	ally.add_to_group("player_allies")
+	var behind_ally: Node2D = _creature(Vector2(100, 60), false, 32)
+	behind_ally.remove_from_group("enemies")
+	behind_ally.add_to_group("player_allies")
+	var puppet: Node2D = _creature(Vector2(300, 140), false, 32)
+	puppet.remove_from_group("enemies")
+	puppet.add_to_group("player_ally")
+	puppet.add_to_group("remote_players")
+	var cd: Node = CreatureDepthScript.new()
+	_track(cd)
+	add_child(cd)
+	cd.update_now()
+	assert(rat.z_index == CreatureDepthScript.FRONT_Z, "oyuncunun önündeki sıçan yükselir")
+	assert(pet.z_index == CreatureDepthScript.FRONT_Z, "yükselen sıçanın önündeki evcil de yükselmeli (yoksa sıçan onun üstüne çizilir): z=%d" % pet.z_index)
+	assert(ally.z_index == CreatureDepthScript.FRONT_Z, "oyuncunun önünde örtüşen müttefik oyuncunun üstüne çizilmeli: z=%d" % ally.z_index)
+	assert(behind_ally.z_index == 0, "arkadaki müttefik oyuncunun altında kalır")
+	assert(puppet.z_index == 0, "oyuncu kuklası karakterdir, yaratık gibi yükseltilmez")
+	## evcil sıçanın arkasına geçince iner
+	pet.global_position = Vector2(150, 120)
+	cd.update_now()
+	assert(pet.z_index == 0, "sıçanın arkasına geçen evcil iner: z=%d" % pet.z_index)
+	cd.free()
+	_spawned.erase(cd)
+	_cleanup()
+
+
+class FakeMain extends Node2D:
+	func _creature_foot_y(n: Node2D) -> float:
+		return n.global_position.y
+
+
+## Yer evcilinin (top_level, sahibin çocuğu) görseli Main altındaki vekile taşınır ve hayvanı izler; Main yoksa taşınmaz.
+func test_pet_depth_proxy_hosts_the_visual_under_main() -> void:
+	var proxy_script: GDScript = load("res://scripts/pet_depth_proxy.gd")
+	var main := FakeMain.new()
+	_track(main)
+	add_child(main)
+	var owner_node := Node2D.new()
+	main.add_child(owner_node)
+	var pet := Node2D.new()
+	owner_node.add_child(pet)
+	pet.top_level = true
+	pet.global_position = Vector2(50, 60)
+	var spr := AnimatedSprite2D.new()
+	var h: Node2D = proxy_script.host(proxy_script, pet, owner_node, spr)
+	assert(h != null, "Main varken vekil kurulmalı")
+	await get_tree().process_frame
+	assert(h.get_parent() == main, "vekil Main'in doğrudan çocuğu (ayak sırasına girer)")
+	assert(h.is_in_group("ysort_pets") and spr.get_parent() == h and spr.name == "AnimatedSprite2D")
+	assert(h.global_position.is_equal_approx(pet.global_position) and h.visible)
+	pet.global_position = Vector2(80, 90)
+	pet.global_scale = Vector2(0.5, 0.5)
+	h.sync()
+	assert(h.global_position.is_equal_approx(Vector2(80, 90)) and h.global_scale.is_equal_approx(Vector2(0.5, 0.5)))
+	owner_node.visible = false
+	h.sync()
+	assert(not h.visible, "sahibi gizlenince evcilin görseli de gizlenir")
+	pet.free()
+	h.sync()
+	await get_tree().process_frame
+	assert(not is_instance_valid(h), "hayvan silinince vekil de silinir")
+	## Main yok (menü / test sahnesi): taşınmaz
+	var lone_owner := Node2D.new()
+	_track(lone_owner)
+	add_child(lone_owner)
+	var spr2 := AnimatedSprite2D.new()
+	var pet2 := Node2D.new()
+	assert(proxy_script.host(proxy_script, pet2, lone_owner, spr2) == null)
+	spr2.free()
+	pet2.free()
+	_cleanup()

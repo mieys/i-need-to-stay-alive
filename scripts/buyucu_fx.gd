@@ -6,7 +6,7 @@ extends RefCounted
 ##   Q Büyü Değişimi  fx_mage_swap.tscn (props target_set) - havada büyü kitabı + set zerreleri, Set 1 soğuk / Set 2 sıcak
 ##   E Arcane Lanet   fx_arcane_skull_bounce.gd (lanet gözü + iz + kıvılcım) + fx_arcane_impact.gd (patlama + ayak mührü + lanet ipi)
 ##                    + E1 "Arcane Patlama" fx_arcane_blast.gd (Yıldız Tozu, toplamalı, madde 563)
-##   E Hortum         fx_buyucu_tornado.gd (hortum_in -> hortum_loop -> hortum_out) + fx_buyucu_tornado_cast/_hit.tscn
+##   E Hortum         fx_buyucu_tornado.gd (hortum_in -> hortum_loop -> hortum_out) + fx_buyucu_tornado_cast/_hit.tscn - görünüm 2026-11-16'dan beri "Toz Şeytanı" (madde 728)
 ##   Pasif            fx_buyucu_surge_wave.tscn (mor dalga) + güçlendirilmiş mermiye style_surge_projectile (namlu parlaması + mor iz
 ##                    + isabette mor patlama). Silah ikonunda animasyon YOK (geri tepme/mor parlama/kıvılcım 2026-11-11'de kaldırıldı).
 ##   R Meteor         fx_buyucu_meteor_channel.tscn (ayak altında rün çemberi, ateş yayı 3 sn'de dolar + şapka ucundan korlar) +

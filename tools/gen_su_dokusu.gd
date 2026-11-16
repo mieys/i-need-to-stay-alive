@@ -22,15 +22,26 @@ func _initialize() -> void:
 func _run() -> void:
 	await process_frame
 	var WaterFx: GDScript = load("res://scripts/water_fx.gd")
-	## `-- col` = Altın Kumlar (madde 631): aynı hesap, çöl sahnesi, doku alanı Su katmanının kullanılan alanı + 4 hücre (yazdırılır, harita_profili "su_doku"ya girilir),
-	## çıktı assets/map/col_su_mesafe.png + col_su_akis.png.
-	var col_mode: bool = "col" in OS.get_cmdline_user_args()
-	var harita: Node = load("res://scenes/col_baked.tscn" if col_mode else "res://scenes/harita_baked.tscn").instantiate()
+	## `-- <harita id>` (madde 631 çöl, madde 714 hepsi: bataklik / col / kis / batik_nekropol): aynı hesap, profilin sahnesi, doku alanı Su katmanının
+	## kullanılan alanı + 4 hücre (yazdırılır, harita profilinin "su_doku"suna girilir), çıktı assets/map/<id>_su_mesafe.png + <id>_su_akis.png.
+	## Profilde "renk" varsa (sabit renkli su) su karosunun HER opak pikseli su sayılır (zindan setinin dalga karosu mavi değil); kıyı ayrıntı
+	## katmanları profilin "ayrinti"sı (yoksa terrain_collision WATER_DETAIL_LAYERS).
+	var MP: GDScript = load("res://scripts/map_profiles.gd")
+	var map_id: String = ""
+	for a: String in OS.get_cmdline_user_args():
+		if (MP.get("PROFILES") as Dictionary).has(a) and a != "ana":
+			map_id = a
+	var col_mode: bool = map_id != "" ## ana harita dışı (adı eski: yalnız çöl vardı)
+	var prof: Dictionary = (MP.get("PROFILES") as Dictionary).get(map_id, {})
+	var cfg: Dictionary = prof.get("su_doku", {})
+	var harita: Node = load(str(prof["sahne"]) if col_mode else "res://scenes/harita_baked.tscn").instantiate()
 	root.add_child(harita)
 	await process_frame
 	var TC: GDScript = load("res://scripts/terrain_collision.gd")
 	var helper: Node = load("res://scripts/depth_occluders.gd").new()
-	var water := harita.get_node(WaterFx.WATER_PATH) as TileMapLayer
+	var water := harita.get_node(str(cfg.get("katman", WaterFx.WATER_PATH))) as TileMapLayer
+	var all_opaque: bool = cfg.has("renk")
+	var detail_paths: Array = cfg.get("ayrinti", TC.WATER_DETAIL_LAYERS)
 	var wofs: Vector2 = helper.cell_origin(water)
 	var origin: Vector2 = WaterFx.TEX_ORIGIN
 	var wsize: Vector2 = WaterFx.TEX_WORLD_SIZE
@@ -39,7 +50,7 @@ func _run() -> void:
 	var rect := Rect2i(cell0, Vector2i(int(wsize.x) / 16, int(wsize.y) / 16))
 	if col_mode:
 		rect = used.grow(4)
-		print("COL_SU_DOKU origin=Vector2(%d, %d) size=Vector2(%d, %d)" % [wofs.x + rect.position.x * 16, wofs.y + rect.position.y * 16, rect.size.x * 16, rect.size.y * 16])
+		print("SU_DOKU %s origin=Vector2(%d, %d) size=Vector2(%d, %d)" % [map_id, wofs.x + rect.position.x * 16, wofs.y + rect.position.y * 16, rect.size.x * 16, rect.size.y * 16])
 	if not rect.encloses(used):
 		push_error("Su katmanı doku alanının dışına taşıyor: kullanılan %s, doku %s - water_fx.gd TEX_ORIGIN/TEX_WORLD_SIZE büyüt" % [used, rect])
 	var w: int = rect.size.x * 8
@@ -54,7 +65,7 @@ func _run() -> void:
 		var lofs: Vector2 = helper.cell_origin(wl)
 		var lshift := Vector2i(roundi((lofs.x - wofs.x) / 16.0), roundi((lofs.y - wofs.y) / 16.0))
 		var details: Array = []
-		for path: String in TC.WATER_DETAIL_LAYERS:
+		for path: String in detail_paths:
 			var dl := harita.get_node_or_null(path) as TileMapLayer
 			if dl != null and dl.tile_set != null and not dl.get_used_cells().is_empty():
 				var dofs: Vector2 = helper.cell_origin(dl)
@@ -63,6 +74,11 @@ func _run() -> void:
 			var base: PackedByteArray = TC._class_mask(helper, wl, cell, cache)
 			if base.is_empty():
 				continue
+			if all_opaque:
+				base = base.duplicate()
+				for i in 256:
+					if base[i] == 2:
+						base[i] = 1
 			var vis: PackedByteArray = base.duplicate()
 			for d: Dictionary in details:
 				var dl: TileMapLayer = d["layer"]
@@ -114,7 +130,7 @@ func _run() -> void:
 	var code: int = -1
 	for py: String in ["python", "py", "python3"]:
 		output.clear()
-		code = OS.execute(py, [script_path, mask_abs, out_dir] + (["col_"] if col_mode else []), output, true)
+		code = OS.execute(py, [script_path, mask_abs, out_dir] + ([map_id + "_"] if col_mode else []), output, true)
 		if code != -1 and code != 9009 and not "".join(output).contains("is not recognized"):
 			break
 	print("".join(output))

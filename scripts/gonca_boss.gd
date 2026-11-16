@@ -171,7 +171,7 @@ static func filiz_count(boss: Node) -> int:
 		return 0
 	var n: int = 0
 	for m: Node in boss.get_tree().get_nodes_in_group("summons"):
-		if is_instance_valid(m) and m.get("is_dead") != true and str(m.get_meta("creature_id", "")) == FILIZ_ID and m.get_meta("summoner", null) == boss:
+		if is_instance_valid(m) and m.get("is_dead") != true and str(m.get_meta("creature_id", "")) == FILIZ_ID and (m.get_meta("summoner") if m.has_meta("summoner") else null) == boss:
 			n += 1
 	return n
 
@@ -281,7 +281,7 @@ func _begin_migrate() -> bool:
 	var best_d: float = -1.0
 	var players: Array = AbilitiesScript.damageable_players(e.get_tree())
 	for m: Node in e.get_tree().get_nodes_in_group("summons"):
-		if not is_instance_valid(m) or m.get("is_dead") == true or str(m.get_meta("creature_id", "")) != FILIZ_ID or m.get_meta("summoner", null) != e:
+		if not is_instance_valid(m) or m.get("is_dead") == true or str(m.get_meta("creature_id", "")) != FILIZ_ID or (m.get_meta("summoner") if m.has_meta("summoner") else null) != e:
 			continue
 		var from_boss: float = e.global_position.distance_to((m as Node2D).global_position)
 		if from_boss < MIGRATE_MIN_DIST or from_boss > MIGRATE_MAX_DIST:

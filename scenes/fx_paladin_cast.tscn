@@ -1,6 +1,6 @@
 [gd_scene load_steps=3 format=3 uid="uid://dg87h5w28q36g"]
 
-[ext_resource type="Script" uid="uid://cd99h1d77x2n2" path="res://scripts/fx_paladin_cast.gd" id="1"]
+[ext_resource type="Script" uid="uid://biumv6wa5eki4" path="res://scripts/fx_paladin_cast.gd" id="1"]
 [ext_resource type="AudioStream" uid="uid://boa1jfiv6y5rw" path="res://assets/audio/levelup.wav" id="2"]
 
 [node name="FxPaladinCast" type="Node2D"]

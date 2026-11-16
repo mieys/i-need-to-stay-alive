@@ -827,8 +827,12 @@ var net_enemy_records: int = 0
 var net_enemy_records_no_hp: int = 0
 
 
+var _test_map: bool = false ## TEST HARİTASI (madde 731): _ready'de MapProfiles.is_test_map()
+
+
 func _ready() -> void:
 	add_to_group("enemy_spawner") ## yönetmenler (underground_boss.gd) uzuv doğurmak için bulur
+	_test_map = MapProfilesScript.is_test_map() ## TEST HARİTASI (madde 731): kendiliğinden doğuş / boss / kademe duyurusu yok, yalnız debug doğurur
 	NetworkManager.became_host.connect(_on_became_host)
 	NetworkManager.peer_needs_game_catchup.connect(_on_peer_needs_game_catchup)
 	## HOST DEVRİ (bkz. network_manager.gd "HOST DEVRİ" bloğu): bu Main yeni host olan oyuncunun yeniden kurduğu koşu. Eski host'un son
@@ -1000,7 +1004,8 @@ func _process(delta: float) -> void:
 		return
 
 	## Kademe bildirimi: spawn kapılarından (içerideyken spawn durur) ÖNCE - Kademe saati oyuncular evdeyken de akar.
-	if not NetworkManager.is_multiplayer_active or NetworkManager.is_host:
+	## TEST HARİTASI (madde 731): kademe duyurusu / zafer / sonsuz kat yok (kademe debug menüsünde elle seçilir); aşağıdaki ağ eşitlemesi SÜRER.
+	if (not NetworkManager.is_multiplayer_active or NetworkManager.is_host) and not _test_map:
 		_check_tier_announcement()
 		## Zafer/sonsuz kat da aynı sebeple (oyuncular evdeyken de saat akar, bkz. ZAFER + SONSUZ MOD bloğu) spawn kapılarından önce.
 		_check_victory()
@@ -1047,11 +1052,13 @@ func _process(delta: float) -> void:
 	## debug_enemy_spawns_enabled notu) - bu satırdan yukarısı zaten host-authoritative kapının
 	## İÇİNDE (bkz. fonksiyon başındaki "sadece host" erken dönüşü), o yüzden host kapatınca
 	## herkes için gerçekten kapanmış olur.
-	if GameManager.debug_enemy_spawns_enabled and _run_phase != RunPhase.VICTORY: ## zafer penceresi açıkken doğuş durur
+	## TEST HARİTASI (madde 731, kullanıcı: "hiçbir yaratık doğmayacak"): debug menüsünün "Yaratık spawnları" anahtarı da açamaz - yalnız debug_spawn_creature.
+	if GameManager.debug_enemy_spawns_enabled and _run_phase != RunPhase.VICTORY and not _test_map: ## zafer penceresi açıkken doğuş durur
 		_spawn_timer -= delta
 		if _spawn_timer <= 0.0:
 			_spawn_timer = _current_interval()
 			_spawn_regular_enemy()
+		_process_water_ambush(delta) ## Kara Bataklık sudan pusu (yalnız bataklik_tehlike profilinde; bkz. _spawn_regular_at altı)
 
 		## Boss/Final/sonsuz boss dalgası tetikleri çeyrek saniyede bir bakılır: kapı kapalıyken (en çok GATE_MAX_WAIT_MSEC) bunlar
 		## _resolve_spawn_tier -> _older_tier_survivor_count ile "enemies" grubunu tarıyordu ve her karede çalışıyordu (CLAUDE.md
@@ -1773,27 +1780,154 @@ func _spawn_regular_enemy() -> void:
 			spawn_pos = _ambush_pack_member_position(Vector2(ambush_pos), i)
 		else:
 			spawn_pos = _random_spawn_position(anchor_pos, false, bias_dir)
-		var network_id: int = _next_network_enemy_id
-		_next_network_enemy_id += 1
-		var enemy = _spawn_creature(id, spawn_pos, network_id)
-		if not enemy:
-			if elite:
-				_unroll_elite(tier)
-			continue
-		enemy.set_meta("spawn_tier", tier) ## bkz. Kademe kapısı notu (_older_tier_survivor_count) - ROSTER kademesi, ölçek değil
-		_apply_base_stats(enemy, pool_stats(id, scale_tier, elite)) ## hesaplanan taban (elit: P = kademe + 2), kademe ölçeğinden ÖNCE
-		if enemy.has_method("apply_tier_scaling"):
-			enemy.apply_tier_scaling(scale_tier)
-		_enable_regular_shield(enemy, tier)
-		# Global güçlendirme - tier scaling SONRASI uygulanır (zaten ölçeklenmiş
-		# değerlerin üstüne eklenir, katlanarak büyümez)
-		_apply_global_buff(enemy)
-		if elite:
-			_apply_elite(enemy)
+		if _spawn_regular_at(id, spawn_pos, tier, scale_tier, elite) == null and elite:
+			_unroll_elite(tier)
 
-		if NetworkManager.is_multiplayer_active and NetworkManager.is_host:
-			## İstemci istatistiği bu sayıdan hesaplıyor (apply_tier_scaling) - sonsuzda host'la AYNI ölçek kademesi gitmeli.
-			_announce_spawn(enemy, id, spawn_pos, scale_tier, false, network_id, false, elite)
+
+## Sıradan (boss olmayan) yaratığı verilen noktada doğurur + istatistik + yayın. _spawn_regular_enemy ve Kara Bataklık sudan pusu ortak yolu.
+func _spawn_regular_at(id: String, spawn_pos: Vector2, tier: int, scale_tier: int, elite: bool) -> Node:
+	var network_id: int = _next_network_enemy_id
+	_next_network_enemy_id += 1
+	var enemy = _spawn_creature(id, spawn_pos, network_id)
+	if not enemy:
+		return null
+	enemy.set_meta("spawn_tier", tier) ## bkz. Kademe kapısı notu (_older_tier_survivor_count) - ROSTER kademesi, ölçek değil
+	_apply_base_stats(enemy, pool_stats(id, scale_tier, elite)) ## hesaplanan taban (elit: P = kademe + 2), kademe ölçeğinden ÖNCE
+	if enemy.has_method("apply_tier_scaling"):
+		enemy.apply_tier_scaling(scale_tier)
+	_enable_regular_shield(enemy, tier)
+	# Global güçlendirme - tier scaling SONRASI uygulanır (zaten ölçeklenmiş
+	# değerlerin üstüne eklenir, katlanarak büyümez)
+	_apply_global_buff(enemy)
+	if elite:
+		_apply_elite(enemy)
+
+	if NetworkManager.is_multiplayer_active and NetworkManager.is_host:
+		## İstemci istatistiği bu sayıdan hesaplıyor (apply_tier_scaling) - sonsuzda host'la AYNI ölçek kademesi gitmeli.
+		_announce_spawn(enemy, id, spawn_pos, scale_tier, false, network_id, false, elite)
+	return enemy
+
+
+## ---------- KARA BATAKLIK SUDAN PUSU (bataklik_tehlike.gd; yalnız host) ----------
+## PUSU_WADE_MIN sn kesintisiz suda kalan dışarıdaki (yerel / uzak) oyuncunun yakınındaki suda, yoklama başına PUSU_CHANCE ile: önce PUSU_WARN sn
+## kabarcık uyarısı (fx_su_pusu.gd, herkese `_rpc_water_ambush_fx`), sonra 2-3 sıradan yaratık (uçanlar hariç, elit yok) normal doğuş yayınıyla.
+## Kademe kapısı + yaratık tavanı geçerli; oyuncu başına PUSU_COOLDOWN. Suda mı: WadeFx.is_wading (host'ta kuklalar için de çalışır).
+const BataklikTehlike := preload("res://scripts/bataklik_tehlike.gd")
+const FxSuPusuScript := preload("res://scripts/fx_su_pusu.gd")
+var _water_ambush_on: int = -1 ## -1 = henüz bakılmadı (harita koşu boyunca değişmez)
+var _water_ambush_accum: float = 0.0
+var _water_wade_time: Dictionary = {} ## oyuncu örnek kimliği -> kesintisiz suda geçen sn
+var _water_ambush_cd: Dictionary = {} ## oyuncu örnek kimliği -> kalan bekleme sn
+
+
+func _process_water_ambush(delta: float) -> void:
+	if _water_ambush_on < 0:
+		_water_ambush_on = 1 if BataklikTehlike.enabled() else 0
+	if _water_ambush_on == 0:
+		return
+	_water_ambush_accum += delta
+	if _water_ambush_accum < BataklikTehlike.PUSU_CHECK:
+		return
+	var step: float = _water_ambush_accum
+	_water_ambush_accum = 0.0
+	var main_node: Node = get_tree().current_scene
+	var wade: Node = main_node.get_node_or_null("WadeFx") if main_node else null
+	if wade == null or not wade.has_method("is_wading"):
+		return
+	var seen := {}
+	for p: Node in _outdoor_living_players():
+		if not (p is Node2D):
+			continue
+		var key: int = p.get_instance_id()
+		seen[key] = true
+		var cd: float = maxf(float(_water_ambush_cd.get(key, 0.0)) - step, 0.0)
+		_water_ambush_cd[key] = cd
+		if not bool(wade.call("is_wading", p)):
+			_water_wade_time[key] = 0.0
+			continue
+		var wt: float = float(_water_wade_time.get(key, 0.0)) + step
+		_water_wade_time[key] = wt
+		if BataklikTehlike.pusu_ready(wt, cd) and randf() < BataklikTehlike.PUSU_CHANCE:
+			if _start_water_ambush((p as Node2D).global_position, wade):
+				_water_ambush_cd[key] = BataklikTehlike.PUSU_COOLDOWN
+				_water_wade_time[key] = 0.0
+	for key in _water_wade_time.keys():
+		if not seen.has(key):
+			_water_wade_time.erase(key)
+			_water_ambush_cd.erase(key)
+
+
+## Pusuyu kurar (uyarı görseli + gecikmeli doğuş). Kurulamadıysa (kapı / tavan / suda yer yok) false - bekleme başlamaz.
+func _start_water_ambush(center: Vector2, wade: Node) -> bool:
+	var tier: int = _resolve_spawn_tier()
+	if tier <= 0:
+		return false
+	var roster: Array = _spawnable_roster(tier).filter(func(i: String) -> bool: return BataklikTehlike.pusu_id_ok(i))
+	if roster.is_empty():
+		return false
+	var n: int = mini(randi_range(BataklikTehlike.PUSU_PACK_MIN, BataklikTehlike.PUSU_PACK_MAX), _scaled_enemy_cap() - _regular_enemy_count())
+	if n <= 0:
+		return false
+	var spots: PackedVector2Array = _water_ambush_spots(center, n, wade)
+	if spots.is_empty():
+		return false
+	var ids: Array = []
+	for i in range(spots.size()):
+		ids.append(roster[randi() % roster.size()])
+	_spawn_water_ambush_fx(spots)
+	if NetworkManager.is_multiplayer_active and NetworkManager.is_host:
+		for pid in NetworkManager.game_ready_peers():
+			_rpc_water_ambush_fx.rpc_id(int(pid), spots)
+	get_tree().create_timer(BataklikTehlike.PUSU_WARN, false).timeout.connect(_finish_water_ambush.bind(spots, ids, tier))
+	return true
+
+
+## Oyuncunun çevresinde (PUSU_DIST_MIN..MAX) suyun içinde, doğuşa uygun, birbirinden ayrık en çok n nokta.
+func _water_ambush_spots(center: Vector2, n: int, wade: Node) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	for _i in range(n):
+		for _attempt in range(BataklikTehlike.PUSU_ATTEMPTS):
+			var pos: Vector2 = (center + Vector2.from_angle(randf() * TAU) * randf_range(BataklikTehlike.PUSU_DIST_MIN, BataklikTehlike.PUSU_DIST_MAX)).floor()
+			if float(wade.call("water_at", pos)) <= 0.0 or _spawn_point_invalid(pos):
+				continue
+			var crowded: bool = false
+			for q in out:
+				if q.distance_to(pos) < 16.0:
+					crowded = true
+					break
+			if not crowded:
+				out.append(pos)
+				break
+	return out
+
+
+func _finish_water_ambush(spots: PackedVector2Array, ids: Array, tier: int) -> void:
+	if GameManager.is_game_over or (NetworkManager.is_multiplayer_active and not NetworkManager.is_host):
+		return
+	var scale_tier: int = _scale_tier_for(tier)
+	for i in range(mini(spots.size(), ids.size())):
+		if _regular_enemy_count() >= _scaled_enemy_cap():
+			return
+		var enemy: Node = _spawn_regular_at(str(ids[i]), spots[i], tier, scale_tier, false)
+		if enemy:
+			enemy.set_meta("water_ambush", true)
+
+
+func _spawn_water_ambush_fx(spots: PackedVector2Array) -> void:
+	var main_node: Node = get_tree().current_scene
+	if main_node == null:
+		return
+	for p in spots:
+		var fx: Node2D = FxSuPusuScript.new()
+		fx.position = p.floor()
+		main_node.add_child(fx)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _rpc_water_ambush_fx(spots: PackedVector2Array) -> void:
+	if not NetworkManager._from_host():
+		return
+	_spawn_water_ambush_fx(spots)
 
 
 
@@ -1804,6 +1938,8 @@ func _active_boss_tiers() -> Dictionary:
 
 
 static func boss_tiers_for_map(map_id: String) -> Dictionary:
+	if MapProfilesScript.is_test_map_id(map_id):
+		return {} ## TEST HARİTASI (madde 731): kademe bossu yok, bosslar debug menüsünden
 	var t: Variant = MapProfilesScript.get_profile(map_id).get("bosslar", null)
 	return t if t is Dictionary and not (t as Dictionary).is_empty() else NEW_BOSS_TIERS
 
@@ -1878,8 +2014,7 @@ func _spawn_boss_group(ids: Array, tier: int) -> Array:
 	if _active_boss_tiers().has(tier) and not spawned_bosses.is_empty():
 		_tier_bosses[tier] = spawned_bosses
 	if not spawned_bosses.is_empty():
-		EventSfx.play(get_tree(), &"boss")
-		CameraShakeScript.add_limited("boss_spawn", 0.45, 3.0) ## kamera sarsıntısı: boss geldi (bkz. camera_shake.gd)
+		_play_boss_arrival()
 	return spawned_bosses
 
 
@@ -2226,7 +2361,9 @@ func _check_endless_boss_wave() -> void:
 		return
 	## Dalga HARİTANIN KENDİ bosslarından kurulur (madde 597: ana harita = Minotaur + Üç Kardeş [2026-11-14, eskiden Wendigo]; eski 6'lı genel havuz ve 13'lü FINAL_CREATURES kalktı).
 	## Boyut hâlâ EndlessMath.pool_wave_size ile büyür ama havuzdan fazlası seçilemez (haritada 2 boss varsa en çok 2: ek zorluk can/hasar çarpanlarından gelir).
-	var pool: Array = _endless_wave_pool()
+	## Üç Kardeş TEK boss: seçimden önce havuzda tek girişe indirilir (2026-11-16 düzeltmesi - eskiden 3 ayrı giriş sayılıyordu, "2 boss"
+	## seçimi iki kardeşe denk gelince dalga yalnız üçlüden = 1 bosstan oluşuyordu). with_whole_trio aşağıda üçünü geri açar.
+	var pool: Array = _collapse_trio(_endless_wave_pool())
 	var ids: Array = EndlessMathScript.pick_wave_ids(pool, clampi(EndlessMathScript.pool_wave_size(_endless_layer), 1, pool.size()))
 	ids = with_whole_trio(ids)
 	var spawned: Array = _spawn_boss_group(ids, EndlessMathScript.scale_tier(_endless_layer))
@@ -2244,6 +2381,20 @@ static func with_whole_trio(ids: Array) -> Array:
 				if not out.has(t):
 					out.append(t)
 			break
+	return out
+
+
+## Havuzdaki Üç Kardeş üyelerini tek girişe (ilk görülen kardeş) indirir; sıra korunur.
+static func _collapse_trio(pool: Array) -> Array:
+	var trio: Array = preload("res://scripts/boss_bar_art.gd").TRIO_IDS
+	var out: Array = []
+	var trio_in: bool = false
+	for id in pool:
+		if trio.has(id):
+			if trio_in:
+				continue
+			trio_in = true
+		out.append(id)
 	return out
 
 
@@ -2440,16 +2591,33 @@ func _spawn_creature(id: String, pos: Vector2, network_id: int = 0) -> Node:
 ## oyuncunun (ya da verilen konumun) etrafında doğması. Host-authoritative (bkz. enemy_spawner.gd
 ## dosya başı "sadece host" deseni) - bir İSTEMCİ bunu çağırırsa (çok oyunculu, host değilse)
 ## hiçbir şey olmaz, host'un kendi debug menüsünden çağırması gerekir.
+## Madde 731 (test haritası, kullanıcı: "bosslar dahil, üç kardeşler bossunda üç kardeş de doğmalı, ayrıntıları gözden kaçırma"):
+##  - ÜÇ KARDEŞ tek bosstur: hangi kardeş istenirse istensin ÜÇÜ birlikte, ayrı yönlerden doğar (adet yok sayılır; sahada kardeş varken yeni üçlü
+##    doğmaz - kardeşlerin öfke / imza devri ve ortak 3 parçalı bar tek üçlüye göre, iki üçlü birbirini öfkelendirirdi).
+##  - Gece bossu (Banshee) oyundaki gibi gece kilidini ister (saat hızla derin geceye akar, boss ölünce kilit kendiliğinden açılır).
+##  - Boss doğunca host'ta da boss sesi + kamera sarsıntısı (istemciler RPC'nin announce'uyla zaten çalıyordu).
+##  - Doğuş noktası engelsiz zeminde (su / bina / ağaç / duvar; zindanda ulaşılamayan cep değil) - eskiden düz halka noktasıydı, ağaç içine düşebiliyordu.
+##  - Boss minyonları (SUMMON_STATS: kabak / yarasa / filiz) host'ta da minyon oranlarını alır (istemci kopyası _rpc_client_spawn_creature'da zaten alıyordu).
+## Dönüş: doğan yaratık sayısı (Üç Kardeş = 3). Ret nedeni `debug_last_error`da (debug menüsünün durum satırı).
+var debug_last_error: String = ""
+
+
 func debug_spawn_creature(id: String, tier: int, count: int, around_pos: Vector2) -> int:
+	debug_last_error = ""
 	if NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
+		debug_last_error = "Sadece host yaratık doğurabilir."
 		return 0
 	if not SCENES.has(id):
+		debug_last_error = "Bilinmeyen yaratık: %s" % id
 		return 0
+	if debug_trio_ids().has(id):
+		return _debug_spawn_trio(tier, around_pos)
+	var is_boss: bool = FIXED_BOSS_STATS.has(id)
+	if is_boss and needs_night([id]):
+		_night_ready_for_boss() ## gece kilidini ister (dönüşü önemsiz: boss hemen doğar, gece birkaç saniyede gelir)
 	var spawned := 0
 	for i in range(max(1, count)):
-		var angle: float = randf() * TAU
-		var dist: float = randf_range(60.0, 220.0)
-		var spawn_pos: Vector2 = around_pos + Vector2(cos(angle), sin(angle)) * dist
+		var spawn_pos: Vector2 = debug_spawn_spot(around_pos, is_boss)
 		var network_id: int = _next_network_enemy_id
 		_next_network_enemy_id += 1
 		var enemy = _spawn_creature(id, spawn_pos, network_id)
@@ -2462,12 +2630,24 @@ func debug_spawn_creature(id: String, tier: int, count: int, around_pos: Vector2
 			enemy.begin_limb(null, randi() % 2, 0, 14.0)
 			spawned += 1
 			continue
-		if FIXED_BOSS_STATS.has(id):
+		if is_boss:
 			## Yeni bosslar (Minotaur...) debug menüsünden GERÇEK boss olarak doğar: sabit statlar, boss barı, hücumlar test edilebilsin.
 			enemy.add_to_group("boss")
 			_setup_boss_enemy(enemy, id, tier)
 			if NetworkManager.is_multiplayer_active:
 				_announce_spawn(enemy, id, spawn_pos, tier, true, network_id, true, false)
+			spawned += 1
+			continue
+		if SUMMON_STATS.has(id):
+			## Boss minyonu tek başına (sahibi yok): spawn_summon ile AYNI kurulum - istemci kopyası da minyon oranlarını alır.
+			if enemy.has_method("apply_tier_scaling"):
+				enemy.apply_tier_scaling(tier)
+			_enable_regular_shield(enemy, tier)
+			_apply_global_buff(enemy)
+			_apply_summon_stats(enemy, SUMMON_STATS[id])
+			enemy.add_to_group("summons")
+			if NetworkManager.is_multiplayer_active:
+				_announce_spawn(enemy, id, spawn_pos, tier, false, network_id, false, false)
 			spawned += 1
 			continue
 		enemy.set_meta("spawn_tier", tier)
@@ -2478,7 +2658,82 @@ func debug_spawn_creature(id: String, tier: int, count: int, around_pos: Vector2
 		if NetworkManager.is_multiplayer_active:
 			_announce_spawn(enemy, id, spawn_pos, tier, false, network_id, false, false)
 		spawned += 1
+	if is_boss and spawned > 0:
+		_play_boss_arrival()
 	return spawned
+
+
+## ÜÇ KARDEŞ kimlikleri (bar sırası; kardes_boss.gd TRIO_IDS ile aynı).
+static func debug_trio_ids() -> Array:
+	return preload("res://scripts/boss_bar_art.gd").TRIO_IDS
+
+
+## Sahada canlı bir kardeş var mı (debug: ikinci üçlü doğmasın).
+func debug_trio_alive() -> bool:
+	return not _living_bosses_of(debug_trio_ids()).is_empty()
+
+
+## Üç kardeş birlikte: oyuncunun çevresinde 120 derece aralıklı üç yönden (normal K10 doğuşunda da üçü ayrı noktalardan gelir).
+func _debug_spawn_trio(tier: int, around_pos: Vector2) -> int:
+	if debug_trio_alive():
+		debug_last_error = "Üç Kardeş zaten sahada - önce 'Sahayı temizle' ya da hepsini öldür."
+		return 0
+	var ids: Array = debug_trio_ids()
+	var base_angle: float = randf() * TAU
+	var spawned := 0
+	for i in range(ids.size()):
+		var id: String = str(ids[i])
+		var spawn_pos: Vector2 = debug_spawn_spot(around_pos, true, base_angle + TAU * float(i) / float(ids.size()))
+		var network_id: int = _next_network_enemy_id
+		_next_network_enemy_id += 1
+		var enemy = _spawn_creature(id, spawn_pos, network_id)
+		if not enemy:
+			continue
+		enemy.add_to_group("boss")
+		_setup_boss_enemy(enemy, id, tier)
+		if NetworkManager.is_multiplayer_active:
+			_announce_spawn(enemy, id, spawn_pos, tier, true, network_id, true, false)
+		spawned += 1
+	if spawned > 0:
+		_play_boss_arrival()
+	if spawned < ids.size():
+		debug_last_error = "Üç Kardeş'ten yalnız %d kardeş doğabildi." % spawned
+	return spawned
+
+
+## Debug doğuş noktası: `center` çevresinde engelsiz zemin (GameManager su / bina / ağaç / duvar kuralları; zindan haritasında ulaşılabilir hücre).
+## Boss biraz daha uzağa (160-260 px: büyük gövde oyuncunun dibinde belirmesin). `angle` verilirse o yönün çevresinde aranır (Üç Kardeş).
+## Engelsiz nokta bulunamazsa son aday döner (eski davranış).
+func debug_spawn_spot(center: Vector2, is_boss: bool, angle: float = NAN) -> Vector2:
+	var lo: float = 160.0 if is_boss else 60.0
+	var hi: float = 260.0 if is_boss else 220.0
+	var pos: Vector2 = center
+	for attempt in range(16):
+		var a: float = randf() * TAU if is_nan(angle) else angle + randf_range(-0.45, 0.45) * (1.0 + float(attempt) * 0.2)
+		pos = center + Vector2.from_angle(a) * randf_range(lo, hi)
+		if not _spawn_point_invalid(pos) and not GameManager.is_position_blocked_by_walls(pos):
+			return pos
+	return pos
+
+
+## Boss geldi: ses + kamera sarsıntısı (normal kademe bossu ve debug doğuşu ortak).
+func _play_boss_arrival() -> void:
+	EventSfx.play(get_tree(), &"boss")
+	CameraShakeScript.add_limited("boss_spawn", 0.45, 3.0) ## kamera sarsıntısı: boss geldi (bkz. camera_shake.gd)
+
+
+## Debug menüsü "Sahayı temizle": sahadaki BÜTÜN yaratıklar (bosslar, minyonlar, uzuvlar dahil) her peer'de ödülsüz kaybolur - zaferdeki dağılmayla
+## aynı yol (enemy.gd dismiss_without_reward: öldürme / ödül / drop yok). Yalnız host / tek oyunculu. Dönüş: kaldırılan yaratık sayısı (host'taki).
+func debug_clear_creatures() -> int:
+	if NetworkManager.is_multiplayer_active and not NetworkManager.is_host:
+		debug_last_error = "Sadece host sahayı temizleyebilir."
+		return 0
+	var n := 0
+	for enemy: Node in get_tree().get_nodes_in_group("enemies"):
+		if is_instance_valid(enemy) and enemy.get("is_dead") != true and enemy.has_method("dismiss_without_reward"):
+			n += 1
+	_rpc_victory_dissolve.rpc()
+	return n
 
 
 ## "Alanı Güvenceye Al" görevi (bkz. world_event_manager.gd SECURE_WAVE_*): görev bölgesinde oyuncu
@@ -2576,6 +2831,24 @@ func spawn_mission_elite(pos: Vector2) -> Node:
 ## dışarıdan doğrudan da okunabilir ama isimlendirilmiş bir erişim daha temiz.
 func get_debug_creature_ids() -> Array:
 	return SCENES.keys()
+
+
+## Debug menüsü: boss kimlikleri (gerçek boss kurulumuyla doğanlar = FIXED_BOSS_STATS; Üç Kardeş üç kimlik, menü tek düğme gösterir).
+static func debug_boss_ids() -> Array:
+	return FIXED_BOSS_STATS.keys()
+
+
+## Bossun OYUNDA doğduğu kademe (ana haritanın + her haritanın kademe boss tablosu, ilk bulunan). Debug menüsü boss seçilince kademeyi buna
+## ayarlar: yuva can/kalkanı ve hasar çarpanı (BOSS_SLOT_STATS / boss_slot_damage_mult) oyundakiyle aynı çıksın. Tabloda yoksa BOSS_HOME_TIER, o da yoksa 1.
+static func debug_boss_tier(id: String) -> int:
+	var tables: Array = [NEW_BOSS_TIERS]
+	for map_id: String in MapProfilesScript.ids():
+		tables.append(boss_tiers_for_map(map_id))
+	for t: Dictionary in tables:
+		for tier in t.keys():
+			if (t[tier] as Array).has(id):
+				return int(tier)
+	return int(BOSS_HOME_TIER.get(id, 1))
 
 
 var _sync_enemy_map: Dictionary = {}

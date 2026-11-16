@@ -44,11 +44,37 @@ const PvpNetScript := preload("res://scripts/pvp/pvp_net.gd")
 const LEFT := Rect2(32, 24, 440, 1024)
 const MID := Rect2(488, 24, 760, 1024)
 const RIGHT := Rect2(1264, 24, 624, 908)
+const ROW_GAP := 24 ## orta panel çubuk / stat satırında iki blok arasındaki en az boşluk (madde 748)
 const START_Y := 948.0
 const CARD := Vector2(134, 150)
-const TILE := Vector2(108, 124)
+## TILE.y 124 -> 122 + TILE_NAME_GAP -4 -> -6 (madde 759): SEL_PAD 8 ok payı silah sekmesinde sağ paneli 908 -> 910 uzatıyordu; panel boyu
+## değişince PixelBox damar kayması (grain_offset, kutu BOYUNA bağlı) değişip sekme değiştirince pencere dokusu "değişiyordu".
+const TILE := Vector2(108, 122)
+## TEK KUTU (madde 759, 2026-11-16; kullanıcı: "kutu içinde kutu var, karakter ikonunun çerçevesi olsa yeter"): MASAÜSTÜNDE kart / karo
+## kutusu yok (düğme flat, yalnız tıklama alanı), kutu = Gömme Tepsi çerçevesi, ad altında. Karakter: yüz 96 + 2x8 = 112; 5 x 112 + 4 x 42
+## = 728 = orta panelin iç genişliği (başlık / ayraçla aynı kenar). Yüz x5 (136) + 32'lik adla en dolu karakterde (Matthew) orta panel
+## 1047 > 1024 oluyordu -> x4 kaldı. Telefon düzeni eski kart kutusunda (görsel doğrulanmadı, madde 279).
+const CARD_GAP := Vector2(42, 16)
+const CARD_NAME_GAP := -6 ## etiketin üstündeki satır payı alt köşebende yetiyor -> eksi aralık, yazı köşebendin hemen altında
+const CARD_NAME_H := 32.0
+const NAME_OVER := 12.0 ## ad etiketi çerçeveden iki yana taşabilir (en uzun ad 32'de < 136)
+const TILE_FRAME := 104.0
+const TILE_GAP := 15 ## 5 x 104 + 4 x 15 = 580: sekmelerin sol kenarına hizalı, sağda kaydırma çubuğu payı 20 (madde 652)
+const TILE_NAME_GAP := -6
+const WEAPON_ICON_TARGET := 75.0 ## silah çiziminin uzun kenarı en çok (madde 759, _weapon_icon; 60 -> 75 "azcık daha büyük")
+const WEAPON_DENSE_FILL := 0.55 ## opak oranı bunun üstündeki (dolu yuvarlak / kare) silahın hedefi %90
+## Yetenek ikonu 48 -> 56 (madde 759). 60 denendi: metin sütunu 658 -> 638 daralıp Lyra'nın iki kısa metni 2 satıra sığmadı ("…");
+## 56 + 2x8 çerçeve = 72, ikon-metin aralığı 14 -> SKILL_GAP 8 -> sütun 648.
+const SKILL_ICON := 56.0
+const SKILL_GAP := 8
+const SKILL_BOX := SKILL_ICON + 16.0 ## + 2 x 8 Gömme Tepsi çerçevesi
+const SEL_PAD := 8 ## sağ ızgaranın kaydırma kutusunda pay: seçim oku çerçevenin 8 px üstüne, uzun ad sütunun 7 px soluna taşar
+const PickArrow := preload("res://scripts/pick_arrow.gd") ## seçili kartın zıplayan oku (madde 759)
+const SEL_PAL := [HT.PICK_FRAME_HI, HT.ACCENT, HT.PICK_FRAME_LO] ## seçili çerçeve: açık kenar / ahşap / koyu ahşap altın
+const HOV_PAL := [HT.ACCENT_SOFT, HT.PICK_HOVER, HT.RIM] ## üstünde / odakta: açık ahşap
 const SHORT := {} ## uzun unvanların kart kısaltması; karakterlere isim verilince boşaldı (madde 623)
 const CHAT_KEEP := 50
+const ScrollFollowScript := preload("res://scripts/scroll_follow.gd")
 
 ## Tek oyunculu kip (build'den ÖNCE atanır).
 var solo: bool = false
@@ -56,7 +82,7 @@ var _sel_char: int = 1
 var _viewing_locked: bool = false
 var _tab: String = "weapon"
 var _detail_key: String = "" ## sekmede incelenen (kilitliyse seçilmeden açıklaması gösterilir)
-var _cards: Dictionary = {} ## char_id -> {"btn": Button, "marks": HBoxContainer, "name": Label}
+var _cards: Dictionary = {} ## char_id -> {"btn": Button, "name": Label, "face": FramedPortrait, "arrow" / "brk", ...}
 var _room_name: Label = null
 var _chips: HBoxContainer = null
 var _leave_btn: Button = null
@@ -72,7 +98,9 @@ var _stats: GridContainer = null
 var _skills: VBoxContainer = null
 var _preview: Control = null
 var _load_name: Label = null
-var _load_icons: HBoxContainer = null
+var _load_icons: HBoxContainer = null ## yalnız telefon düzeni (_ph_refresh_loadout)
+var _hero_side: VBoxContainer = null ## masaüstü vitrin: önizlemenin sağı, şimdilik BOŞ (kullanıcı dolduracak, madde 748)
+var _char_bars: GridContainer = null ## orta panel: karakter Hasar/Savunma/Çeviklik/Destek çubukları (weapon_stat_bars.gd CHAR_ROWS)
 var _tab_btns: Dictionary = {}
 var _tab_grid: GridContainer = null
 var _detail_name: Label = null
@@ -242,6 +270,7 @@ func _build_left() -> void:
 	_chat_log = DK.v(4)
 	_chat_log.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_chat_scroll.add_child(_chat_log)
+	ScrollFollowScript.attach(_chat_scroll)
 	cv.add_child(_chat_scroll)
 	_chat_input = LineEdit.new()
 	_chat_input.placeholder_text = "Mesaj yaz... (Enter)"
@@ -271,7 +300,7 @@ func _build_left_solo() -> void:
 	head.add_child(_leave_btn)
 	rv.add_child(head)
 	_chips = DK.h(8)
-	_chips.add_child(DK.chip(DK.G_PERSON, "Tek oyuncu", DK.C_DIM))
+	_chips.add_child(DK.chip(DK.I_PLAYERS, "Tek oyuncu", DK.C_DIM))
 	var shard := DK.box(DK.C_INSET, DK.C_LINE, 6, 2, 4)
 	var sst = shard.get_theme_stylebox("panel") ## PixelBox (madde 417)
 	sst.content_margin_left = 12
@@ -370,12 +399,12 @@ func _refresh_room() -> void:
 		_chips.remove_child(c)
 		c.queue_free()
 	var locked: bool = not NetworkManager.room_password.is_empty()
-	_chips.add_child(DK.chip(DK.G_LOCK if locked else DK.G_OPEN, "Şifreli" if locked else "Açık", DK.C_DIM))
+	_chips.add_child(DK.chip(DK.I_LOCKED if locked else DK.I_OPEN, "Şifreli" if locked else "Şifresiz", DK.C_DIM))
 	if NetworkManager.is_online_session:
-		_chips.add_child(DK.chip(DK.G_GLOBE, "İnternet", DK.C_DIM))
+		_chips.add_child(DK.chip(DK.I_ONLINE, "İnternet", DK.C_DIM))
 	else:
-		_chips.add_child(DK.chip(DK.G_GLOBE, (Loc.t("LAN %s") % NetworkManager.room_code) if NetworkManager.room_code != "" else "LAN", DK.C_DIM))
-	_chips.add_child(DK.chip(DK.G_PERSON, "%d/%d" % [NetworkManager.lobby_players.size(), NetworkManager.room_max_players], DK.C_TEXT))
+		_chips.add_child(DK.chip(DK.I_ONLINE, (Loc.t("LAN %s") % NetworkManager.room_code) if NetworkManager.room_code != "" else "LAN", DK.C_DIM))
+	_chips.add_child(DK.chip(DK.I_PLAYERS, "%d/%d" % [NetworkManager.lobby_players.size(), NetworkManager.room_max_players], DK.C_TEXT))
 	if _team_mode():
 		_chips.add_child(DK.chip(DK.G_CROWN, GameModeScript.display_name(GameModeScript.PVP), DK.C_ACCENT))
 
@@ -497,13 +526,14 @@ func _player_card(pid: int, index: int) -> PanelContainer:
 	v.alignment = BoxContainer.ALIGNMENT_CENTER
 	var top := DK.h(8)
 	var nm := DK.lbl(str(info.get("name", "Oyuncu")), DK.FS_BODY)
+	nm.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED ## oyuncu adı çevrilmez ("Can" -> "Health" olmasın, 2026-11-15)
 	nm.clip_text = true
 	nm.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	nm.custom_minimum_size.x = 40
 	top.add_child(nm)
 	if bool(info.get("is_host", false)):
-		var cr := DK.glyph(DK.G_CROWN, DK.C_ACCENT, 3)
+		var cr := DK.room_icon(DK.I_HOST)
 		cr.tooltip_text = "Host"
 		cr.mouse_filter = Control.MOUSE_FILTER_PASS
 		top.add_child(cr)
@@ -641,8 +671,7 @@ func _scroll_chat_end() -> void:
 	if not is_inside_tree():
 		return
 	await get_tree().process_frame
-	if is_instance_valid(_chat_scroll):
-		_chat_scroll.scroll_vertical = int(_chat_scroll.get_v_scroll_bar().max_value)
+	ScrollFollowScript.to_end(_chat_scroll) ## asıl iniş vbar.changed'de (satır boyu birkaç karede oturur)
 
 
 ## ------------------------------------------------------------------ orta: karakter ızgarası + ayrıntı
@@ -650,11 +679,16 @@ func _build_mid() -> void:
 	var mid := DK.box(DK.C_PANEL, DK.C_LINE, 16)
 	var mv := DK.v(12)
 	_open_count = DK.lbl("", DK.FS_LABEL, DK.C_DIM)
-	mv.add_child(DK.title_bar("KARAKTERİNİ SEÇ", _open_count))
+	## AYRINTILI (madde 756): yetenek satırları KISA metin, tam metin bu düğmenin penceresinde. Alt kenarda 2 satırlık kısa metinle
+	## sığmıyordu (37 px taşma) -> başlık satırının sağında.
+	var th := DK.h(12)
+	th.add_child(_open_count)
+	th.add_child(_details_button(DK.FS_LABEL, 34.0))
+	mv.add_child(DK.title_bar("KARAKTERİNİ SEÇ", th))
 	var grid := GridContainer.new()
 	grid.columns = 5
-	grid.add_theme_constant_override("h_separation", 10)
-	grid.add_theme_constant_override("v_separation", 10)
+	grid.add_theme_constant_override("h_separation", int(CARD_GAP.x)) ## tek kutu (madde 759)
+	grid.add_theme_constant_override("v_separation", int(CARD_GAP.y))
 	var ids: Array = Characters.DEFS.keys()
 	ids.sort()
 	var open_n: int = 0
@@ -667,21 +701,31 @@ func _build_mid() -> void:
 	_open_count.text = ""
 	mv.add_child(grid)
 	mv.add_child(DK.hline())
-	var nh := DK.h(12)
-	var name_col := DK.v(0)
-	_char_name = DK.lbl("", DK.FS_TITLE, DK.C_ACCENT)
-	name_col.add_child(_char_name)
-	_char_title = DK.lbl("", DK.FS_LABEL, DK.C_DIM) ## lakap (madde 623)
-	name_col.add_child(_char_title)
-	nh.add_child(name_col)
-	nh.add_child(DK.sp(0, 0, true))
+	## 2026-11-16 (madde 748): satır = [karakter çubukları 2x2] [boşluk] [temel statlar 2x2]. Karakter adı + lakap bu satırdan SAĞ ÜSTE
+	## (vitrin önizlemesinin yanı, _build_right) taşındı (kullanıcı: "karakterin adı yazmasın o halde, sağ üstte yazsın"). Çubuk bloğu sola,
+	## yeteneklerin ikon kenarına hizalı ve SABİT (karakter değişince kaymaz); temel statlar sağ kenarda. Çubuk bloğu temel stat ızgarasıyla
+	## aynı kalıp (2 satır, 32 px ikon): 32 + 9 + 117 (3 sanat px dilim) = 158 hücre, blok 334; en geniş stat ızgarası 337 (Aldric) -> sığar.
+	## Uzun özel stat adları kısa (meta_upgrades "short"); başka dilde yine sığmazsa _fit_stats_row "…" ile kırpar.
+	var nh := DK.h(0)
+	if not _phone:
+		_char_bars = WeaponStatBars.new()
+		_char_bars.setup(3, 32.0, DK.FS_LABEL, WeaponStatBars.CHAR_ROWS, 3)
+		_char_bars.add_theme_constant_override("v_separation", 0) ## hücre (ad + dilim) 36 px: 2 x 36 = 72 ~ stat ızgarası 2 x 32 + 6 = 70
+		_char_bars.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		nh.add_child(_char_bars)
+	nh.add_child(DK.sp(ROW_GAP, 0, true))
 	_stats = GridContainer.new()
 	_stats.columns = 2
 	_stats.add_theme_constant_override("h_separation", 22)
 	_stats.add_theme_constant_override("v_separation", 6)
+	_stats.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	nh.add_child(_stats)
 	mv.add_child(nh)
-	_skills = DK.v(10)
+	## Stat satırı ile ilk yetenek arası 12 -> 30 (2026-11-16, kullanıcı: "yetenek satırıyla stat çubukları arasında çok az mesafe var"):
+	## mv aralığı 12 + 6 px boşluk + 12. Yetenek satırları kendi arasında 10'da kalır.
+	mv.add_child(DK.sp(0, 6))
+	## Kısa metin 2 satır (madde 756): satır arası 10 -> 4, yoksa 4 satırı da iki satırlık karakter (Matthew) 13 px taşıyordu.
+	_skills = DK.v(4)
 	mv.add_child(_skills)
 	mid.add_child(mv)
 	_put(mid, MID)
@@ -694,11 +738,18 @@ func _char_card(id: int) -> Button:
 	b.custom_minimum_size = _card
 	b.tooltip_text = str(def.get("name", "")) + ("\n" + MP.lock_text(MP.CHAR, id) if lk else "")
 	b.pressed.connect(func() -> void: character_picked.emit(id))
-	var v := DK.v(2)
+	var single: bool = not _phone ## TEK KUTU yalnız masaüstü (madde 759)
+	var v := DK.v(CARD_NAME_GAP if single else 2)
 	v.set_anchors_preset(Control.PRESET_FULL_RECT)
-	v.alignment = BoxContainer.ALIGNMENT_CENTER
+	v.alignment = BoxContainer.ALIGNMENT_BEGIN if single else BoxContainer.ALIGNMENT_CENTER
 	## Portre Gömme Tepsi çerçevesinde (madde 535): çerçevesiz kare kartın içinde "kesik" duruyordu.
 	var face: CenterContainer = PortraitFace.framed_icon(id, _card_face, 3.0 if _phone else 2.0, lk)
+	var fw: float = face.custom_minimum_size.x
+	if single:
+		_flat_button(b)
+		b.custom_minimum_size = Vector2(fw, face.custom_minimum_size.y + CARD_NAME_GAP + CARD_NAME_H)
+		v.offset_left = -NAME_OVER
+		v.offset_right = NAME_OVER
 	v.add_child(face)
 	var nl: Label = null
 	if lk:
@@ -709,26 +760,38 @@ func _char_card(id: int) -> Button:
 		v.add_child(ph)
 	else:
 		var t: String = str(SHORT.get(id, def.get("name", "")))
-		var fs: int = _fs_lab if DK.font().get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, _fs_lab).x <= _card.x - 12 else _fs_small
+		## Etiket metni ekranda çevrilir -> ölçüm çevrilmiş adla (tr).
+		var tw: float = DK.font().get_string_size(tr(t), HORIZONTAL_ALIGNMENT_LEFT, -1, DK.FS_BODY).x
+		var fs: int = (DK.FS_BODY if tw <= fw + NAME_OVER * 2.0 else DK.FS_LABEL) if single \
+				else (_fs_lab if DK.font().get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, _fs_lab).x <= _card.x - 12 else _fs_small)
 		nl = DK.lbl(t, fs, DK.C_TEXT, HORIZONTAL_ALIGNMENT_CENTER)
 		v.add_child(nl)
 	b.add_child(v)
-	## Seçim vurgusu altın dış kart çerçevesi değil KÖŞEBENT (madde 538): seçili altın, üstünde / odakta PICK_HOVER.
-	var brk := CornerBrackets.new()
-	brk.t = 4.0 if _phone else 3.0
-	b.add_child(brk)
+	## Seçim vurgusu: telefonda KÖŞEBENT (madde 538: seçili altın, üstünde / odakta PICK_HOVER). Masaüstü tek kutuda (madde 759, kullanıcı
+	## 4 prototipten "D ile B'yi birleştir"): seçili = çerçeve ALTIN + üstünde zıplayan altın OK (pick_arrow.gd), üstünde / odakta = çerçeve
+	## açık ahşap; ikisi de _refresh_brackets'te.
+	var brk: Control = null
+	var arrow: Control = null
+	if single:
+		arrow = PickArrow.new()
+		arrow.set("t", 3.0)
+		(face.get_child(0) as Control).add_child(arrow)
+	else:
+		brk = CornerBrackets.new()
+		brk.set("t", 4.0 if _phone else 3.0)
+		b.add_child(brk)
 	b.mouse_entered.connect(_set_card_hover.bind(id, "hov", true))
 	b.mouse_exited.connect(_set_card_hover.bind(id, "hov", false))
 	b.focus_entered.connect(_set_card_hover.bind(id, "foc", true))
 	b.focus_exited.connect(_set_card_hover.bind(id, "foc", false))
 	if lk:
+		var cw: float = fw if single else _card.x
 		var lg := DK.glyph(DK.G_LOCK, DK.C_DIM, 3 if _card.x <= CARD.x else 4)
-		lg.position = Vector2(_card.x - (30 if _card.x <= CARD.x else 40), 8)
+		lg.position = Vector2(cw - (30 if _card.x <= CARD.x else 40), 8)
 		b.add_child(lg)
-	var marks := DK.h(4)
-	marks.position = Vector2(6, 6)
-	b.add_child(marks)
-	_cards[id] = {"btn": b, "marks": marks, "name": nl, "locked": lk, "face": face.get_child(0), "brk": brk, "hov": false, "foc": false}
+	## Kartın sol üstündeki oyuncu baş harfi (kim hangi karakteri seçti) kaldırıldı (madde 759, kullanıcı: "kimin aldığını belirten
+	## göstergeye gerek yok"); oyuncu kartları zaten herkesin karakterini gösteriyor.
+	_cards[id] = {"btn": b, "name": nl, "locked": lk, "face": face.get_child(0), "brk": brk, "arrow": arrow, "hov": false, "foc": false}
 	_style_card(id)
 	return b
 
@@ -740,15 +803,16 @@ func _style_card(id: int) -> void:
 	## üstündeyken dolgu biraz açılır, vurgu köşebentlerde (_refresh_brackets).
 	var b: Button = c["btn"]
 	var lk: bool = c["locked"]
-	var fill: Color = DK.C_INSET if lk else (DK.C_PANEL3 if sel else DK.C_PANEL2)
-	DK.style_button_colors(b, fill, DK.C_LINE, DK.C_DIM if lk else DK.C_TEXT, Color(0, 0, 0, 0), 2, 4, 6.0)
-	b.add_theme_stylebox_override("hover", DK.sb(fill.lightened(0.06), DK.C_LINE, 2, 4, 6.0))
-	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	if not b.flat: ## tek kutu (madde 759) kartında kutu yok
+		var fill: Color = DK.C_INSET if lk else (DK.C_PANEL3 if sel else DK.C_PANEL2)
+		DK.style_button_colors(b, fill, DK.C_LINE, DK.C_DIM if lk else DK.C_TEXT, Color(0, 0, 0, 0), 2, 4, 6.0)
+		b.add_theme_stylebox_override("hover", DK.sb(fill.lightened(0.06), DK.C_LINE, 2, 4, 6.0))
+		b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	_refresh_brackets(id)
 	if c["name"] != null:
 		(c["name"] as Label).add_theme_color_override("font_color", DK.C_ACCENT if sel else DK.C_TEXT)
 	var fp: Object = c.get("face")
-	if fp != null and fp.has_method("set_accent"):
+	if fp != null and fp.has_method("set_accent") and c.get("arrow") == null: ## tek kutuda çerçevenin tamamı boyanır (_refresh_brackets)
 		fp.call("set_accent", DK.C_ACCENT if sel else Color(0, 0, 0, 0))
 
 
@@ -761,6 +825,13 @@ func _set_card_hover(id: int, key: String, on: bool) -> void:
 
 func _refresh_brackets(id: int) -> void:
 	var c: Dictionary = _cards[id]
+	var arrow: Object = c.get("arrow")
+	if arrow != null and is_instance_valid(arrow): ## tek kutu (madde 759): altın çerçeve + ok / açık ahşap çerçeve
+		var sel: bool = id == _sel_char
+		var hov: bool = c.get("hov", false) or c.get("foc", false)
+		(c["face"] as Object).call("set_palette", SEL_PAL if sel else (HOV_PAL if hov else []))
+		arrow.call("set_on", sel)
+		return
 	var brk: Object = c.get("brk")
 	if brk == null or not is_instance_valid(brk):
 		return
@@ -772,27 +843,11 @@ func _refresh_brackets(id: int) -> void:
 	brk.call("set_color", col)
 
 
-## Kimin hangi karakteri seçtiği: kartın sol üstünde oyuncu renginde baş harf.
-func _refresh_marks() -> void:
-	for id in _cards:
-		var marks: HBoxContainer = _cards[id]["marks"]
-		for c in marks.get_children():
-			marks.remove_child(c)
-			c.queue_free()
-	var ids: Array = _player_ids()
-	for i in ids.size():
-		var info: Dictionary = NetworkManager.lobby_players[ids[i]]
-		var cid: int = int(info.get("char_id", 1))
-		if not _cards.has(cid):
-			continue
-		var col: Color = DK.player_color(i)
-		var p := DK.box(col, col.darkened(0.5), 0, 2, 3)
-		p.custom_minimum_size = Vector2(26, 26)
-		var l := DK.lbl(str(info.get("name", "?")).substr(0, 1).to_upper(), DK.FS_LABEL, Color("#16120c"), HORIZONTAL_ALIGNMENT_CENTER)
-		l.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0))
-		p.add_child(l)
-		p.tooltip_text = str(info.get("name", ""))
-		(_cards[cid]["marks"] as HBoxContainer).add_child(p)
+## Tek kutu (madde 759): düğme yalnız tıklama alanı, hiçbir durumda kutu çizmez (flat + boş odak).
+static func _flat_button(b: Button) -> void:
+	b.flat = true
+	for s: String in ["normal", "hover", "pressed", "hover_pressed", "disabled", "focus"]:
+		b.add_theme_stylebox_override(s, StyleBoxEmpty.new())
 
 
 func show_character(id: int, locked: bool) -> void:
@@ -809,6 +864,8 @@ func show_character(id: int, locked: bool) -> void:
 		_char_title.text = str(def.get("title_name", ""))
 		_char_title.visible = _char_title.text != ""
 	_fill_stats(id)
+	if _char_bars != null:
+		_char_bars.call("show_values", Characters.stat_bars(id))
 	_fill_skills(id)
 	if _preview:
 		_preview.call("setup", def, _prev_k, _prev_ground)
@@ -840,7 +897,9 @@ func _fill_stats(id: int) -> void:
 			["damage", "Güç", str(int(bs.get("ap", 10)))]]
 	var sig: Dictionary = MenuKit.signature_info(id) ## karaktere özel stat (madde 677) 4. hücre
 	if not sig.is_empty():
-		rows.append([str(sig["icon"]), str(sig["name"]), str(sig["value"])])
+		## Masaüstünde ad satırı dar (çubuklar ortada, madde 748): kısa ad, tam ad ipucunda. Telefon tam adı kullanır.
+		rows.append([str(sig["icon"]), str(sig["name"] if _phone else sig["short"]), str(sig["value"]), str(sig["name"])])
+	var sig_lab: Label = null
 	for row: Array in rows:
 		var hb := DK.h(8)
 		hb.add_child(DK.icon(_stat_tex(row[0]), 32 if _fs_lab <= DK.FS_LABEL else 48))
@@ -850,7 +909,29 @@ func _fill_stats(id: int) -> void:
 			hb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		hb.add_child(nlab)
 		hb.add_child(DK.lbl(row[2], _fs_lab))
+		if row.size() > 3:
+			hb.mouse_filter = Control.MOUSE_FILTER_PASS
+			hb.tooltip_text = "%s %s" % [tr(str(row[3])), row[2]]
+			sig_lab = nlab
 		_stats.add_child(hb)
+	if not _phone and sig_lab != null:
+		_fit_stats_row(sig_lab)
+
+
+## Masaüstü ad satırı (madde 748): ad + boşluk + çubuk bloğu + boşluk + stat ızgarası iç genişliği aşarsa özel stat adı "…" ile kırpılır
+## (kısa adı olmayan uzun çeviriler için; tam ad hücrenin ipucunda). Aşmıyorsa dokunulmaz.
+func _fit_stats_row(sig_lab: Label) -> void:
+	var nh: Control = _stats.get_parent()
+	var used: float = 0.0
+	for c in nh.get_children():
+		used += (c as Control).get_combined_minimum_size().x
+	var over: float = used - (MID.size.x - 32.0)
+	if over <= 0.0:
+		return
+	var w: float = sig_lab.get_combined_minimum_size().x
+	sig_lab.clip_text = true
+	sig_lab.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	sig_lab.custom_minimum_size.x = maxf(40.0, floorf(w - over))
 
 
 ## Yetenek açıklamasının ilk cümlesi ("ULTİ:" gibi büyük harfli önek atılır); tamamı satırın ipucunda.
@@ -867,7 +948,110 @@ static func first_sentence(t: String, n: int = 150) -> String:
 	return s
 
 
+## ---------------------------------------------------------------- kısa / ayrıntılı yetenek açıklaması (madde 756)
+## Orta paneldeki yetenek satırının açıklama satır sayısı (kısa metin; sığma: tests/test_skill_short_desc.gd).
+const SKILL_ROW_LINES := 2
+var _details_ov: Control = null
+
+
+## Kısa açıklama tek satırlık gösterime: tür öneki ("ULTİ:", "TEMEL (Q ile değişir):"), gömülü bekleme notu ve satır sonları atılır.
+static func short_line(t: String) -> String:
+	var re := RegEx.new()
+	## Tür öneki: BÜYÜK HARF kelime (+ parantez) + ":" ; Çincede harf büyüklüğü yok -> Han kelime + PARANTEZ + ":" (madde 759: "基础 (用 Q 切换):"
+	## silinmiyor, Lyra satırı 2 satıra sığmıyordu). Parantezsiz Han önek (pasif adı "闪电速度：") korunur.
+	re.compile("^\\s*(?:\\p{Lu}+(?:\\s*\\([^)]*\\))?|\\p{Han}+\\s*\\([^)]*\\))\\s*[:：]\\s*")
+	var s: String = re.sub(t.strip_edges(), "")
+	re.compile("\\s*\\(\\d+(?:[.,]\\d+)?\\s*(?:sn bekleme|s cooldown|s Abklingzeit|s de enfriamiento|s de recharge|s di ricarica|s de recarga|s odnowienia|с перезарядки|秒冷却)\\)")
+	s = re.sub(s, "", true)
+	return s.replace("\n", " ").strip_edges()
+
+
+func _details_button(fs: int, hh: float) -> Button:
+	var b := DK.btn("AYRINTILI", "ghost", fs, hh)
+	b.focus_mode = Control.FOCUS_NONE
+	b.tooltip_text = "Yeteneklerin ve ruhani yeteneğin tam açıklaması"
+	b.pressed.connect(open_skill_details)
+	return b
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if is_instance_valid(_details_ov) and event.is_action_pressed("ui_cancel"):
+		get_viewport().set_input_as_handled()
+		close_skill_details()
+
+
+func close_skill_details() -> void:
+	if is_instance_valid(_details_ov):
+		_details_ov.queue_free()
+	_details_ov = null
+
+
+## Seçili karakterin P/Q/E/R + seçili ruhani yeteneğin UZUN (eski, tam) açıklamaları; dışına tık / KAPAT / Esc kapatır.
+func open_skill_details() -> void:
+	close_skill_details()
+	var d: Dictionary = Characters.get_def(_sel_char)
+	var ov := ColorRect.new()
+	ov.color = Color(HT.DEEP, 0.6)
+	ov.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(ov)
+	ov.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_details_ov = ov
+	var area: Vector2 = size if size.x > 0.0 else get_viewport_rect().size
+	var fs_text: int = _fs_lab
+	var psz := Vector2(minf(1120.0, area.x - 48.0), minf(920.0, area.y - 48.0))
+	var panel := DK.box(DK.C_PANEL2, DK.C_LINE_HI, 20)
+	panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	ov.add_child(panel)
+	panel.position = ((area - psz) * 0.5).floor()
+	panel.size = psz
+	ov.gui_input.connect(func(e: InputEvent) -> void:
+		if e is InputEventMouseButton and (e as InputEventMouseButton).pressed:
+			close_skill_details())
+	var v := DK.v(12)
+	panel.add_child(v)
+	var close := DK.btn("KAPAT", "ghost", fs_text, 44.0)
+	close.pressed.connect(close_skill_details)
+	v.add_child(DK.title_bar(Loc.t("%s - AYRINTILI AÇIKLAMA") % str(d.get("name", "")), close, DK.FS_BODY))
+	v.add_child(DK.hline())
+	var sc := ScrollContainer.new()
+	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	v.add_child(sc)
+	var list := DK.v(18)
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sc.add_child(list)
+	var text_w: float = psz.x - 40.0 - SKILL_BOX - 14.0 - 24.0 ## panel iç payı + ikon çerçevesi + aralık + kaydırma çubuğu
+	for slot: Array in [["passive", ""], ["skill", "skill"], ["skill2", "skill2"], ["skill3", "skill3"]]:
+		var key: String = slot[0]
+		var desc: String = Characters.long_desc(d, key)
+		if desc == "":
+			continue
+		var nm: String = Loc.t("Pasif") if key == "passive" else str(d.get(key + "_name", ""))
+		var badge: String = "P" if key == "passive" else GameManager.get_action_key_label(str(slot[1]))
+		list.add_child(_details_row(_tex(str(d.get(key + "_icon", ""))), "%s  [%s]" % [nm, badge.left(1)], desc, text_w, fs_text))
+	var sp_id: String = GameManager.selected_spiritual
+	var sd: Dictionary = SS.get_def(sp_id)
+	if not sd.is_empty():
+		list.add_child(DK.hline(2.0))
+		list.add_child(_details_row(_tex(str(sd.get("icon", ""))), Loc.t("Ruhani: %s") % str(sd.get("name", "")), str(sd.get("desc", "")), text_w, fs_text))
+	UISound.connect_all_buttons(panel)
+
+
+func _details_row(tex: Texture2D, title: String, desc: String, text_w: float, fs: int) -> HBoxContainer:
+	var hb := DK.h(14)
+	var sl := _skill_frame(tex)
+	sl.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	hb.add_child(sl)
+	var col := DK.v(4)
+	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	col.add_child(DK.lbl(title, DK.FS_BODY, DK.C_ACCENT))
+	col.add_child(DK.wrap(desc, fs, DK.C_TEXT, text_w))
+	hb.add_child(col)
+	return hb
+
+
 func _fill_skills(id: int) -> void:
+	close_skill_details() ## karakter değişince açık ayrıntı penceresi eski karakteri göstermesin
 	for c in _skills.get_children():
 		_skills.remove_child(c)
 		c.queue_free()
@@ -878,12 +1062,12 @@ func _fill_skills(id: int) -> void:
 	for slot: Array in [["skill", "skill"], ["skill2", "skill2"], ["skill3", "skill3"], ["passive", ""]]:
 		var key: String = slot[0]
 		var nm: String = "Pasif" if key == "passive" else str(d.get(key + "_name", ""))
-		var desc: String = str(d.get("passive" if key == "passive" else key + "_desc", ""))
+		var desc: String = Characters.long_desc(d, key)
 		if nm == "" and desc == "":
 			continue
 		var badge: String = "P" if key == "passive" else GameManager.get_action_key_label(str(slot[1]))
 		var lvl: int = 0 if key == "passive" else Characters.skill_unlock_level(id, key)
-		_skills.add_child(_skill_row(_tex(str(d.get(key + "_icon", ""))), badge, nm, desc, lvl))
+		_skills.add_child(_skill_row(_tex(str(d.get(key + "_icon", ""))), badge, nm, desc, lvl, short_line(Characters.short_desc(d, key))))
 
 
 func _tex(path: String) -> Texture2D:
@@ -892,19 +1076,29 @@ func _tex(path: String) -> Texture2D:
 	return load(path) as Texture2D
 
 
-func _skill_row(tex: Texture2D, key: String, nm: String, desc: String, unlock_lvl: int) -> HBoxContainer:
-	var hb := DK.h(14)
+## Yetenek ikonu Gömme Tepsi çerçevesinde (madde 759, kullanıcı: "skill göstergelerindeki çerçeveler diğer çerçeveler gibi olsun ...
+## azıcık büyüsün skill ikonları da"): eski DK.slot (ince C_LINE kenar, 48 px) yerine portre / karo çerçevesi (t 2), ikon 48 -> 56.
+## İkon dokuları 144 px = 48 sanat px x3; 56'da nearest küçültme (sanat pikseli ~1,17 ekran px).
+func _skill_frame(tex: Texture2D) -> CenterContainer:
+	return PortraitFace.wrap_framed(DK.icon(tex, SKILL_ICON), Vector2(SKILL_ICON, SKILL_ICON), 2.0)
+
+
+func _skill_row(tex: Texture2D, key: String, nm: String, desc: String, unlock_lvl: int, short: String = "") -> HBoxContainer:
+	var hb := DK.h(SKILL_GAP)
 	hb.mouse_filter = Control.MOUSE_FILTER_PASS
 	hb.tooltip_text = "%s%s\n%s" % [nm, (Loc.t("  (%d. seviyede açılır)") % unlock_lvl) if unlock_lvl > 1 else "", desc]
 	var holder := Control.new()
-	holder.custom_minimum_size = Vector2(56, 56)
+	holder.custom_minimum_size = Vector2(SKILL_BOX, SKILL_BOX)
+	## HBox çocuğu varsayılan FILL: 2 satırlık açıklama satırı ikondan uzun -> çerçeve dikey gerilip ikonun
+	## üstünde/altında siyah bant kalıyordu (2026-11-16). Kare kalsın, metne göre ortalansın.
+	holder.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var sl := DK.slot(tex, 48)
-	sl.set_anchors_preset(Control.PRESET_FULL_RECT)
-	holder.add_child(sl)
+	var fr := _skill_frame(tex)
+	fr.set_anchors_preset(Control.PRESET_FULL_RECT)
+	holder.add_child(fr)
 	var kb := DK.box(DK.C_INSET, DK.C_LINE_HI, 0, 2, 3)
 	kb.custom_minimum_size = Vector2(24, 24)
-	kb.position = Vector2(36, 36)
+	kb.position = Vector2(SKILL_BOX - 20.0, SKILL_BOX - 20.0) ## sağ alt köşeye, çerçeveden 4 px taşar (eskisi gibi)
 	kb.add_child(DK.lbl(key.left(1), DK.FS_SMALL, DK.C_ACCENT, HORIZONTAL_ALIGNMENT_CENTER))
 	holder.add_child(kb)
 	hb.add_child(holder)
@@ -912,7 +1106,7 @@ func _skill_row(tex: Texture2D, key: String, nm: String, desc: String, unlock_lv
 	v.alignment = BoxContainer.ALIGNMENT_CENTER
 	v.add_child(DK.lbl(nm, DK.FS_BODY))
 	if desc != "":
-		v.add_child(DK.wrap(first_sentence(desc), DK.FS_LABEL, DK.C_DIM, MID.size.x - 32 - 56 - 14, 1))
+		v.add_child(DK.wrap(short if short != "" else first_sentence(desc), DK.FS_LABEL, DK.C_DIM, MID.size.x - 32 - SKILL_BOX - SKILL_GAP, SKILL_ROW_LINES))
 	hb.add_child(v)
 	return hb
 
@@ -931,16 +1125,18 @@ func _build_right() -> void:
 	sc.add_child(_preview)
 	_preview.set("playing", true)
 	hv.add_child(sc)
-	var hb := DK.v(6)
-	hb.alignment = BoxContainer.ALIGNMENT_CENTER
-	hb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	hb.add_child(DK.lbl("YÜKLEMEN", DK.FS_LABEL, DK.C_ACCENT))
-	_load_name = DK.lbl("", DK.FS_TITLE)
-	_load_name.clip_text = true
-	hb.add_child(_load_name)
-	_load_icons = DK.h(6)
-	hb.add_child(_load_icons)
-	hv.add_child(hb)
+	## 2026-11-16 (madde 748): önizlemenin sağında ÜSTTE karakter adı + lakap (orta paneldeki ad satırından taşındı, kullanıcı isteği);
+	## altı boş - kullanıcı buraya seçilen silah/evcil/ruhani kutucuklarını ya da karakter hikayesini koyacak.
+	_hero_side = DK.v(0)
+	_hero_side.alignment = BoxContainer.ALIGNMENT_BEGIN
+	_hero_side.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_char_name = DK.lbl("", DK.FS_TITLE, DK.C_ACCENT)
+	_char_name.clip_text = true
+	_char_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_hero_side.add_child(_char_name)
+	_char_title = DK.lbl("", DK.FS_LABEL, DK.C_DIM) ## lakap (madde 623)
+	_hero_side.add_child(_char_title)
+	hv.add_child(_hero_side)
 	xv.add_child(hv)
 	var tabs := DK.h(8)
 	for t: Array in [["weapon", "SİLAH"], ["pet", "EVCİL"], ["spirit", "RUHANİ"]]:
@@ -953,7 +1149,7 @@ func _build_right() -> void:
 	xv.add_child(tabs)
 	_tab_grid = GridContainer.new()
 	_tab_grid.columns = 5
-	_tab_grid.add_theme_constant_override("h_separation", 10)
+	_tab_grid.add_theme_constant_override("h_separation", TILE_GAP) ## tek kutu (madde 759): 10 -> 15, 5 x 104 + 4 x 15 = 580
 	_tab_grid.add_theme_constant_override("v_separation", 3) ## 6 -> 3: 4 satırla da panel 8 px taşıyordu (madde 652 ölçümü)
 	## 2026-11-13 (madde 652, 21. silah Makineli): 20'den fazla seçenek 5. satırı açıp paneli yine OYUNU BAŞLAT'ın altına taşıyordu ->
 	## ızgara en çok 4 satır yüksekliğinde bir kaydırma kutusunda (fazlası tekerlekle kayar; 5 x 108 + aralık 580 < 600, çubuğa yer var).
@@ -961,10 +1157,21 @@ func _build_right() -> void:
 	grid_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	## 2026-11-13 (silah stat çubukları, kullanıcı: "silahlara daha az yer kalsa da bu bilgi önemli"): ızgara 4 -> 3 satır, açılan ~127 px
 	## ayrıntı kutusundaki çubuklara gitti (fazlası yine kayar).
-	grid_scroll.custom_minimum_size = Vector2(0, TILE.y * 3.0 + 3.0 * 2.0)
+	## Tek kutuda seçim oku çerçevenin ÜSTÜNE, uzun ad (Rainbow Staff, Submachine Gun) sütunun SOLUNA taşar (madde 759); kaydırma kutusu
+	## ilk satır / sütunda onları kesiyordu -> ızgara kutunun içinde SEL_PAD sol / üst payla, kutu da dış MarginContainer'ın eksi sol payıyla
+	## aynı kadar sola taşar (panel dolgusu 12 > 8): karolar sekmelerin sol kenarında kalır. Kutu boyu da SEL_PAD uzun.
+	grid_scroll.custom_minimum_size = Vector2(0, TILE.y * 3.0 + 3.0 * 2.0 + SEL_PAD)
 	_tab_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	grid_scroll.add_child(_tab_grid)
-	xv.add_child(grid_scroll)
+	var pad := MarginContainer.new()
+	pad.add_theme_constant_override("margin_left", SEL_PAD)
+	pad.add_theme_constant_override("margin_top", SEL_PAD)
+	pad.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	pad.add_child(_tab_grid)
+	grid_scroll.add_child(pad)
+	var outer := MarginContainer.new()
+	outer.add_theme_constant_override("margin_left", -SEL_PAD)
+	outer.add_child(grid_scroll)
+	xv.add_child(outer)
 	xv.add_child(DK.sp(0, 0, false, true))
 	var wd := DK.box(DK.C_INSET, DK.C_LINE, 10)
 	var wdv := DK.v(4)
@@ -1027,18 +1234,19 @@ func _opt_icon(kind: String, key: String) -> Texture2D:
 
 
 ## Yükleme satırı / oyuncu kartı yuvası (madde 679): portreyle aynı Gömme Tepsi çerçevesi (eski düz WIN_LINE kenar ahşap kartta kayboluyordu).
-## Silah açık ahşap kuyuda (HT.ITEM_WELL; çizimler siyah konturlu), evcil kendi arka planıyla (madde 585), ruhani kendi çizimli zemininde.
+## Silah damarlı ahşap kuyuda (_weapon_well, madde 759), evcil kendi arka planıyla (madde 585), ruhani kendi çizimli zemininde.
 ## Toplam boy eskisiyle aynı: px + 2x4 çerçeve.
 func _kind_slot(kind: String, key: String, px: float, tip: String) -> Control:
 	var face: Control
 	if kind == "pet" and PetBadge.has_background(key):
 		face = PetBadge.box(key, px)
+	elif kind == "weapon":
+		face = _weapon_well(key, px)
 	else:
 		var well := ColorRect.new()
-		well.color = HT.ITEM_WELL if kind == "weapon" else DK.C_INSET
+		well.color = DK.C_INSET
 		well.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		## Silah: boş kenarı kırpılıp yuvaya tam katla sığan en büyük boyda, kenara en az 2 px kala (madde 681).
-		var ic := DK.icon(_trimmed(_opt_icon(kind, key)), px - 4.0) if kind == "weapon" else DK.icon(_opt_icon(kind, key), px)
+		var ic := DK.icon(_opt_icon(kind, key), px)
 		ic.set_anchors_preset(Control.PRESET_FULL_RECT)
 		well.add_child(ic)
 		face = well
@@ -1049,6 +1257,98 @@ func _kind_slot(kind: String, key: String, px: float, tip: String) -> Control:
 		cc.tooltip_text = tip
 		cc.mouse_filter = Control.MOUSE_FILTER_PASS
 	return cc
+
+
+## SİLAH KUYUSU (madde 759; kullanıcı: "silahların arkaplanı çok parlak ve göz yoruyor, önceki halindeki texture'a benzer"): düz açık
+## ahşap yerine HT.ITEM_WELL (koyu ahşap RIM_LO) + pencere / karo ile AYNI R2 ahşap damarı, kart gücünde (PixelBox.grain_card_alpha).
+## Kuyu GRAIN_MIN'den küçük olduğu için PixelBox kendisi dokulamaz -> damar karosundan side x side bölge (kayma anahtara bağlı, sanat
+## pikseline oturur: karolar birbirinin kopyası görünmez). Çizim _weapon_icon ile dengeli boyda, kenara en az 2 px kala.
+func _weapon_well(key: String, side: float) -> ColorRect:
+	var well := ColorRect.new()
+	well.color = HT.ITEM_WELL
+	well.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var gt: Texture2D = DK.PixelBox.grain_tex
+	if gt != null and DK.PixelBox.grain_card_alpha > 0.0:
+		var h: int = absi(hash(key))
+		var nx: int = maxi(1, int((gt.get_width() - side) / 3.0))
+		var ny: int = maxi(1, int((gt.get_height() - side) / 3.0))
+		var at := AtlasTexture.new()
+		at.atlas = gt
+		at.region = Rect2(float((h % nx) * 3), float(((h / 7) % ny) * 3), side, side)
+		var gr := TextureRect.new()
+		gr.texture = at
+		gr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		gr.stretch_mode = TextureRect.STRETCH_SCALE
+		gr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		gr.set_anchors_preset(Control.PRESET_FULL_RECT)
+		gr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		gr.modulate = Color(1, 1, 1, DK.PixelBox.grain_card_alpha)
+		well.add_child(gr)
+	var ic := _weapon_icon(_trimmed(_opt_icon("weapon", key)), side - 4.0)
+	ic.set_anchors_preset(Control.PRESET_FULL_RECT)
+	well.add_child(ic)
+	return well
+
+
+## DENGELİ SİLAH BOYU (madde 759; kullanıcı: "bazı silahlar çok ufak bazıları çok büyük görünüyor" + "silahlar azcık daha büyük gözüksün"):
+## DK.icon kutuya sığan EN BÜYÜK tam katı seçiyordu -> 28 px Yay / Arbalet 3x = 84, 48'lik tuvalde çizilmiş çapraz tüfekler (Tüfek / Pompalı /
+## Makineli, kırpık 43-44 px) 1x = 44, çoğu (29-30 px) 2x = 58-60. Şimdi ölçek YARIM KAT adımlı, uzun kenar WEAPON_ICON_TARGET'i geçmeyen en
+## büyük (tam kat hedefin %90'ına yetiyorsa o): çoğu 2,5x = 70-75, tüfekler 1,5x = 64-66. Dolu yuvarlak / kare çizim (opak oranı
+## WEAPON_DENSE_FILL üstü: Kalkan, Çakram, Yin Yang) aynı boyda daha iri görünür -> hedefi %90 (Kalkan / Çakram 2x = 60, Yin Yang 2,5x = 65).
+## Kutuya (box) sığmayan kat yarımşar küçülür (oyuncu kartı yuvası 60).
+static func _weapon_icon(tex: Texture2D, box: float) -> CenterContainer:
+	var cc := CenterContainer.new()
+	cc.custom_minimum_size = Vector2(box, box)
+	cc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if tex == null:
+		return cc
+	var ts: Vector2 = tex.get_size()
+	var md: float = maxf(ts.x, ts.y)
+	var target: float = WEAPON_ICON_TARGET * (0.9 if _icon_fill(tex) > WEAPON_DENSE_FILL else 1.0)
+	target = minf(target, box)
+	var k: float = floorf(target / md)
+	if k < 1.0 or k * md < target * 0.9:
+		k = maxf(0.5, floorf(target / md * 2.0) / 2.0)
+	while k * md > box and k > 0.5:
+		k -= 0.5
+	var tr := TextureRect.new()
+	tr.texture = tex
+	tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	tr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	tr.custom_minimum_size = (ts * k).floor()
+	tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cc.add_child(tr)
+	return cc
+
+
+## Çizimin (kırpık bölge) opak piksel oranı; dolu yuvarlak / kare silahlar için (_weapon_icon). Önbellekli.
+static var _fill_cache: Dictionary = {}
+
+static func _icon_fill(tex: Texture2D) -> float:
+	var src: Texture2D = tex
+	var reg := Rect2i(Vector2i.ZERO, Vector2i(tex.get_size()))
+	if tex is AtlasTexture:
+		src = (tex as AtlasTexture).atlas
+		reg = Rect2i((tex as AtlasTexture).region)
+	if src == null or src.resource_path == "":
+		return 0.0
+	var ck: String = src.resource_path + str(reg)
+	if _fill_cache.has(ck):
+		return _fill_cache[ck]
+	var f: float = 0.0
+	var img: Image = src.get_image()
+	if img and reg.size.x > 0 and reg.size.y > 0:
+		if img.is_compressed():
+			img.decompress()
+		var n: int = 0
+		for y in range(reg.position.y, reg.end.y):
+			for x in range(reg.position.x, reg.end.x):
+				if img.get_pixel(x, y).a > 0.5:
+					n += 1
+		f = float(n) / float(reg.size.x * reg.size.y)
+	_fill_cache[ck] = f
+	return f
 
 
 ## Dokunun saydam kenarını kırpar (silah çizimleri 32/48 tuvalde 26-30 px; kırpınca tam kat ölçek daha büyük sığar). Önbellekli.
@@ -1112,9 +1412,14 @@ func _fill_tab() -> void:
 			continue ## sahip olunmayanlar burada gizli (Ruh Mağazası'nda görünür)
 		var on: bool = key == cur
 		var b := Button.new()
+		b.tooltip_text = _opt_tip(_tab, key) + ("\n" + MP.lock_text(_meta_kind(_tab), key) if lk else "")
+		if not _phone:
+			_single_tile(b, key, on)
+			b.pressed.connect(_on_option_pressed.bind(key))
+			_tab_grid.add_child(b)
+			continue
 		b.custom_minimum_size = _tile
 		DK.style_button(b, "tile_on" if on else ("tile_locked" if lk else "tile"), 4, 4.0)
-		b.tooltip_text = _opt_tip(_tab, key) + ("\n" + MP.lock_text(_meta_kind(_tab), key) if lk else "")
 		var v := DK.v(2)
 		v.set_anchors_preset(Control.PRESET_FULL_RECT)
 		v.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -1123,6 +1428,13 @@ func _fill_tab() -> void:
 		if _tab == "pet" and PetBadge.has_background(key):
 			## karakter kartı portresiyle aynı çerçeve kalınlığı (madde 535) + arka plan (madde 585): masaüstü 56 iç (2x) + 2x4 kenar = 72
 			v.add_child(PetBadge.framed_icon(key, 104.0 if _phone else 72.0, 3.0 if _phone else 2.0, lk))
+		elif _tab == "spirit":
+			## Ruhani de aynı Gömme Tepsi çerçevesinde (kullanıcı 2026-11-16: "diğerleri gibi çerçevesi olmalı"); toplam boy evcil karosuyla
+			## aynı: masaüstü 56 iç + 2x8 kenar = 72, telefon 80 iç + 2x12 = 104 (144 px ikon küçültülür; eski çerçevesiz hali de 64'e küçülüyordu).
+			var sp_in: float = 80.0 if _phone else 56.0
+			var sp_face := DK.icon(_opt_icon(_tab, key), sp_in, lk)
+			sp_face.custom_minimum_size = Vector2(sp_in, sp_in)
+			v.add_child(PortraitFace.wrap_framed(sp_face, Vector2(sp_in, sp_in), 3.0 if _phone else 2.0, lk))
 		else:
 			v.add_child(DK.icon(_opt_icon(_tab, key), isz, lk))
 		var on_l := DK.lbl(_opt_name(_tab, key), _fs_small, DK.C_ACCENT if on else (DK.C_DIM if lk else DK.C_TEXT), HORIZONTAL_ALIGNMENT_CENTER)
@@ -1138,6 +1450,54 @@ func _fill_tab() -> void:
 		_tab_grid.add_child(b)
 	_fill_detail()
 	UISound.connect_all_buttons(_tab_grid)
+
+
+## Masaüstü seçenek karosu TEK KUTU (madde 759): kutu = 104 px Gömme Tepsi çerçevesi (silah açık ahşap kuyuda, _kind_slot gibi; evcil kendi
+## arka planıyla; ruhani kendi çiziminde), ad 24 altında. Seçili: çerçeve altın + zıplayan ok (karakter kartıyla aynı), ad altın; üstünde /
+## odakta çerçeve açık ahşap.
+## Ad sütun adımını (104 + 15) 6 px'e kadar aşabilir (yazı ortalı, komşuyla çakışmaz, kırpılmaz); daha uzunu 16'ya düşer ve "…" ile kırpılır.
+func _single_tile(b: Button, key: String, on: bool) -> void:
+	_flat_button(b)
+	b.custom_minimum_size = Vector2(TILE_FRAME, TILE.y)
+	b.set_meta("tile_on", on)
+	var v := DK.v(TILE_NAME_GAP)
+	v.set_anchors_preset(Control.PRESET_FULL_RECT)
+	v.alignment = BoxContainer.ALIGNMENT_BEGIN
+	v.offset_left = -float(TILE_GAP / 2)
+	v.offset_right = float(TILE_GAP / 2)
+	var inner: float = TILE_FRAME - 8.0 * 2.0
+	var face: CenterContainer
+	if _tab == "pet" and PetBadge.has_background(key):
+		face = PetBadge.framed_icon(key, TILE_FRAME, 2.0)
+	elif _tab == "weapon":
+		face = PortraitFace.wrap_framed(_weapon_well(key, inner), Vector2(inner, inner), 2.0)
+	else:
+		var sp := DK.icon(_opt_icon(_tab, key), inner)
+		sp.custom_minimum_size = Vector2(inner, inner)
+		face = PortraitFace.wrap_framed(sp, Vector2(inner, inner), 2.0)
+	v.add_child(face)
+	var holder: Control = face.get_child(0)
+	if on:
+		holder.call("set_palette", SEL_PAL)
+		var arrow := PickArrow.new()
+		arrow.t = 2.0
+		holder.add_child(arrow)
+		arrow.set_on(true)
+	var hov := func(state: bool) -> void:
+		if not on:
+			holder.call("set_palette", HOV_PAL if state else [])
+	b.mouse_entered.connect(hov.bind(true))
+	b.mouse_exited.connect(hov.bind(false))
+	b.focus_entered.connect(hov.bind(true))
+	b.focus_exited.connect(hov.bind(false))
+	var nm: String = _opt_name(_tab, key)
+	var limit: float = TILE_FRAME + float(TILE_GAP) + 6.0
+	var too_long: bool = DK.font().get_string_size(tr(nm), HORIZONTAL_ALIGNMENT_LEFT, -1, DK.FS_LABEL).x > limit ## ekranda çevrilir
+	var l := DK.lbl(nm, DK.FS_SMALL if too_long else DK.FS_LABEL, DK.C_ACCENT if on else DK.C_TEXT, HORIZONTAL_ALIGNMENT_CENTER)
+	l.clip_text = too_long
+	l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS if too_long else TextServer.OVERRUN_NO_TRIMMING
+	v.add_child(l)
+	b.add_child(v)
 
 
 func _on_option_pressed(key: String) -> void:
@@ -1181,24 +1541,15 @@ func _fill_detail() -> void:
 			var def: Dictionary = SS.get_def(key)
 			_detail_cat.text = Loc.t("Aktif (%s)") % GameManager.get_action_key_label("skill4") if bool(def.get("active", false)) else "Pasif"
 			_detail_cat.add_theme_color_override("font_color", DK.C_DIM)
-			_detail_desc.text = str(def.get("desc", ""))
+			_detail_desc.text = SS.short_desc(key) ## kısa (madde 756); tam metin karo ipucunda ve AYRINTILI penceresinde
 	if lk:
 		_detail_desc.text = MP.lock_text(_meta_kind(_tab), key) + "\n" + _detail_desc.text
 
 
 func _refresh_loadout_header() -> void:
-	if _load_name == null:
-		return
-	if _phone:
+	## Masaüstünde vitrin başlığı şimdilik boş (madde 748); yalnız telefon düzeninin yükleme satırı var.
+	if _phone and _load_name != null:
 		_ph_refresh_loadout()
-		return
-	_load_name.text = str(Characters.get_def(_sel_char).get("name", ""))
-	for c in _load_icons.get_children():
-		_load_icons.remove_child(c)
-		c.queue_free()
-	for kind: String in ["weapon", "pet", "spirit"]:
-		var key: String = _current(kind)
-		_load_icons.add_child(_kind_slot(kind, key, 48, _opt_tip(kind, key)))
 
 
 ## ------------------------------------------------------------------ başlat / hazır + kilit
@@ -1301,13 +1652,12 @@ func set_status(text: String) -> void:
 		_status.text = text
 
 
-## lobby_updated: oda bilgisi, oyuncular, kart işaretleri, başlat düğmesi.
+## lobby_updated: oda bilgisi, oyuncular, başlat düğmesi.
 func refresh() -> void:
 	if not NetworkManager.is_multiplayer_active:
 		return
 	_refresh_room()
 	_refresh_players()
-	_refresh_marks()
 	_refresh_start()
 
 
@@ -1499,6 +1849,7 @@ func _ph_team_page() -> Control:
 	_chat_log = DK.v(4)
 	_chat_log.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_chat_scroll.add_child(_chat_log)
+	ScrollFollowScript.attach(_chat_scroll)
 	cv.add_child(_chat_scroll)
 	_chat_input = PK.line_edit("Mesaj yaz", PK.FS_SMALL, 80.0)
 	_chat_input.max_length = 200
@@ -1561,14 +1912,14 @@ func _ph_build_detail(det: VBoxContainer) -> void:
 	det.add_child(_start_btn)
 
 
-## Yetenek simgeleri (Pasif, Q, E, R) 96 px + tuş rozeti; dokunulan yeteneğin adı + ilk cümlesi altta.
+## Yetenek simgeleri (Pasif, Q, E, R) 96 px + tuş rozeti + AYRINTILI; dokunulan yeteneğin adı + KISA açıklaması altta (madde 756).
 func _ph_fill_skills(id: int, d: Dictionary) -> void:
 	var row := DK.h(20)
 	var slots: Array = []
 	for slot: Array in [["passive", ""], ["skill", "skill"], ["skill2", "skill2"], ["skill3", "skill3"]]:
 		var key: String = slot[0]
 		var nm: String = "Pasif" if key == "passive" else str(d.get(key + "_name", ""))
-		var desc: String = str(d.get("passive" if key == "passive" else key + "_desc", ""))
+		var desc: String = short_line(Characters.short_desc(d, key)) ## kısa (madde 756); tam metin AYRINTILI penceresinde
 		if nm == "" and desc == "":
 			continue
 		slots.append([key, nm, desc, "P" if key == "passive" else GameManager.get_action_key_label(str(slot[1])).left(1)])
@@ -1594,6 +1945,11 @@ func _ph_fill_skills(id: int, d: Dictionary) -> void:
 			_ph_skill_sel = bi
 			_fill_skills(_sel_char))
 		row.add_child(b)
+	row.add_child(DK.sp(0, 0, true))
+	var dbtn := _details_button(24, 104.0)
+	dbtn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	dbtn.custom_minimum_size.y = 72.0
+	row.add_child(dbtn)
 	_skills.add_child(row)
 	_ph_skill_desc = PK.lbl("", PK.FS_SMALL, DK.C_DIM)
 	_ph_skill_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -1601,7 +1957,7 @@ func _ph_fill_skills(id: int, d: Dictionary) -> void:
 	if not slots.is_empty():
 		var cur: Array = slots[_ph_skill_sel]
 		var lvl: int = 0 if str(cur[0]) == "passive" else Characters.skill_unlock_level(id, str(cur[0]))
-		_ph_skill_desc.text = "%s%s: %s" % [cur[1], (Loc.t(" (%d. sv.)") % lvl) if lvl > 1 else "", first_sentence(str(cur[2]), 110)]
+		_ph_skill_desc.text = "%s%s: %s" % [cur[1], (Loc.t(" (%d. sv.)") % lvl) if lvl > 1 else "", str(cur[2])]
 	_skills.add_child(_ph_skill_desc)
 
 

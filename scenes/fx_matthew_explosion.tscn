@@ -1,6 +1,6 @@
 [gd_scene load_steps=3 format=3 uid="uid://dg84h5w28q36d"]
 
-[ext_resource type="Script" uid="uid://cd96h1d77x2n8" path="res://scripts/fx_matthew_explosion.gd" id="1"]
+[ext_resource type="Script" uid="uid://v6gp2l14s63x" path="res://scripts/fx_matthew_explosion.gd" id="1"]
 [ext_resource type="AudioStream" uid="uid://cva5u03wv8xhs" path="res://assets/audio/shield_break.wav" id="2"]
 
 [node name="FxMatthewExplosion" type="Node2D"]

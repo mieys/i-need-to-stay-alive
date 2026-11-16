@@ -5,6 +5,7 @@ extends Node
 
 const PlayerScene: PackedScene = preload("res://scenes/player.tscn")
 const BuyucuFxScript := preload("res://scripts/buyucu_fx.gd")
+const FxPixelGlowScript := preload("res://scripts/fx_pixel_glow.gd")
 const BounceScene: PackedScene = preload("res://scenes/fx_arcane_skull_bounce.tscn")
 const TornadoScene: PackedScene = preload("res://scenes/fx_buyucu_tornado.tscn")
 const ProjectileScene: PackedScene = preload("res://scenes/arcane_projectile.tscn")
@@ -156,8 +157,14 @@ func test_arcane_blast_star_dust_and_ground_slot() -> void:
 	var ground: Array = _world_sheets("patlama_ground")
 	assert(front.size() == 1 and ground.size() == 1, "ön + zemin sayfası: %d / %d" % [front.size(), ground.size()])
 	for s in [front[0], ground[0]]:
-		assert((s as CanvasItem).material is ShaderMaterial and ((s as CanvasItem).material as ShaderMaterial).shader == BuyucuFxScript.AddShader
-			and BuyucuFxScript.AddShader.code.contains("blend_add"), "toplamalı (ilk karede hazır shader, madde 563)")
+		## Madde 739: toplamalı + hafif parıltı (fx_pixel_glow, additive) - ilk karede hazır (preload + fx_warmup), kare boyu sayfanın karesi.
+		var gm: ShaderMaterial = (s as CanvasItem).material as ShaderMaterial
+		assert(gm != null and gm.shader == FxPixelGlowScript.SHADER and bool(gm.get_shader_parameter("additive"))
+			and FxPixelGlowScript.SHADER.code.contains("additive ? 0.0"), "toplamalı + hafif parıltı (madde 563/739)")
+		var sheet_tex: Texture2D = (s as Sprite2D).texture
+		assert(gm.get_shader_parameter("cell_px") == Vector2(float(sheet_tex.get_width()) / float((s as Sprite2D).hframes), float(sheet_tex.get_height())),
+			"parıltı kare boyu = sayfanın bir karesi (komşu kare sızmaz)")
+		assert(is_equal_approx(float(gm.get_shader_parameter("glow")), 0.55), "Ateş Asası / Matthew ile aynı parıltı gücü")
 		assert(is_equal_approx((s as Node2D).scale.x, BuyucuFxScript.PX * 1.25), "ölçek PX x yarıçap oranı: %.3f" % (s as Node2D).scale.x)
 		assert((s as Node2D).global_position.is_equal_approx(Vector2(300, 200)), "isabet noktasında")
 	assert((front[0] as CanvasItem).z_index == FxArcaneBlast.FRONT_Z, "ön katman yaratıkların üstü")

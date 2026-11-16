@@ -30,6 +30,9 @@ func test_default_is_main_map() -> void:
 	assert(MapProfiles.feature("orman_gorselleri"))
 	assert(MapProfiles.feature("ev_acilisi"))
 	assert(MapProfiles.feature("tanimsiz_bayrak")) ## tanımsız bayrak ana haritada açık
+	## madde 714: diğer haritaların FX'i (ışık / ateş böceği / ısı noktası, kendi koordinatlarında) ana haritaya kurulmaz
+	for f: String in ["bataklik_fx", "col_fx", "kis_fx"]:
+		assert(not MapProfiles.feature(f))
 	assert(MapProfiles.preload_paths().is_empty())
 
 
@@ -159,9 +162,10 @@ func test_swamp_profile_flags_spawn_and_layers() -> void:
 	_set_map("bataklik")
 	assert(MapProfiles.current_id() == "bataklik")
 	assert(not MapProfiles.is_main_map())
-	for f: String in ["orman_gorselleri", "hava", "gorevler", "bataklik_fx"]:
+	## su_efekti (madde 714): bataklık suyu da ana haritanın su shader'ı (sabit renk, profil "su_doku")
+	for f: String in ["orman_gorselleri", "hava", "gorevler", "bataklik_fx", "su_efekti"]:
 		assert(MapProfiles.feature(f))
-	for f: String in ["ev_acilisi", "seyyar_satici", "madenler", "kenar_bekcileri", "zindan_etkilesim", "harita_ayiklama", "su_efekti",
+	for f: String in ["ev_acilisi", "seyyar_satici", "madenler", "kenar_bekcileri", "zindan_etkilesim", "harita_ayiklama",
 			"zemin_gecisi", "tanimsiz_bayrak"]:
 		assert(not MapProfiles.feature(f))
 	assert(MapFrame.play_cells() == Meta.PLAY_CELLS)
@@ -208,7 +212,7 @@ func test_desert_profile_flags_spawn_layers_and_weather() -> void:
 	_set_map("col")
 	assert(MapProfiles.current_id() == "col")
 	assert(MapProfiles.is_selectable("col"))
-	## su_efekti: vaha suyu ana haritanın su shader'ını + pişmiş kıyı/akış dokularını kullanır (col_su.gdshader, profil "su_doku")
+	## su_efekti: vaha suyu ana haritanın su shader'ını + pişmiş kıyı/akış dokularını kullanır (su.gdshader sabit renk, profil "su_doku"; madde 714)
 	for f: String in ["orman_gorselleri", "hava", "gorevler", "calilik", "col_fx", "su_efekti"]:
 		assert(MapProfiles.feature(f))
 	for f: String in ["ev_acilisi", "seyyar_satici", "madenler", "kenar_bekcileri", "zindan_etkilesim", "harita_ayiklama",
@@ -220,7 +224,8 @@ func test_desert_profile_flags_spawn_layers_and_weather() -> void:
 	assert(MapProfiles.minimap_texture() != null)
 	assert(not MapProfiles.water_walkable()) ## vaha suyu yürünmez
 	assert(MapProfiles.map_weather(0) == 0 and MapProfiles.map_weather(1) == 1)
-	assert(MapProfiles.map_weather(2) == 1 and MapProfiles.map_weather(3) == 0) ## çölde yağmur yok
+	assert(MapProfiles.map_weather(2) == 1 and MapProfiles.map_weather(3) == 3) ## çölde yağmur yok; Sağanak = kum fırtınası (madde 718)
+	assert(MapProfiles.sandstorm())
 	for i in range(Meta.LIGHTS.size()):
 		assert(str(Meta.LIGHTS[i][0]) == "kure")
 	for k: String in ["Shader Eklenecek/Kayalar 1", "Shader Eklenecek/Kayalar 2", "Shader Eklenecek/Kayalar 3"]:
@@ -246,7 +251,8 @@ func test_desert_profile_flags_spawn_layers_and_weather() -> void:
 	assert((h.get_node("Su/Su") as TileMapLayer).get_cell_source_id(sc) == -1) ## doğuş suda değil
 	## zemin ve su malzemeleri bake'te kuruldu
 	assert(((h.get_node("Yer/Zemin Toprak") as TileMapLayer).material as ShaderMaterial).shader.resource_path == "res://scenes/col_zemin.gdshader")
-	assert(((h.get_node("Su/Su") as TileMapLayer).material as ShaderMaterial).shader.resource_path == "res://scenes/col_su.gdshader")
+	assert(((h.get_node("Su/Su") as TileMapLayer).material as ShaderMaterial).shader.resource_path == "res://scenes/su.gdshader")
+	assert(((h.get_node("Su/Su") as TileMapLayer).material as ShaderMaterial).get_shader_parameter("sabit_renk") == true)
 	assert(main.get_node_or_null("HouseInterior") == null and main.get_node_or_null("TravelingMerchant") == null)
 	assert(main.get_node_or_null("WorldEventManager") != null)
 	main.free()
@@ -265,9 +271,9 @@ func test_winter_profile_flags_spawn_heat_and_layers() -> void:
 	_set_map("kis")
 	assert(MapProfiles.current_id() == "kis")
 	assert(MapProfiles.is_selectable("kis"))
-	for f: String in ["orman_gorselleri", "hava", "gorevler", "calilik", "kis_fx"]:
+	for f: String in ["orman_gorselleri", "hava", "gorevler", "calilik", "kis_fx", "su_efekti"]:
 		assert(MapProfiles.feature(f))
-	for f: String in ["ev_acilisi", "seyyar_satici", "madenler", "kenar_bekcileri", "zindan_etkilesim", "harita_ayiklama", "su_efekti",
+	for f: String in ["ev_acilisi", "seyyar_satici", "madenler", "kenar_bekcileri", "zindan_etkilesim", "harita_ayiklama",
 			"zemin_gecisi", "bataklik_fx", "col_fx", "tanimsiz_bayrak"]:
 		assert(not MapProfiles.feature(f))
 	assert(MapFrame.play_cells() == Meta.PLAY_CELLS)
@@ -313,7 +319,8 @@ func test_winter_profile_flags_spawn_heat_and_layers() -> void:
 	assert(((h.get_node("Yer/Zemin Toprak") as TileMapLayer).material as ShaderMaterial).shader.resource_path == "res://scenes/kis_zemin.gdshader")
 	assert(((h.get_node("Yer/Patika") as TileMapLayer).material as ShaderMaterial).shader.resource_path == "res://scenes/kis_zemin.gdshader")
 	assert(((h.get_node("Yer/Buz") as TileMapLayer).material as ShaderMaterial).shader.resource_path == "res://scenes/kis_buz.gdshader")
-	assert(((h.get_node("Su/Su") as TileMapLayer).material as ShaderMaterial).shader.resource_path == "res://scenes/kis_su.gdshader")
+	assert(((h.get_node("Su/Su") as TileMapLayer).material as ShaderMaterial).shader.resource_path == "res://scenes/su.gdshader")
+	assert(((h.get_node("Su/Su") as TileMapLayer).material as ShaderMaterial).get_shader_parameter("sabit_renk") == true)
 	assert(main.get_node_or_null("HouseInterior") == null and main.get_node_or_null("TravelingMerchant") == null)
 	assert(main.get_node_or_null("WorldEventManager") != null)
 	main.free()

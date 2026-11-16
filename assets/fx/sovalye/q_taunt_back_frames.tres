@@ -1,0 +1,202 @@
+[gd_resource type="SpriteFrames" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/fx/sovalye/q_taunt_back_sheet.png" id="1"]
+
+[sub_resource type="AtlasTexture" id="AT_0"]
+atlas = ExtResource("1")
+region = Rect2(0, 0, 134, 58)
+
+[sub_resource type="AtlasTexture" id="AT_1"]
+atlas = ExtResource("1")
+region = Rect2(134, 0, 134, 58)
+
+[sub_resource type="AtlasTexture" id="AT_2"]
+atlas = ExtResource("1")
+region = Rect2(268, 0, 134, 58)
+
+[sub_resource type="AtlasTexture" id="AT_3"]
+atlas = ExtResource("1")
+region = Rect2(402, 0, 134, 58)
+
+[sub_resource type="AtlasTexture" id="AT_4"]
+atlas = ExtResource("1")
+region = Rect2(536, 0, 134, 58)
+
+[sub_resource type="AtlasTexture" id="AT_5"]
+atlas = ExtResource("1")
+region = Rect2(670, 0, 134, 58)
+
+[sub_resource type="AtlasTexture" id="AT_6"]
+atlas = ExtResource("1")
+region = Rect2(804, 0, 134, 58)
+
+[sub_resource type="AtlasTexture" id="AT_7"]
+atlas = ExtResource("1")
+region = Rect2(938, 0, 134, 58)
+
+[sub_resource type="AtlasTexture" id="AT_8"]
+atlas = ExtResource("1")
+region = Rect2(1072, 0, 134, 58)
+
+[sub_resource type="AtlasTexture" id="AT_9"]
+atlas = ExtResource("1")
+region = Rect2(1206, 0, 134, 58)
+
+[sub_resource type="AtlasTexture" id="AT_10"]
+atlas = ExtResource("1")
+region = Rect2(1340, 0, 134, 58)
+
+[sub_resource type="AtlasTexture" id="AT_11"]
+atlas = ExtResource("1")
+region = Rect2(1474, 0, 134, 58)
+
+[sub_resource type="AtlasTexture" id="AT_12"]
+atlas = ExtResource("1")
+region = Rect2(1608, 0, 134, 58)
+
+[sub_resource type="AtlasTexture" id="AT_13"]
+atlas = ExtResource("1")
+region = Rect2(1742, 0, 134, 58)
+
+[sub_resource type="AtlasTexture" id="AT_14"]
+atlas = ExtResource("1")
+region = Rect2(1876, 0, 134, 58)
+
+[sub_resource type="AtlasTexture" id="AT_15"]
+atlas = ExtResource("1")
+region = Rect2(2010, 0, 134, 58)
+
+[sub_resource type="AtlasTexture" id="AT_16"]
+atlas = ExtResource("1")
+region = Rect2(2144, 0, 134, 58)
+
+[sub_resource type="AtlasTexture" id="AT_17"]
+atlas = ExtResource("1")
+region = Rect2(2278, 0, 134, 58)
+
+[sub_resource type="AtlasTexture" id="AT_18"]
+atlas = ExtResource("1")
+region = Rect2(2412, 0, 134, 58)
+
+[sub_resource type="AtlasTexture" id="AT_19"]
+atlas = ExtResource("1")
+region = Rect2(2546, 0, 134, 58)
+
+[sub_resource type="AtlasTexture" id="AT_20"]
+atlas = ExtResource("1")
+region = Rect2(2680, 0, 134, 58)
+
+[sub_resource type="AtlasTexture" id="AT_21"]
+atlas = ExtResource("1")
+region = Rect2(2814, 0, 134, 58)
+
+[sub_resource type="AtlasTexture" id="AT_22"]
+atlas = ExtResource("1")
+region = Rect2(2948, 0, 134, 58)
+
+[sub_resource type="AtlasTexture" id="AT_23"]
+atlas = ExtResource("1")
+region = Rect2(3082, 0, 134, 58)
+
+[resource]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AT_0")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_1")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_2")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_3")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_4")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_5")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_6")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_7")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_8")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_9")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_10")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_11")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_12")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_13")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_14")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_15")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_16")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_17")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_18")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_19")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_20")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_21")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_22")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AT_23")
+}],
+"loop": false,
+"name": &"play",
+"speed": 20
+}]

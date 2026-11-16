@@ -3,5 +3,3 @@ Vulkan 1.4.351 - Forward+ - Using Device #0: NVIDIA - NVIDIA GeForce RTX 5060
 
 SHOT menu_0 2560x1440
 SHOT menu_1 2560x1440
-SHOT hava_gece2
-SHOT hava_gunbatimi

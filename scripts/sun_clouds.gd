@@ -121,16 +121,18 @@ func _process(delta: float) -> void:
 	var storm: float = 0.0
 	var wind: float = 0.0
 	var wind_angle: float = 0.0
+	var sand: float = 0.0 ## kum fırtınası (madde 718): güneş huzmesi tozun ardında söner
 	if _atmosphere:
 		darkness = AtmosphereMathRef.darkness(float(_atmosphere.get("cycle_time")))
 		rain = float(_atmosphere.get("rain_intensity"))
 		storm = float(_atmosphere.get("storm_intensity"))
 		wind = float(_atmosphere.get("wind_intensity"))
 		wind_angle = float(_atmosphere.get("wind_angle"))
+		sand = float(_atmosphere.get("sand_intensity"))
 	var indoors: bool = _local_player_indoors()
 	var wet: float = clampf(maxf(rain, storm), 0.0, 1.0)
 	var day: float = 1.0 - darkness
-	var sun_target: float = 0.0 if indoors or not SUN_RAYS_ENABLED else day * day * (1.0 - wet)
+	var sun_target: float = 0.0 if indoors or not SUN_RAYS_ENABLED else day * day * (1.0 - maxf(wet, sand))
 	var cloud_target: float = 0.0 if indoors or not ShadowsFlag.clouds else day * lerpf(CLOUD_STRENGTH_CLEAR, CLOUD_STRENGTH_RAIN, wet) / CLOUD_STRENGTH_CLEAR
 	var cover_target: float = lerpf(lerpf(CLOUD_COVER_CLEAR, CLOUD_COVER_WINDY, wind), CLOUD_COVER_RAIN, wet)
 	var step: float = FADE_RATE * delta

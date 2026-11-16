@@ -23,6 +23,7 @@ const VisionFogScript: GDScript = preload("res://scripts/vision_fog.gd")
 const EnemyQueryScript := preload("res://scripts/enemy_world/enemy_query.gd")
 const FRAMES: SpriteFrames = preload("res://assets/pets/kirpi/kirpi_frames.tres")
 const PetFollowScript := preload("res://scripts/pet_follow.gd")
+const PetDepthProxyScript := preload("res://scripts/pet_depth_proxy.gd")
 
 const SCAN_INTERVAL := 0.25
 const CLOSE_DELAY := 1.0
@@ -62,6 +63,7 @@ var _close_cd: float = 0.0
 var _net_idle: float = NET_HEARTBEAT - 1.0 ## ilk "buradayım" kurulumdan 1 sn sonra
 var _pop: float = 0.0
 var _is_behind: bool = false
+var _proxy: Node2D = null ## görselin derinlik vekili (pet_depth_proxy.gd)
 
 
 func setup(body: Node2D, anim_src: AnimatedSprite2D, puppet: bool) -> void:
@@ -78,7 +80,10 @@ func setup(body: Node2D, anim_src: AnimatedSprite2D, puppet: bool) -> void:
 	_sprite.centered = true
 	## Hücre 32x32; ayak (gölge altı) hücrenin alt kenarına yakın - düğüm orijini ayak hizasına gelsin.
 	_sprite.offset = Vector2(0.0, -14.0)
-	add_child(_sprite)
+	## Görsel Main altındaki derinlik vekilinde: yaratıklarla aynı y-sıralaması (pet_depth_proxy.gd); Main yoksa eskisi gibi kendi çocuğu.
+	_proxy = PetDepthProxyScript.host(PetDepthProxyScript, self, body, _sprite)
+	if _proxy == null:
+		add_child(_sprite)
 	global_scale = Vector2.ONE * EntityScale.SIZE
 	_sprite.play(&"kapali_down")
 	global_position = _heel_point()
@@ -223,7 +228,10 @@ func set_open(v: bool) -> void:
 
 
 ## Hayvan sahibinin arkasındaysa çocuk sırasının başında (sahibin sprite'ının altında), önündeyse sonunda çizilir.
+## Vekil varken sıra Main'deki y-sıralamasının (pet_depth_proxy.gd) - top_level düğümde bu çocuk sırası zaten etkisizdi.
 func _update_draw_order() -> void:
+	if _proxy != null:
+		return
 	var dy: float = global_position.y - owner_body.global_position.y
 	var want_behind: bool = _is_behind
 	if dy < -BEHIND_HYSTERESIS:

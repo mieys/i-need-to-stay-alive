@@ -1,10 +1,23 @@
 shader_type canvas_item;
 #include "res://shaders/harita_renk.gdshaderinc"
-#include "res://shaders/bataklik_su_desen.gdshaderinc"
+// 2026-11-16 BULANIK SU: su yüzeyi `bulanik` açıkken dip + pis su (shaders/su_bulanik.gdshaderinc) -> örtü de AYNI su_bulanik()'i çizer
+// (aynı dünya pikseli + TIME = suyun üstünde görünmez); parametreleri wade_fx.gd, water_fx.gd apply_murk ile profilden yazar.
+#include "res://shaders/su_bulanik.gdshaderinc"
+
+// madde 714: su yüzeyi artık ana haritanın su shader'ı (scenes/su.gdshader, sabit renk) -> örtü suyun SABİT rengini çizer; renkler harita
+// profilinin "su_doku"sundan (renk / sirt) scripts/wade_fx.gd yazar. Eski bataklık deseni (bataklik_su_desen.gdshaderinc) kaldırıldı.
+uniform vec4 su_rengi : source_color = vec4(0.141, 0.404, 0.294, 1.0);
+uniform vec4 parilti_rengi : source_color = vec4(0.537, 0.729, 0.569, 1.0);
+
+float bs_hash12(vec2 p) {
+	vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+	p3 += dot(p3, p3.yzx + 33.33);
+	return fract((p3.x + p3.y) * p3.z);
+}
 
 // SUYA GİREN AYAK (madde 525, Kara Bataklık; kullanıcı: "geçerken karakterlerin (uçanlar hariç) ayakları suya girmiş gibi görünmeli, hafif
 // derinlik hissi olmalı"). Karakterin sprite'ına DOKUNULMAZ: karakterin hemen üstünde (sprite'ın kardeşi, aynı z) çizilen tek dörtgen, ayağın
-// çevresine SUYUN KENDİ RENGİNİ (shaders/bataklik_su_desen.gdshaderinc - çevredeki suyla piksel piksel aynı) yarı saydam boyar:
+// çevresine SUYUN KENDİ RENGİNİ (profilin sabit su rengi, scenes/su.gdshader ile aynı) yarı saydam boyar:
 //  - ŞERİT: su çizgisinden (ayak - derinlik) ayağa kadar, gövde genişliğinde; örtü su çizgisinde %50'den ayakta %90'a koyulaşır -> bacak
 //    aşağı indikçe suda kaybolur (derinlik hissi). Dışarıda kalan kısmı suyun üstüne su boyar = görünmez.
 //  - SU ÇİZGİSİ: şeridin üstünde 1 px, gövdeden biraz geniş, kesik kesik kıpırdayan açık çizgi (yüzey bacağa değiyor).
@@ -52,7 +65,7 @@ void fragment() {
 	if (m <= 0.0) {
 		discard;
 	}
-	vec3 su = bs_su_rengi(px, TIME);
+	vec3 su = bulanik ? su_bulanik(su_rengi.rgb, px, TIME) : su_rengi.rgb;
 	float dx = px.x - ayak.x;
 	float dy = px.y - ayak.y;
 	float wy = dy + derinlik; // su çizgisine göre (0 = su çizgisi satırı)

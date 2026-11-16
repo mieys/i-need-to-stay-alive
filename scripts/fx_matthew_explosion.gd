@@ -19,6 +19,7 @@ var _anim: AnimatedSprite2D = null
 
 
 func _ready() -> void:
+	CameraShakeScript.mark_fx_origin(self) ## madde 711: başkasının kopyası mı (sarsıntı yalnız kasterde)
 	z_index = 12
 	call_deferred("_shake") ## konum add_child'dan sonra verilebilir: sarsıntı bir kare sonra (bkz. camera_shake.gd)
 	_anim = AnimatedSprite2D.new()
@@ -39,7 +40,7 @@ func _ready() -> void:
 
 
 func _shake() -> void:
-	CameraShakeScript.add_at(global_position, 0.55, 1100.0)
+	CameraShakeScript.add_at_fx(self, global_position, 0.55, 1100.0)
 
 
 ## Görsel bitti ama kırılma sesi animasyondan uzun sürebilir - düğüm (ve ses) ses bitince silinir.

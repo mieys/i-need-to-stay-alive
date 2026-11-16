@@ -8,6 +8,13 @@ const KillGold := preload("res://scripts/kill_gold.gd")
 
 const ATTRACT_ACCEL := 720.0 ## genel hız ayarı: %20 düşürüldü
 const MAX_ATTRACT_SPEED := 496.0
+## Madde 711 (2026-11-15, göz yorgunluğu): yerdeki tüm eşyalar aynı 3 px / 1,57 sn ritimle (çoğu AYNI fazda) zıplıyordu.
+## Ortak sakin ölçü: genlik 1,5, hız 2,5 rad/sn (~2,5 sn), rastgele faz.
+## Altın ayrıca durmadan dönüyordu (4 kare, 8 fps): artık bir tur döner, SPIN_PAUSE_MIN-MAX sn ilk karede bekler.
+const BOB_AMP := 1.5
+const BOB_SPEED := 2.5
+const SPIN_PAUSE_MIN := 2.5
+const SPIN_PAUSE_MAX := 5.0
 
 var amount: int = 1
 ## Uyku (bkz. drop_attraction.gd set_visual_awake): ekran dışında uyuyan altın zıplama/animasyon işini durdurur.
@@ -17,6 +24,7 @@ var visual_asleep: bool = false
 var is_boss_gold: bool = false
 var bob_time: float = 0.0
 var _last_bob_offset: float = 0.0
+var _spin_wait: float = 0.0
 var is_magnetized: bool = false
 var attract_speed: float = 0.0
 ## #32 DÜZELTME (kullanıcı bildirimi: "Mıknatısla çekilen objeler her zaman
@@ -64,6 +72,12 @@ func _ready() -> void:
 	body_entered.connect(_on_body_entered)
 	## Gölge (2026-10-02, bkz. drop_shadow.gd): kök zıplıyor (position.y += bob) - gölge yerde kalır.
 	DropShadowScript.attach(self, get_node_or_null("AnimatedSprite2D") as Node2D, true)
+	bob_time = randf() * TAU ## madde 711: yan yana düşen altınlar aynı fazda zıplamasın
+	var spr: AnimatedSprite2D = get_node_or_null("AnimatedSprite2D") as AnimatedSprite2D
+	if spr != null:
+		spr.animation_looped.connect(_on_spin_looped.bind(spr))
+		_on_spin_looped(spr)
+		_spin_wait = randf_range(0.2, SPIN_PAUSE_MAX) ## ilk tur da rastgele
 	get_tree().create_timer(EXPIRE_SECONDS).timeout.connect(_on_expire)
 	_place_on_ground.call_deferred()
 
@@ -85,9 +99,22 @@ func _on_expire() -> void:
 	queue_free()
 
 
+## Madde 711: tur bitince ilk karede durur, birkaç saniye sonra yeniden döner (drop_attraction uyandırırken play() erken başlatabilir, zararsız).
+func _on_spin_looped(spr: AnimatedSprite2D) -> void:
+	spr.pause()
+	spr.frame = 0
+	_spin_wait = randf_range(SPIN_PAUSE_MIN, SPIN_PAUSE_MAX)
+
+
 func _process(delta: float) -> void:
+	if _spin_wait > 0.0:
+		_spin_wait -= delta
+		if _spin_wait <= 0.0:
+			var spr: AnimatedSprite2D = get_node_or_null("AnimatedSprite2D") as AnimatedSprite2D
+			if spr != null:
+				spr.play()
 	bob_time += delta
-	var bob_offset: float = sin(bob_time * 4.0) * 3.0
+	var bob_offset: float = sin(bob_time * BOB_SPEED) * BOB_AMP
 	position.y += bob_offset - _last_bob_offset
 	_last_bob_offset = bob_offset
 

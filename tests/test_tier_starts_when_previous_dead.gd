@@ -238,7 +238,10 @@ func test_the_last_boss_also_waits_for_every_older_creature() -> void:
 	assert(not sp._final_spawned and not sp._boss_tiers_spawned.has(10), "9. kademenin yaratığı sağken son boss doğmamalı")
 	old.is_dead = true
 	sp._check_boss_tiers()
-	assert(sp._final_spawned and sp._final_bosses.size() == 1, "eskiler ölünce son boss doğmalı ve zafer için kaydedilmeli")
+	## Son kademe bir grup olabilir (ana harita: Üç Kardeş, 2026-11-14) - grubun tamamı kaydedilmeli.
+	var final_ids: Array = sp._active_boss_tiers()[10]
+	assert(sp._final_spawned and sp._final_bosses.size() == final_ids.size(),
+		"eskiler ölünce son boss(lar) doğmalı ve zafer için kaydedilmeli: %d / %d" % [sp._final_bosses.size(), final_ids.size()])
 	_cleanup()
 
 

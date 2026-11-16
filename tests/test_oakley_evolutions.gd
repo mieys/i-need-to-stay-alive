@@ -452,6 +452,7 @@ func test_fruit_bonus_and_six_flowers() -> void:
 	p.item_shield_max = 1000.0
 	p.item_shield_hp = 1000.0
 	p.damage_bonus = 50.0
+	p.crit_chance_bonus = -10.0 ## %5 yetenek kritiği tutarsa meyve x1,5 olur (test arada bir düşüyordu)
 	p.facing = "right"
 	p._activate_skill3()
 	assert(is_equal_approx(p.skill3_timer, 24.0), "R 24 sn aktif (bulunan %s)" % str(p.skill3_timer))

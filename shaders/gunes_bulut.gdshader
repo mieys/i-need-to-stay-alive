@@ -65,7 +65,7 @@ uniform float parlaklik_tavani : hint_range(0.2, 1.5) = 0.7;
 // Bayer dither ile kırılır (isin_dither = geçiş bandının genişliği, 0 = sert basamak). Gece ışıklarıyla aynı dil
 // (atmosphere_grade.gdshader pixel_light). Hafif sıcak ton (sicaklik) düz bir taban olduğu için basamaklanmaz.
 uniform float isin_basamak : hint_range(0.05, 0.5) = 0.2;
-uniform float isin_dither : hint_range(0.0, 1.0) = 0.45;
+uniform float isin_dither : hint_range(0.0, 1.0) = 0.0; // madde 711: dither kalıcı yasak (eski 0,45); ışınlar şu an kapalı
 
 const float BAYER4[16] = {
 	0.0 / 16.0, 8.0 / 16.0, 2.0 / 16.0, 10.0 / 16.0,

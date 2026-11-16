@@ -129,7 +129,7 @@ const DEFS := {
 			{"id": "oakley_q2", "name": "Öfkeli Sürü", "desc": "Arılar aynı yaratığı 1 saniye yerine 0,7 saniyede bir etkiler; zehir yükleri ve geri itmeler sıklaşır."},
 			{"id": "oakley_q3", "name": "Geniş Halka", "desc": "Arı halkasının yarıçapı %30 büyür ve sürü 3 saniye daha uzun kalır."},
 			{"id": "oakley_q4", "name": "Çiçek Tozu", "desc": "Arı zehri taşıyan bir yaratık ölürse %10 ihtimalle yerine bir çiçek düşer (her sürü için en fazla 3 çiçek)."},
-			{"id": "oakley_qf", "name": "Salgın Zehir", "desc": "Arı zehri taşıyan bir yaratık ölünce taşıdığı tüm zehir yükleri 150 birim çevresindeki yaratıklara geçer.", "final": true},
+			{"id": "oakley_qf", "name": "Salgın Zehir", "desc": "Arı zehri taşıyan bir yaratık ölünce taşıdığı tüm zehir yükleri 150 birim çevresindeki en yakın 6 yaratığa geçer.", "final": true},
 		],
 		"skill2": [
 			{"id": "oakley_e1", "name": "Çabuk Filiz", "desc": "Sarmaşıklar'ın bekleme süresi %25 azalır."},
@@ -332,29 +332,30 @@ const DEFS := {
 			{"id": "buyucu_rf", "name": "Ateş ve Buz", "desc": "Meteorlar yere krater bırakır; üstüne basan yaratıklar yanarak 3 saniye boyunca saniyede saldırı gücünün %30'u kadar hasar alır. Don Nova yaratıkları ilk 3 saniye dondurur.", "final": true},
 		],
 	},
-	## ---------------------------------------------------------------- Necromancer (kullanıcı isteği 2026-10-11)
-	## Q = İskelet Çağır (19), E = Golem Çağır (20), R = Lanetli Kafatası (44, pasif etrafında döner / aktif büyür). Temel yeteneklerin
-	## taban değerleri bu yüzden kötüleşti (yaratık sınırı 20 -> 10, iskelet 5 -> 8 ruh, golem 25 -> 50 ruh, golemin sersemletmesi kaldırıldı,
-	## kafatasının korkusu kaldırıldı) - "çünkü geliştirmelere eklenmeli". Sayılar player.gd EVO_NECRO_* / golem_pet.gd EVO_* / necro_skull.gd.
+	## ---------------------------------------------------------------- Necromancer (kit yenilendi 2026-11-16, kullanıcı onayı)
+	## Q = Kemik Savaşçısı (19, yakın dövüş), E = Kemik Okçusu (20, menzilli), R = Ölüler Ordusu (44, iskelet askerler; 2026-11-16 öncesi hayalet). Kimlikler yuvaya göre:
+	## necro_q* = savaşçı, necro_e* = okçu, necro_r* = ordu. Q/E'de alınan her evrim o birliğin RÜTBESİNİ (görünümünü) yükseltir - bkz.
+	## NecroArmyMath.warrior_unit/archer_unit. Sayıların TEK kaynağı scripts/necro_army_math.gd (metin onlarla aynı kalmalı).
+	## Eski kit (İskelet Çağır / Golem / Lanetli Kafatası ve evrimleri) bu turda kaldırıldı.
 	11: {
 		"skill": [
-			{"id": "necro_q1", "name": "Kemik Ordusu", "desc": "Aynı anda sahip olabileceğin yaratık (iskelet + golem) sınırı 10'dan 20'ye çıkar."},
-			{"id": "necro_q2", "name": "Ucuz Ruhlar", "desc": "İskelet yaratmanın ruh bedeli 8 yerine 5 olur."},
-			{"id": "necro_q3", "name": "Sert Kemikler", "desc": "İskeletlerin canı ve mana kalkanı %20 artar."},
-			{"id": "necro_q4", "name": "Dayanıklı Ruhlar", "desc": "İskeletlerin hayatta kalma süresi 7,5 saniye artar."},
-			{"id": "necro_qf", "name": "Kemik Fedası", "desc": "Canın %20'nin altına düştüğünde anında tüm iskeletlerin ruhunu tüketirsin; hayatta olan her iskelet başına saldırı gücünün %10'u kadar can ve mana kalkanı yenilersin.", "final": true},
+			{"id": "necro_q1", "name": "Kemik Ordusu", "desc": "Aynı anda sahip olabileceğin savaşçı sınırı 5'ten 8'e çıkar. Savaşçıların rütbesi 1 artar."},
+			{"id": "necro_q2", "name": "Ucuz Ruhlar", "desc": "Savaşçı çağırmanın ruh bedeli 10 yerine 7 olur. Savaşçıların rütbesi 1 artar."},
+			{"id": "necro_q3", "name": "Sert Kemikler", "desc": "Savaşçıların canı %30 artar. Savaşçıların rütbesi 1 artar."},
+			{"id": "necro_q4", "name": "Dayanıklı Ruhlar", "desc": "Savaşçılar 10 saniye daha uzun yaşar. Savaşçıların rütbesi 1 artar."},
+			{"id": "necro_qf", "name": "Kemik Şövalyesi", "desc": "Savaşçıların Kemik Şövalyesi'ne dönüşür: canları %50 artar ve 3'lü kombo vururlar; her 3. vuruş 60 birim çevresindeki tüm düşmanlara saldırı gücünün %80'i kadar hasar verir ve onları 1 saniye sersemletir.", "final": true},
 		],
 		"skill2": [
-			{"id": "necro_e1", "name": "Ucuz Golem", "desc": "Golem çağırmanın ruh bedeli 50 yerine 35 olur."},
-			{"id": "necro_e2", "name": "Yıkıcı Yumruk", "desc": "Golemlerin saldırıları düşmanları geriye iter."},
-			{"id": "necro_e3", "name": "Taş Gövde", "desc": "Golemin canı ve mana kalkanı %30 artar."},
-			{"id": "necro_e4", "name": "Dev Golem", "desc": "Golemler %20 büyür; vuruş alanları ve hasarları %20 artar."},
-			{"id": "necro_ef", "name": "Son Çare Golemi", "desc": "Canın %20'nin altına düştüğünde anında bedelsiz 1 golem doğar; doğduğu anda tüm yaratıkları kışkırtarak kendisine saldırtır. (120 saniye bekleme süresi)", "final": true},
+			{"id": "necro_e1", "name": "Dolu Sadak", "desc": "Aynı anda sahip olabileceğin okçu sınırı 5'ten 8'e çıkar. Okçuların rütbesi 1 artar."},
+			{"id": "necro_e2", "name": "Ucuz Kemik", "desc": "Okçu çağırmanın ruh bedeli 6 yerine 4 olur. Okçuların rütbesi 1 artar."},
+			{"id": "necro_e3", "name": "Gergin Kiriş", "desc": "Okçuların saldırı hızı %30 artar. Okçuların rütbesi 1 artar."},
+			{"id": "necro_e4", "name": "Kartal Gözü", "desc": "Okçuların menzili %25, ok hasarı %15 artar. Okçuların rütbesi 1 artar."},
+			{"id": "necro_ef", "name": "Kemik Büyücüsü", "desc": "Okçuların Kemik Büyücüsü'ne dönüşür: ok yerine hedefin üstünde bir ateş sütunu çıkarır (hedefe ve 40 birim çevresine saldırı gücünün %45'i kadar hasar); her büyücü 15 saniyede bir, yakında ölen bir iskeletini aynı rütbede yeniden doğurur.", "final": true},
 		],
 		"skill3": [
-			{"id": "necro_r1", "name": "Korku Darbesi", "desc": "Kafatası vurduğu düşmanları 1 saniye boyunca korkutur."},
-			{"id": "necro_r2", "name": "Hızlı Ezme", "desc": "Kafatasının vuruş hızı saldırı hızına bağlı olarak artar."},
-			{"id": "necro_rf", "name": "Lanetli Mühür", "desc": "Kafatası hasar verdiği yaratıkları 10 saniye boyunca lanetler; lanetli yaratıklar aldıkları tüm hasarı %10 daha fazla alır ve bu sürede ölürlerse %1 ihtimalle iskelete dönüşüp senin tarafında savaşır.", "final": true},
+			{"id": "necro_r1", "name": "Kalabalık Saflar", "desc": "Ölüler Ordusu 12 yerine 18 askerle gelir."},
+			{"id": "necro_r2", "name": "Uzun Sefer", "desc": "Ordu 20 yerine 30 saniye kalır."},
+			{"id": "necro_rf", "name": "Hayalet Komutan", "desc": "Ordunun başında bir Kemik Şövalyesi çıkar (canı saldırı gücünün 10 katı + 80, 3'lü kombo); o yaşadıkça askerler %25 fazla hasar verir ve ordu dağılınca hayatta kalan her asker 1 ruh bırakır.", "final": true},
 		],
 	},
 }

@@ -152,11 +152,12 @@ const DEFS := {
 			"add": {"sp_cap": 3}, "set": {"sp_full_double": true}},
 	},
 	## Madde 592 (2026-11-11): Bulaşıcı Salgı yerine. Yaratıklar zehir işlemeden ölüyordu; değer artık ÖLÜMDE (damla sıçrar), yere bir şey kalmaz.
+	## Madde 749 (2026-11-16 buff, kullanıcı "sadece sayılar"): yük başına zehir %7 -> %10, atış 1,7 -> 1,3 sn (weapon_tuftuf.tscn fire_rate).
 	"sicrayan_zehir": {
 		"weapons": ["tuftuf"], "name": "Sıçrayan Zehir", "element": "zehir",
 		"desc": "Atışları zehirler; zehirlediğin bir düşman ölünce zehir cesedinden en yakın düşmana sıçrar.",
-		"base": {"text": "Her atış 6 saniyelik zehir yükü bırakır (yük başına saniyede saldırı gücünün %7'si, 5 yüke kadar). Zehirlediğin düşman zehirliyken ölürse (kim öldürürse öldürsün) cesedinden bir damla 110 birim içindeki en yakın düşmana sıçrar: saldırı gücünün %50'si kadar hasar verir ve onu da zehirler. Bir zincir en çok 3 kez sıçrar.",
-			"set": {"poison_stacks": 1, "poison_dps": 0.07, "poison_dur": 6.0, "poison_cap": 5.0, "leap_ap": 0.5, "leap_range": 110.0, "leap_hops": 3, "leap_count": 1}},
+		"base": {"text": "Her atış 6 saniyelik zehir yükü bırakır (yük başına saniyede saldırı gücünün %10'u, 5 yüke kadar). Zehirlediğin düşman zehirliyken ölürse (kim öldürürse öldürsün) cesedinden bir damla 110 birim içindeki en yakın düşmana sıçrar: saldırı gücünün %50'si kadar hasar verir ve onu da zehirler. Bir zincir en çok 3 kez sıçrar.",
+			"set": {"poison_stacks": 1, "poison_dps": 0.10, "poison_dur": 6.0, "poison_cap": 5.0, "leap_ap": 0.5, "leap_range": 110.0, "leap_hops": 3, "leap_count": 1}},
 		"upgrades": [
 			{"name": "Keskin Damla", "text": "Sıçrama hasarı: saldırı gücünün %50'si → %70'i.", "add": {"leap_ap": 0.2}},
 			{"name": "Uzun Zincir", "text": "Bir zincir en çok 3 → 4 kez sıçrar.", "add": {"leap_hops": 1}},
@@ -216,17 +217,19 @@ const DEFS := {
 	},
 	"yankilanan_buyu": {
 		"weapons": ["arcane"], "name": "Yankılanan Büyü", "element": "kaos",
-		"desc": "İsabet hedefin yerinde bir yankı bırakır; kısa süre sonra aynı yerde ikinci bir küre patlar.",
-		"base": {"text": "Her isabet %25 ihtimalle (4 isabette bir kesin) hedefin yerinde bir yankı bırakır. 0,8 saniye sonra aynı noktada ikinci bir küre patlar: 45 birim içindekilere silah hasarının %70'i kadar vurur.",
-			"set": {"echo_chance": 0.25, "echo_pity": 4, "echo_delay": 0.8, "echo_dmg": 0.7, "echo_radius": 45.0, "echo_repeat": 0, "echo_stun": 0.0}},
+		## Madde 749 (2026-11-16 buff, kullanıcı: "her 3 saldırıda herhangi bir hedefte kesin açılıyorsa"): şans kalktı, sayaç SİLAHA bağlı
+		## (echo_chance 0 + echo_pity 2 = her 3. isabet; echo_pity <= 0 = her isabet, bkz. yankilanan_buyu.gd _echo_now), patlama %70 -> %100.
+		"desc": "Asanın her 3. isabeti hedefin yerinde bir kaos yarığı açar; kısa süre sonra yarık patlar.",
+		"base": {"text": "Asanın her 3. isabeti (hangi düşmana olursa olsun) hedefin yerinde bir kaos yarığı açar. 0,8 saniye sonra yarık patlar: 45 birim içindekilere silah hasarının %100'ü kadar vurur.",
+			"set": {"echo_chance": 0.0, "echo_pity": 2, "echo_delay": 0.8, "echo_dmg": 1.0, "echo_radius": 45.0, "echo_repeat": 0, "echo_stun": 0.0}},
 		"upgrades": [
-			{"name": "Sık Yankı", "text": "Yankı ihtimali: %25 → %35.", "add": {"echo_chance": 0.10}},
-			{"name": "Güçlü Yankı", "text": "Yankı patlamasının hasarı: silah hasarının %70'i → %90'ı.", "add": {"echo_dmg": 0.2}},
+			{"name": "Sık Yankı", "text": "Yarık her 3. yerine her 2. isabette açılır.", "add": {"echo_pity": -1}},
+			{"name": "Güçlü Yankı", "text": "Yankı patlamasının hasarı: silah hasarının %100'ü → %120'si.", "add": {"echo_dmg": 0.2}},
 			{"name": "Geniş Yankı", "text": "Yankı patlamasının alanı 45 → 60 birim.", "add": {"echo_radius": 15.0}},
 			{"name": "Çift Yankı", "text": "Yankı 0,5 saniye sonra bir kez daha patlar (hasarın %50'si).", "add": {"echo_repeat": 1}},
 		],
-		"final": {"name": "Çınlayan Boşluk", "text": "Yankı ihtimali %60'a çıkar ve patlamaya yakalananlar 0,5 saniye sersemler.",
-			"set": {"echo_chance": 0.6, "echo_stun": 0.5}},
+		"final": {"name": "Çınlayan Boşluk", "text": "Yarık bir isabet daha erken açılır (Sık Yankı ile birlikte her isabette) ve patlamaya yakalananlar 0,5 saniye sersemler.",
+			"add": {"echo_pity": -1}, "set": {"echo_stun": 0.5}},
 	},
 	## Mızrak (madde 305; öneri kullanıcıya sunuldu, "güzel"): her N. saplamada fırlatılan cirit. Görünüş/zaman scripts/mizrak_thrust_math.gd,
 	## hasar scripts/weapon_traits/cirit.gd (karede ilerleyen uç). cirit_every n() ile okunur (geliştirme -1 ekler).
@@ -299,7 +302,7 @@ const DEFS := {
 		## 2026-10-10 (kullanıcı: "buz asası hiç dondurmuyor ve efsunu çok işlevsiz"): sayaç asaya bağlı (freeze_count_global; eskiden düşman başınaydı ve asa hedefleri
 		## dağıttığı için neredeyse hiç dolmuyordu), taban her 3. -> her 2. isabet, parçalanma %100 -> %120 ve alan 90 -> 100.
 		"base": {"text": "Asanın her isabeti vurduğu düşmanı 1,5 saniye %30 yavaşlatır, her 2. isabeti 1,5 saniye dondurur. Donmuşken ölen düşman parçalanır: 100 birim içindekilere saldırı gücünün %120'si kadar vurur ve onları 1 saniye %40 yavaşlatır.",
-			"set": {"slow_pct": 0.3, "slow_dur": 1.5, "freeze_after": 2, "freeze_count_global": true, "freeze_dur": 1.5, "shatter_ap": 1.2, "shatter_radius": 100.0, "shatter_slow": 0.4, "shatter_slow_dur": 1.0, "shatter_freeze": false}},
+			"set": {"slow_pct": 0.3, "slow_dur": 1.5, "slow_chill": true, "freeze_after": 2, "freeze_count_global": true, "freeze_dur": 1.5, "shatter_ap": 1.2, "shatter_radius": 100.0, "shatter_slow": 0.4, "shatter_slow_dur": 1.0, "shatter_freeze": false}},
 		"upgrades": [
 			{"name": "Çabuk Don", "text": "Asanın HER isabeti dondurur (her 2. yerine).", "add": {"freeze_after": -1}},
 			{"name": "Uzun Buz", "text": "Donma süresi 1,5 → 2 saniye.", "add": {"freeze_dur": 0.5}},
@@ -353,7 +356,7 @@ const DEFS := {
 			{"name": "Ağır Kenar", "text": "Mana kalkanın %50'nin üstündeyken darbe hasarı %30 artar (saldırı gücünün %150'si → %195'i).", "set": {"siper_heavy": 0.3}},
 			{"name": "Sarsıcı Darbe", "text": "Darbenin vurduğu düşmanlar 1,5 saniye %25 yavaşlar.", "set": {"siper_slow": 0.25}},
 		],
-		"final": {"name": "Yıkılmaz Duvar", "text": "Her 5. darbe çevrendeki 140 birim içindeki herkese vurur: saldırı gücünün %150'si kadar hasar, 1 saniye sersemletme ve iki kat itme (90 birim; bosslar itilmez).",
+		"final": {"name": "Yıkılmaz Duvar", "text": "Her 5. darbe çevrendeki 140 birim içindeki herkese vurur: saldırı gücünün %225'i kadar hasar, 1 saniye sersemletme ve iki kat itme (90 birim; bosslar itilmez).",
 			"set": {"siper_wall": 5}},
 	},
 	## Yin Yang Kitabı (madde 334): kitabın kendi kuralı (isabet başına %15 SG kalkan, MENZİLSİZ en boş oyuncuya - kullanıcı: "kalkan menzili olmasın,

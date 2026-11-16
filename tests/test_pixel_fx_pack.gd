@@ -162,9 +162,9 @@ func test_melek_ascend_lifts_sprite_and_restores() -> void:
 	assert(anim.offset.y < base_offset.y - 3.0, "havalanırken sprite yukarı kalkar")
 	var glow_found: bool = false
 	for c in player.get_children():
-		if c is Sprite2D and c.material is CanvasItemMaterial:
+		if c is Sprite2D and c.material != null: ## 2026-11-08: ADD yerine soft_glow_blend.gd (ShaderMaterial)
 			glow_found = true
-	assert(glow_found, "kendi karesinin altın (ADD) kopyası ön katmanda")
+	assert(glow_found, "kendi karesinin altın parıltı kopyası ön katmanda")
 	var t: float = 0.0
 	while is_instance_valid(fx) and not fx.is_queued_for_deletion() and t < 3.0:
 		fx._process(0.05)
@@ -200,13 +200,13 @@ func test_matthew_fox_shield_pops_and_frees() -> void:
 # ------------------------------------------------------------------ Talon
 
 func test_talon_q_is_a_lunge_not_a_teleport_and_hits_when_passing() -> void:
-	var player: Node = _make_player(1, 38)
+	var player: Node = _make_player(1, 36) ## Q = Silah Salvosu (36); atılış E'de (38, madde 622)
 	player.facing = "right"
 	var start: Vector2 = player.global_position
 	var enemy: FakeEnemy = _make_enemy(start + Vector2(80, 0))
 	player.buy_weapon_copy("dagger", 1)
 	assert(is_equal_approx(player.TALON_DASH_TIME, TalonMath.DASH_TIME) and TalonMath.DASH_TIME >= 0.25, "atılış süresi paylaşılan sabitten ve ışınlanma gibi kısa değil")
-	assert(is_equal_approx(float(player.SKILL_TIMING[38]["duration"]), TalonMath.DASH_TIME), "skill süresi atılışla aynı")
+	assert(is_equal_approx(float(player.SKILL2_TIMING[38]["duration"]), TalonMath.DASH_TIME), "skill süresi atılışla aynı")
 	player._skill_talon_dash()
 	assert(player._talon_dashing, "atılış sırasında hareket kilidi")
 	assert(_count_children_with_script(player, "fx_talon_dash.gd") == 1, "pixel dash izi FX'i doğdu (diğer oyuncular için de yayınlanan sahne)")
@@ -278,7 +278,9 @@ func test_talon_chain_ropes_follow_weapons_on_player_and_remote_puppet() -> void
 		assert(x.size() == fx.ROPE_SEGS + 1, "ip düğümleri kuruldu")
 		var wp: Vector2 = player.owned_weapon_nodes[j].global_position
 		## Silah fizik karesinde döner (~8 px/kare), ip çizim karesinde bağlanır: ölçüm arasında bir kare fark olabilir.
-		assert(x[fx.ROPE_SEGS].distance_to(wp) < fx.TIP_INSET + 14.0, "ipin ucu silahta: %s" % x[fx.ROPE_SEGS].distance_to(wp))
+		## Salvoda silahlar %400 hızla döner: bir fizik karesi farkı ~17 px olabiliyor (2026-11-16 ölçüldü 27,3 = 10 + 17,3;
+		## headless'ta frame_post_draw gelmediği için aynı karede ölçülemiyor) -> 24 px pay.
+		assert(x[fx.ROPE_SEGS].distance_to(wp) < fx.TIP_INSET + 24.0, "ipin ucu silahta: %s" % x[fx.ROPE_SEGS].distance_to(wp))
 		assert(x[0].distance_to(player.global_position) < 16.0, "ipin başı belde")
 		var length: float = 0.0
 		for i in range(fx.ROPE_SEGS):

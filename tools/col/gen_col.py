@@ -91,12 +91,14 @@ WATER_TILE = ('taban', (0, 0))
 BLOCKER_TILE = ('taban', (1, 0))
 
 OBJ_LAYERS = ['Animasyonsuz çalılar', 'Kayalar 1', 'Kayalar 2', 'Kayalar 3']
+## madde 714 (Y sırası): "Çalılar1" = bir nesnenin/ağacın ÖNÜNDEKİ (kökü güneyinde) bitki (plant_layer_for) -> nesne + ağaç katmanlarından SONRA
+## çizilir; eskiden önlerinden önce çiziliyordu ve öndeki ot/mantar/çiçek arkasındaki kayanın/ağacın altında kalıyordu (tools/harita_cila/nesne_sirasi.py).
 LAYERS = [
     ('Yer', 'Zemin Toprak'), ('Yer', 'Zemin Çimen'), ('Yer', 'Leke'), ('Yer', 'Kum süsleri'), ('Yer', 'Filiz'),
     ('Su', 'Su'), ('Su', 'Su süsleri'), ('Su', 'Su ayrıntılar 2'),
     ('Orman parçaları', 'Saklanma Çalılığı'), ('Orman parçaları', 'Orman parçaları'),
-    ('Shader Eklenecek', 'Çiçekler 1'), ('Shader Eklenecek', 'Çalılar'), ('Shader Eklenecek', 'Çalılar1'),
-] + [('Shader Eklenecek', n) for n in OBJ_LAYERS] + [('Shader Eklenecek', 'Ağaç %d' % i) for i in range(8)]
+    ('Shader Eklenecek', 'Çiçekler 1'), ('Shader Eklenecek', 'Çalılar'),
+] + [('Shader Eklenecek', n) for n in OBJ_LAYERS] + [('Shader Eklenecek', 'Ağaç %d' % i) for i in range(8)] + [('Shader Eklenecek', 'Çalılar1')]
 TREE_LAYERS = 8
 
 ## terrain_collision.gd sabitleri (ayak izi taklidi)
@@ -1657,9 +1659,10 @@ def main():
     ## madde 676: görünmez engelin (şerit / plato / sırt) kenarı görünen kaya / ağaca hizalanır (tools/harita_duvar.py)
     cov = harita_duvar.nesne_ortusu(m, imgs, tile_rgba, OBJ_LAYERS + ['Ağaç %d' % i for i in range(TREE_LAYERS)], H, W, T, FEET_SHIFT)
     ncut = harita_duvar.duvari_hizala(m, imgs, cov, compute_blocked, flood, P(*SPAWN), (PX0, PY0, PLAY, PLAY))
+    ncik = harita_duvar.cikinti_temizle(m, imgs, compute_blocked, flood, P(*SPAWN), (PX0, PY0, PLAY, PLAY))  ## madde 714
     blocked, reach, npocket, cat = seal_pockets(m, imgs)
     rim_all, rim_open = harita_duvar.acik_kenar(m, imgs, cov, compute_blocked, flood, P(*SPAWN))
-    print('duvar hizalama: kırpılan %d hücre, kenar %d (açık görünen %d)' % (ncut, rim_all, rim_open))
+    print('çıkıntı temizliği %d hücre; duvar hizalama: kırpılan %d hücre, kenar %d (açık görünen %d)' % (ncik, ncut, rim_all, rim_open))
     play = blocked[PY0:PY0 + PLAY, PX0:PX0 + PLAY]
     rplay = reach[PY0:PY0 + PLAY, PX0:PX0 + PLAY]
     nobj = sum(1 for o in m.objects if o['layer'] in OBJ_LAYERS)

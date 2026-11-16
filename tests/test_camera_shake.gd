@@ -106,7 +106,11 @@ func test_add_limited_blocks_repeats_inside_the_interval() -> void:
 	assert(is_equal_approx(ShakeScript.trauma, 0.3), "aralık içinde ikinci olay sayılmamalı: %s" % str(ShakeScript.trauma))
 	ShakeScript.add_limited("baska", 0.1, 0.2)
 	assert(is_equal_approx(ShakeScript.trauma, 0.4), "farklı anahtar ayrı sayılır")
-	await get_tree().create_timer(0.3).timeout
+	## add_limited gerçek saate (Time.get_ticks_msec) bakar; create_timer(0.3) uzun bir karede ~200 ms'de bitebiliyor (2026-11-16
+	## ölçüldü: 203 ms) -> gerçek saatte aralığı geçene kadar bekle.
+	var t0: int = Time.get_ticks_msec()
+	while Time.get_ticks_msec() - t0 < 260:
+		await get_tree().process_frame
 	ShakeScript.add_limited("t", 0.3, 0.2)
 	assert(is_equal_approx(ShakeScript.trauma, 0.7), "aralık geçince tekrar sayılmalı: %s" % str(ShakeScript.trauma))
 	_cleanup()
@@ -325,6 +329,40 @@ func test_only_the_big_korsan_explosion_shakes_not_the_bombardment_shells() -> v
 	small.call("setup", 68.0)
 	await get_tree().process_frame
 	assert(ShakeScript.trauma == 0.0, "Bombardıman mermisi (saniyede 3 patlama) sarsmamalı")
+	_cleanup()
+
+
+## Madde 711 (2026-11-15): müttefikin yetenek efektinin KOPYASI bu ekranı sallamaz - "skill_scene" kuklanın ("remote_players")
+## altına, "hitscan_impact" network_manager'ın meta işaretiyle kurulur. İşaretsiz kopya (zindan varili gibi) eskisi gibi sallar.
+func test_ally_skill_fx_copies_do_not_shake_this_screen() -> void:
+	_begin()
+	_camera(Vector2.ZERO)
+	await get_tree().process_frame
+	## 1) Kuklanın altındaki kopya (skill_scene yolu)
+	var puppet := Node2D.new()
+	puppet.add_to_group("remote_players")
+	add_child(puppet)
+	_made.append(puppet)
+	var under_puppet: Node2D = MatthewExplosionScript.new()
+	puppet.add_child(under_puppet)
+	await get_tree().process_frame
+	assert(ShakeScript.is_remote_fx(under_puppet), "kuklanın altındaki efekt kopya sayılmalı")
+	assert(ShakeScript.trauma == 0.0, "müttefikin Matthew patlaması bu ekranı sallamamalı: %s" % str(ShakeScript.trauma))
+	## 2) Ağın işaretlediği kopya (hitscan_impact yolu) - meteor sonradan patlasa da sallamaz
+	var meteor: Node2D = MeteorScript.new()
+	meteor.set_meta(&"cs_remote_copy", true)
+	add_child(meteor)
+	_made.append(meteor)
+	meteor.call("setup", Vector2(50, 0))
+	meteor.call("_explode")
+	assert(ShakeScript.trauma == 0.0, "müttefikin meteoru bu ekranı sallamamalı: %s" % str(ShakeScript.trauma))
+	## 3) İşaretsiz (kendi efektim / varil): sallar
+	var own: Node2D = KorsanExplosionScene.instantiate()
+	add_child(own)
+	_made.append(own)
+	own.call("setup", 150.0)
+	await get_tree().process_frame
+	assert(not ShakeScript.is_remote_fx(own) and ShakeScript.trauma > 0.2, "işaretsiz büyük patlama sarsmalı: %s" % str(ShakeScript.trauma))
 	_cleanup()
 
 

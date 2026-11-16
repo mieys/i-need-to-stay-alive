@@ -31,6 +31,7 @@ func _melek() -> Node2D:
 	player.health = 50.0
 	player.damage_bonus = 0.0 ## tik miktarı sadece max_health yüzdesi olsun
 	player.crit_chance_bonus = -10.0 ## kritik zarı hiç tutmasın (sınır 0)
+	player.heal_shield_power = 0.0 ## Melek imza statı (+%8 İyileştirme Gücü, madde 677) paylaşım oranını ölçen bu testleri kaydırmasın
 	return player
 
 

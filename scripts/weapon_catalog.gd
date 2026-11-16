@@ -64,14 +64,16 @@ const MELEE_KEYS := ["dagger", "pence", "topuz", "uzunkilic", "mizrak", "kalkan"
 const DESCRIPTIONS := {
 	"dagger": "HASAR: %154 saldırı gücü · Yakın dövüş, hedefin çevresine hafif alan hasarı",
 	"fire_staff": "HASAR: saniyede %76 saldırı gücü (alevin değdiği herkese) · Menzil 160 · Sürekli alev püskürtür, 3 sn yakar (saniyede %14)", ## madde 639: koni -> flamethrower alevinin şekli, 160 birim ## 2026-10-10 buff: Destiny püskürtmesi %15 -> %27 / 0,25 sn, menzil 110 -> 140, yanma %8 -> %14
-	"lightning_staff": "HASAR: %140 saldırı gücü · Menzil 168 · Kesintisiz ışın",
-	"tabanca": "HASAR: %115 saldırı gücü · Ateş hızı 1.3sn · Menzil 210 · 6 mermilik şarjör (saldırı hızı doldurmayı da hızlandırır)", ## 2026-10-10: oran 0,891 -> 1,15 (sahne card_damage_bonus_ratio)
-	"tuftuf": "HASAR: %160 saldırı gücü · Ateş hızı 1.7sn · Menzil 180", ## madde 592: "gerçek hasar" 2026-09-25 sade silah turunda kalkmıştı (always_true_damage yok), metin eskiydi
+	## cila A9: tik hasarı = oran 1,4 x BEAM_TICK_DAMAGE_RATIO 0,33 = %46; tik aralığı beam_tick_interval 0,3704 / WEAPON_ATTACK_SPEED_MULT 0,7 = ~0,53 sn (~1,9 tik/sn) -> saniyede ~%87. Menzil = sahne 168 x 0,9.
+	"lightning_staff": "HASAR: saniyede ~%87 saldırı gücü (yaklaşık 0,5 sn'de bir %46) · Menzil 151 · Kesintisiz ışın",
+	"tabanca": "HASAR: %115 saldırı gücü · Ateş hızı 1.3sn · Menzil 189 · 6 mermilik şarjör (saldırı hızı doldurmayı da hızlandırır)", ## 2026-10-10: oran 0,891 -> 1,15 (sahne card_damage_bonus_ratio)
+	"tuftuf": "HASAR: %160 saldırı gücü · Ateş hızı 1.3sn · Menzil 180", ## madde 749 buff: 1,7 -> 1,3 sn (fire_rate 0,91), zehir yükü %7 -> %10 ## madde 592: "gerçek hasar" 2026-09-25 sade silah turunda kalkmıştı (always_true_damage yok), metin eskiydi
 	"tufek": "HASAR: %160 saldırı gücü · Ateş hızı 1.9sn · Menzil 302 · 5 mermilik şarjör (saldırı hızı doldurmayı da hızlandırır)", ## şarjör madde 296 (gun_mag_math.gd)
-	"arcane": "HASAR: %125 saldırı gücü · Ateş hızı 1.7sn · Menzil 151",
-	"yay": "HASAR: %85 saldırı gücü · Ateş hızı 1.1sn · Menzil 266 · Ateşten önce ok çeker", ## 2026-10-10: saldırı hızı +%20 (sahne fire_rate 0,7844 -> 0,6537)
-	"crossbow": "HASAR: %99 saldırı gücü · Ateş hızı 1.1sn · Menzil 220",
-	"boomerang": "HASAR: %81 saldırı gücü · Ateş hızı 0.5sn · Menzil 167 · Çarptığı ilk düşmandan geri döner; saldırı hızı arttıkça daha hızlı gidip döner", ## madde 591: "2 kez vurabilir" yanlıştı (dönüşte vurmaz)
+	"arcane": "HASAR: %125 saldırı gücü · Ateş hızı 1.4sn · Menzil 151", ## madde 749 buff: 1,7 -> 1,4 sn (fire_rate 0,98), yankı her 3. isabette kesin %100
+	"yay": "HASAR: %85 saldırı gücü · Ateş hızı 1.1sn · Menzil 239 · Ateşten önce ok çeker", ## 2026-10-10: saldırı hızı +%20 (sahne fire_rate 0,7844 -> 0,6537)
+	## cila A9 / plan K1: weapon.gd'deki `containsn("bow")` weapon_crossbow'u da yakalar -> Yay'ın aralık x1/0,85 yavaşlatması Arbalet'e de biner: 0,8 / 0,85 / 0,7 = 1,34 sn.
+	"crossbow": "HASAR: %99 saldırı gücü · Ateş hızı 1.3sn · Menzil 220",
+	"boomerang": "HASAR: %81 saldırı gücü · Ateş hızı 0.5sn · Menzil 150 · Çarptığı ilk düşmandan geri döner; saldırı hızı arttıkça daha hızlı gidip döner", ## madde 591: "2 kez vurabilir" yanlıştı (dönüşte vurmaz)
 	"buz_asasi": "HASAR: %60 saldırı gücü · Ateş hızı 1.0sn · Menzil 151 · Her isabet %30 yavaşlatır, her 2. isabet dondurur",
 	"fisek": "HASAR: %208 saldırı gücü (sadece alan hasarı) · Ateş hızı 3.8sn · Menzil 227",
 	"pence": "HASAR: %175 saldırı gücü · Yakın dövüş (menzil 110) · Çift tırpan darbesi, çevresine alan hasarı (80, alandakilere %35)",
@@ -79,10 +81,10 @@ const DESCRIPTIONS := {
 	"uzunkilic": "HASAR: %120 saldırı gücü · Yakın dövüş (menzil 115) · Geniş savuruş (çevredekilere %70)",
 	"mizrak": "HASAR: %120 saldırı gücü · Yakın dövüş (menzil 150) · Düz hatta delip geçer: hedefin arkasındakiler de tam hasar alır", ## madde 305 (sahne oranı 1,2)
 	"kalkan": "HASAR: %150 saldırı gücü · Yakın dövüş (menzil 110) · Geniş darbe: önündeki herkes tam hasar alır ve 45 birim geri itilir (bosslar itilmez)", ## madde 338/342 (sahne oranı 1,0; madde 340 yavaşlatması geri alındı)
-	"yinyang": "HASAR: %125 saldırı gücü · Ateş hızı 1.7sn · Menzil 170 · Tek hedef; her isabette kalkanı en boş oyuncuya (sen dahil, kitabın menzili içinde) saldırı gücünün %15'i kadar mana kalkanı · Saldıracak düşman yokken de aynı aralıkla kalkan taşır", ## madde 334 (sahne fire_rate 1,2 / 0,7)
-	"pompali": "HASAR: 6 saçma x %42 saldırı gücü (yakında hepsi isabet eder: %252) · Ateş hızı 1.3sn · Menzil 330 · Ortaya yoğun dar koni, uzakta daha az saçma isabet eder · 7 fişeklik pompa (saldırı hızı doldurmayı da hızlandırır)", ## madde 448 (sahne oranı SAÇMA başına 0,42; 2026-11-14: 0,34 -> 0,38 -> 0,42, şarjör 5 -> 7)
-	"makineli": "HASAR: %40 saldırı gücü · Ateş hızı şarjör içinde hızlanır (saniyede ~2 → ~12 mermi) · Menzil 200 · 30 mermilik şarjör, ~3,4 sn doldurma (saldırı hızı doldurmayı da hızlandırır)", ## madde 652 (sahne oranı 0,40 - madde 653 buff 0,26 -> 0,40; 0,55 denemesi 2026-11-14 geri alındı; fire_rate 0,21)
-	"gokkusagi": "HASAR: saniyede %140 saldırı gücü (0,5 sn'de bir %70) · Menzil 185 · Kesintisiz ışın, ilk düşmanda durur · Işık saçılması: vurduğu düşmanın yakınındaki en çok 3 düşmana yarım hasar", ## madde 306: sahne 1,1 oran x tik oranı 1,0 (2026-10-19 buff: 0,75 -> 1,1, menzil 168 -> 185), tik 0,35 / 0,7 = 0,5 sn
+	"yinyang": "HASAR: %125 saldırı gücü · Ateş hızı 1.7sn · Menzil 153 · Tek hedef; her isabette kalkanı en boş oyuncuya (sen dahil, kitabın menzili içinde) saldırı gücünün %15'i kadar mana kalkanı · Saldıracak düşman yokken de aynı aralıkla kalkan taşır", ## madde 334 (sahne fire_rate 1,2 / 0,7)
+	"pompali": "HASAR: 6 saçma x %42 saldırı gücü (yakında hepsi isabet eder: %252) · Ateş hızı 1.9sn · Menzil 297 · Ortaya yoğun dar koni, uzakta daha az saçma isabet eder · 7 fişeklik pompa (saldırı hızı doldurmayı da hızlandırır)", ## madde 448 (sahne oranı SAÇMA başına 0,42; 2026-11-14: 0,34 -> 0,38 -> 0,42, şarjör 5 -> 7)
+	"makineli": "HASAR: %40 saldırı gücü · Ateş hızı şarjör içinde hızlanır (saniyede ~2 → ~12 mermi) · Menzil 180 · 30 mermilik şarjör, ~3,4 sn doldurma (saldırı hızı doldurmayı da hızlandırır)", ## madde 652 (sahne oranı 0,40 - madde 653 buff 0,26 -> 0,40; 0,55 denemesi 2026-11-14 geri alındı; fire_rate 0,21)
+	"gokkusagi": "HASAR: saniyede %140 saldırı gücü (0,5 sn'de bir %70) · Menzil 167 · Kesintisiz ışın, ilk düşmanda durur · Işık saçılması: vurduğu düşmanın yakınındaki en çok 3 düşmana yarım hasar", ## madde 306: sahne 1,1 oran x tik oranı 1,0 (2026-10-19 buff: 0,75 -> 1,1, menzil 168 -> 185), tik 0,35 / 0,7 = 0,5 sn
 }
 
 
@@ -96,9 +98,9 @@ const STAT_BARS := {
 	"fire_staff": [5, 9, 4, 3],
 	"lightning_staff": [6, 8, 3, 3],
 	"tabanca": [5, 6, 3, 1],
-	"tuftuf": [7, 4, 3, 3],
+	"tuftuf": [7, 5, 3, 3], ## madde 749: atış 1,7 -> 1,3 sn
 	"tufek": [8, 3, 5, 1],
-	"arcane": [6, 4, 3, 2],
+	"arcane": [6, 5, 3, 2], ## madde 749: atış 1,7 -> 1,4 sn
 	"yay": [4, 6, 5, 2],
 	"crossbow": [5, 6, 4, 2],
 	"boomerang": [3, 9, 3, 2],

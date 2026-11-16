@@ -3890,6 +3890,8 @@ func _fire_at(target: Node2D) -> void:
 			proj.return_callback_target = self
 		if "player_node" in proj:
 			proj.player_node = get_parent()
+		if "return_anchor" in proj:
+			proj.return_anchor = self ## çakram karakterin ortasına değil bu silahın yuvasına döner (boomerang_projectile.gd)
 		## Boomerang: kafanın üstünde süzülen ikon, mermi havadayken (dönene
 		## kadar) gizlenir - "fırlatılan bumerang" ile "kafadaki bumerang"
 		## AYNI ANDA görünüp iki ayrı bumerang varmış gibi durmasın diye (bkz.

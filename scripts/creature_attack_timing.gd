@@ -26,6 +26,10 @@ const HIT_FRAME := {
 	## bomba 3 = patlama parlaması (yakın dövüşü yok, kendini patlatır), ateş 4 = alev kabarması, kristal 4 = dikenler çıkar.
 	"enemy_goblin": 2, "enemy_gnoll": 4, "enemy_kertenkele": 4,
 	"enemy_pelte1": 3, "enemy_pelte2": 4, "enemy_pelte3": 4,
+	## madde 682 yaratıkları (2026-11-16, eksikti -> %40 yedeğe düşüyordu): Gonca/Filiz şok dalgası 4, Medusa parlaması 3,
+	## kardeşler: kılıç savuruş zirvesi 3, ok namlu parlaması 5, büyü asa vuruşu 4.
+	"enemy_gonca": 4, "enemy_filiz": 4, "enemy_medusa": 3,
+	"enemy_kardes_kilic": 3, "enemy_kardes_ok": 5, "enemy_kardes_buyu": 4,
 }
 const FALLBACK_FRACTION := 0.4
 ## Vuruş karesine en geç (sn): daha uzun kurulan klip hızlanır.

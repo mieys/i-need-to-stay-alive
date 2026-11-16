@@ -242,6 +242,14 @@ func _build_list() -> PanelContainer:
 		lv.add_child(b)
 		_rows[id] = [b, nl, faces]
 	lv.add_child(_k.sp(0, 0, false, true))
+	if test_map_button_visible():
+		## TEST HARİTASI (madde 731): yalnız debug açılabilen derlemede; tek tık = başlat (oylamada host oylamayı atlayıp herkesi test haritasına götürür).
+		var tb: Button = _k.btn("TEST HARİTASI (DEBUG)", "ghost", _fs(32), 57.0 + (16.0 if _ph else 0.0), 0.0)
+		tb.name = "TestMap"
+		tb.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED ## geliştirici düğmesi: çeviri kataloğuna girmez
+		tb.focus_mode = Control.FOCUS_NONE ## klavye / kumanda odağı YOLA ÇIK'ta kalsın
+		tb.pressed.connect(_choose_test_map)
+		lv.add_child(tb)
 	if can_cancel:
 		var back: Button = _k.btn("GERİ", "ghost", _fs(32), 57.0 + (16.0 if _ph else 0.0), 0.0)
 		back.name = "Back"
@@ -351,6 +359,19 @@ func _confirm() -> void:
 	if voting or not _selectable(_sel):
 		return
 	chosen.emit(_sel)
+
+
+## TEST HARİTASI düğmesi görünür mü (madde 731): debug açılabilen derleme (editör) + oylamada yalnız host (istemcinin seçimi yok; kazanan host'un
+## yayınıyla gelir). Harita listesinde / oylamada satırı YOK (seçilebilir değil) - yalnız bu düğme.
+func test_map_button_visible() -> bool:
+	return MapProfiles.test_map_allowed() and (not voting or NetworkManager.is_host)
+
+
+## Tek kişilikte chosen(test) = character_select / lobi YOLA ÇIK akışı; oylamada host'un lobisi `chosen`a bağlı (lobby_menu.gd) ve oyunu hemen başlatır.
+func _choose_test_map() -> void:
+	if not test_map_button_visible() or _winner != "":
+		return
+	chosen.emit(MapProfiles.TEST_ID)
 
 
 # ---------------------------------------------------------------- seçim

@@ -70,7 +70,7 @@ func _check_card_loadout_slots(desk: Node) -> void:
 	NetworkManager.lobby_players[OTHER_PID] = {"name": "Arkadaş", "char_id": 1, "weapon": "yay", "spirit": sid, "pet": "kirpi"}
 	var card: Node = desk.call("_player_card", OTHER_PID, 1)
 	assert(_count_framed(card) == 4, "portre + silah + evcil + ruhani çerçeveli olmalı: %d" % _count_framed(card))
-	assert(_has_well(card, HT.ITEM_WELL), "silah yuvası açık ahşap kuyuda değil")
+	assert(_has_well(card, HT.ITEM_WELL), "silah yuvası ITEM_WELL (damarlı ahşap) kuyusunda değil")
 	card.free()
 
 

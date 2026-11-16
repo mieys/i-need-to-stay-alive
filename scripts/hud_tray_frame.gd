@@ -24,7 +24,13 @@ const EDGE_TL := "oHAo"
 const EDGE_BR := "oALo"
 
 
-static func _col(ch: String, accent: Color) -> Color:
+## pal = [açık kenar H, ahşap A, koyu ahşap L] (seçim kartının altın çerçevesi, madde 759); boşsa ahşap + accent. Dış hat / iç çizgi hep koyu.
+static func _col(ch: String, accent: Color, pal: Array = []) -> Color:
+	if pal.size() == 3:
+		match ch:
+			"H": return pal[0]
+			"A": return pal[1]
+			"L": return pal[2]
 	match ch:
 		"o": return HudTheme.OUTLINE
 		"H": return HudTheme.RIM_HI
@@ -52,28 +58,28 @@ static func draw(ci: CanvasItem, r: Rect2, layer_px: float, accent: Color = Colo
 ## Aynı çerçeve YEREL koordinatta (dönüşüm geri alınmaz): ölçeklenen / kayan / animasyonlu düğmelerin içinde (seçim ekranı portre kartları,
 ## madde 535) - draw() çizim anındaki global dönüşümü komutlara gömdüğü için düğme sonradan kayınca/büyüyünce çerçeve yerinde kalırdı.
 ## r.size, t'nin katı verilmeli (değilse artan kısım ortalanır).
-static func draw_local(ci: CanvasItem, r: Rect2, t: float, accent: Color = Color(0, 0, 0, 0)) -> void:
+static func draw_local(ci: CanvasItem, r: Rect2, t: float, accent: Color = Color(0, 0, 0, 0), pal: Array = []) -> void:
 	t = maxf(1.0, t)
 	var aw: int = int(floorf(r.size.x / t))
 	var ah: int = int(floorf(r.size.y / t))
 	if aw < 12 or ah < 12:
 		return
 	var o := r.position + ((r.size - Vector2(aw, ah) * t) * 0.5).floor()
-	_draw_px(ci, o, aw, ah, t, accent)
+	_draw_px(ci, o, aw, ah, t, accent, pal)
 
 
-static func _draw_px(ci: CanvasItem, o: Vector2, aw: int, ah: int, t: float, accent: Color) -> void:
+static func _draw_px(ci: CanvasItem, o: Vector2, aw: int, ah: int, t: float, accent: Color, pal: Array = []) -> void:
 	## Köşeler (piksel piksel)
-	_tile(ci, TL, o, t, accent)
-	_tile(ci, TR, o + Vector2((aw - 6) * t, 0.0), t, accent)
-	_tile(ci, BL, o + Vector2(0.0, (ah - 6) * t), t, accent)
-	_tile(ci, BR, o + Vector2((aw - 6) * t, (ah - 6) * t), t, accent)
+	_tile(ci, TL, o, t, accent, pal)
+	_tile(ci, TR, o + Vector2((aw - 6) * t, 0.0), t, accent, pal)
+	_tile(ci, BL, o + Vector2(0.0, (ah - 6) * t), t, accent, pal)
+	_tile(ci, BR, o + Vector2((aw - 6) * t, (ah - 6) * t), t, accent, pal)
 	## Düz kenarlar (köşeler arası tek parça)
 	var run_w: float = (aw - 12) * t
 	var run_h: float = (ah - 12) * t
 	for k in 4:
-		var c_tl: Color = _col(EDGE_TL[k], accent)
-		var c_br: Color = _col(EDGE_BR[k], accent)
+		var c_tl: Color = _col(EDGE_TL[k], accent, pal)
+		var c_br: Color = _col(EDGE_BR[k], accent, pal)
 		if run_w > 0.0:
 			ci.draw_rect(Rect2(o.x + 6.0 * t, o.y + k * t, run_w, t), c_tl) ## üst
 			ci.draw_rect(Rect2(o.x + 6.0 * t, o.y + (ah - 1 - k) * t, run_w, t), c_br) ## alt
@@ -82,11 +88,11 @@ static func _draw_px(ci: CanvasItem, o: Vector2, aw: int, ah: int, t: float, acc
 			ci.draw_rect(Rect2(o.x + (aw - 1 - k) * t, o.y + 6.0 * t, t, run_h), c_br) ## sağ
 
 
-static func _tile(ci: CanvasItem, rows: Array[String], p: Vector2, t: float, accent: Color) -> void:
+static func _tile(ci: CanvasItem, rows: Array[String], p: Vector2, t: float, accent: Color, pal: Array = []) -> void:
 	for y in rows.size():
 		var row: String = rows[y]
 		for x in row.length():
 			var ch: String = row[x]
 			if ch == ".":
 				continue
-			ci.draw_rect(Rect2(p.x + x * t, p.y + y * t, t, t), _col(ch, accent))
+			ci.draw_rect(Rect2(p.x + x * t, p.y + y * t, t, t), _col(ch, accent, pal))

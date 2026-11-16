@@ -166,8 +166,7 @@ const DEFS := {
 		"passive": "Saldırıların hedefin mevcut canının %2'si kadar fazladan hasar verir (elitlere ve bosslara en fazla 40)."},
 	"son_felaket_pencesi": {"name": "Son Felaket Pençesi", "kademe": 3, "cost": 2000,
 		"recipe": ["keskin_goz_hanceri", "keskin_goz_hanceri", "savascinin_kilici"],
-		"stats": {"damage_bonus": 35.0, "crit_chance_bonus": 0.20, "item_crit_damage_bonus": 0.5},
-		"passive": "Kritik hasar sınırını aşabilir."},
+		"stats": {"damage_bonus": 35.0, "crit_chance_bonus": 0.20, "item_crit_damage_bonus": 0.5}}, ## cila A7: "Kritik hasar sınırını aşabilir" pasifi silindi (kodda böyle bir sınır yok, etkisi yalnız stat satırları)
 	"kabuk_delen": {"name": "Kabuk Delen", "kademe": 3, "cost": 2010,
 		"recipe": ["zirh_soken_hancer", "savascinin_kilici", "tornavida", "tornavida"],
 		"stats": {"damage_bonus": 25.0, "shield_pen_percent": 0.20},
@@ -262,7 +261,7 @@ const DEFS := {
 	"kralice_andrea_kitabi": {"name": "Kraliçe Andrea'nın Kitabı", "kademe": 3, "cost": 1710,
 		"recipe": ["savasci_bileyi", "kol_saati", "kol_saati", "bile_tasi"], ## saldırı gücü + bekleme azaltma (fiyat = bileşen toplamı)
 		"stats": {"damage_bonus": 40.0, "cooldown_reduction_percent": 0.20},
-		"passive": "Yeteneklerin (Q, E, R) verdiği hasar %30 artar."},
+		"passive": "Yeteneklerin (Q, E, R, F) verdiği hasar %30 artar."}, ## cila A13: enemy.gd yuvaları ["q", "e", "r", "f"]
 	"gok_kartalin_kanatlari": {"name": "Gök Kartalın Kanatları", "kademe": 3, "cost": 2050, "weapon_class": "ranged",
 		"recipe": ["avci_oklugu", "savascinin_kilici", "ruzgar_eldiveni"],
 		"stats": {"damage_bonus": 20.0, "item_fire_rate_percent": 0.12, "item_ranged_mult_bonus": 0.18},
@@ -486,23 +485,46 @@ static func owns(owned: Array, key: String) -> bool:
 	return false
 
 
-## Satın alınabilir mi (altın hariç): "" = evet, değilse kullanıcıya gösterilecek sebep.
-static func purchase_block_reason(key: String, owned: Array, part_slots: int, plan: Dictionary = {}) -> String:
+## Satın alma engelinin DİLDEN BAĞIMSIZ kodu (altın hariç): "" = alınabilir; "unknown" | "weapon" | "owned" | "copies" | "slots_<kademe>".
+## Ekran kararları (sandık düğmesi "ZATEN SENDE" / "PARÇA DOLU" ...) bu koda bakar: eskiden çevrilmiş sebep metninin Türkçe başına
+## bakılıyordu, İngilizce oyunda her engel genel "SLOTS FULL" görünüyordu (2026-11-15).
+static func purchase_block_code(key: String, owned: Array, part_slots: int, plan: Dictionary = {}) -> String:
 	if not DEFS.has(key):
-		return Loc.t("Bilinmeyen eşya")
+		return "unknown"
 	if plan.is_empty():
 		plan = plan_purchase(key, owned)
 	var k: int = kademe(key)
 	if not weapon_gate_ok(key):
-		return Loc.t("Silah türü uymuyor")
+		return "weapon"
 	if (k == KADEME_EFSANEVI or k == KADEME_EPIK) and owns(owned, key):
-		return Loc.t("Zaten sende var")
+		return "owned"
 	if k == KADEME_PARCA and part_copies(key, owned) >= PART_MAX_COPIES:
-		return Loc.t("Bu parçadan en fazla %d tane") % PART_MAX_COPIES
+		return "copies"
 	var have: int = count_kademe(owned, k, plan.get("consume", []))
 	if have >= slot_limit(k, part_slots):
-		return Loc.t("%s slotları dolu") % Loc.t(KADEME_NAMES[k - 1])
+		return "slots_%d" % k ## dil:yok (kod, ekrana çıkmaz)
 	return ""
+
+
+## Satın alınabilir mi (altın hariç): "" = evet, değilse kullanıcıya gösterilecek (çevrilmiş) sebep. Karar için purchase_block_code.
+static func purchase_block_reason(key: String, owned: Array, part_slots: int, plan: Dictionary = {}) -> String:
+	return block_reason_text(purchase_block_code(key, owned, part_slots, plan))
+
+
+static func block_reason_text(code: String) -> String:
+	match code:
+		"":
+			return ""
+		"unknown":
+			return Loc.t("Bilinmeyen eşya")
+		"weapon":
+			return Loc.t("Silah türü uymuyor")
+		"owned":
+			return Loc.t("Zaten sende var")
+		"copies":
+			return Loc.t("Bu parçadan en fazla %d tane") % PART_MAX_COPIES
+	var k: int = clampi(int(code.trim_prefix("slots_")), 1, KADEME_NAMES.size())
+	return Loc.t("%s slotları dolu") % Loc.t(KADEME_NAMES[k - 1])
 
 
 static func sell_refund(key: String) -> int:

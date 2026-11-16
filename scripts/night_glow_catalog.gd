@@ -92,6 +92,11 @@ const NO_GLOW_SCENES := [
 	## Büyücü Kız Don Nova buz yavaşlatması (2026-10-04): kırağı/buz kristalleri ışık saçmaz - bir dökümde onlarca yaratığa
 	## birden takılır (ışık kalabalığı olmasın); donmuş halin buz kütlesi (fx_ice_freeze_status) parlamaya devam eder.
 	"res://scenes/fx_frost_chill_status.tscn",
+	## Madde 744 (2026-11-16 gece ışığı taraması): Medusa taşlaşması (gri taş kaplama) - taş, büyü ışığı değil (eskiden
+	## DEFAULT_FX_SCENE ile beyazımsı parlıyordu).
+	"res://scenes/fx_petrify.tscn",
+	## Kemik Kolye'nin dönen kemik dişleri (madde 742) - kemik, büyü ışığı değil.
+	"res://scenes/fx_item_bone_fangs.tscn",
 ]
 
 const BY_SCENE := {
@@ -121,7 +126,9 @@ const BY_SCENE := {
 	"res://scenes/korsan_bomb.tscn": {"c": Color(1.0, 0.6, 0.25), "r": 26.0, "e": 0.55, "f": 0.6, "o": Vector2(0.0, -8.0)},
 	## --- Namlu ateşi (kullanıcı: "tüfek ve tabanca ateşlenince ucunda parıltı olacak") - kısa flaş ---
 	"res://scenes/fx_revolver_muzzle.tscn": {"c": Color(1.0, 0.8, 0.45), "r": 60.0, "e": 1.0, "d": 0.14},
-	"res://scenes/fx_makineli_muzzle.tscn": {"c": Color(1.0, 0.8, 0.45), "r": 40.0, "e": 0.8, "d": 0.08}, ## madde 652: küçük, saniyede 12+ kez
+	## madde 652: küçük, saniyede 12+ kez. Madde 711 (2026-11-15): e 0,8 / d 0,08 her atışta 0 -> 0,8 -> 0 = gece ~12 Hz strobo idi.
+	## Şimdi zayıf + uzun (e 0,2 / d 0,45): ~5 ışık üst üste biner, ateş sürerken neredeyse SABİT bir ışık (~0,45-0,65, dalga +-%17).
+	"res://scenes/fx_makineli_muzzle.tscn": {"c": Color(1.0, 0.8, 0.45), "r": 40.0, "e": 0.2, "d": 0.45},
 	"res://scenes/fx_tufek_muzzle.tscn": {"c": Color(1.0, 0.78, 0.42), "r": 72.0, "e": 1.0, "d": 0.16},
 	"res://scenes/fx_pompali_muzzle.tscn": {"c": Color(1.0, 0.7, 0.36), "r": 84.0, "e": 1.0, "d": 0.18}, ## madde 448: namlu patlaması
 	## --- İsabet/patlama efektleri ---
@@ -143,6 +150,9 @@ const BY_SCENE := {
 	## Arcane asasının isabet patlaması - 2026-09-25'te efekt %40 küçültüldü (fx_hit_purple_burst.tscn scale 1.4 -> 0.84),
 	## ışık yarıçapı da orantılı 50 -> 30.
 	"res://scenes/fx_hit_purple_burst.tscn": {"c": Color(0.85, 0.6, 1.0), "r": 30.0, "e": 0.9, "d": 0.35},
+	## Madde 749: Arcane "C - Kaos Yarığı" isabet çatlağı (26 px) ve Zehir "B - Kabarcık" isabeti - küçük, kısa flaş.
+	"res://scenes/fx_hit_void_crack.tscn": {"c": Color(0.94, 0.44, 1.0), "r": 24.0, "e": 0.8, "d": 0.25},
+	"res://scenes/fx_hit_kabarcik.tscn": {"c": Color(0.62, 0.95, 0.35), "r": 22.0, "e": 0.6, "d": 0.3},
 	"res://scenes/fx_hit_big_burst.tscn": {"c": Color(1.0, 0.75, 0.45), "r": 100.0, "e": 1.0, "d": 0.6, "f": 0.2},
 	"res://scenes/fx_fisek_impact.tscn": {"c": Color(1.0, 0.8, 0.45), "r": 110.0, "e": 1.0, "d": 0.7, "f": 0.2},
 	"res://scenes/fx_korsan_puff_spark.tscn": {"c": Color(1.0, 0.65, 0.25), "r": 30.0, "e": 0.7, "d": 0.3},
@@ -164,7 +174,7 @@ const BY_SCENE := {
 	"res://scenes/fx_arcane_skull_bounce.tscn": {"c": Color(0.7, 0.35, 1.0), "r": 40.0, "e": 0.8},
 	"res://scenes/fx_arcane_blast.tscn": {"c": Color(0.85, 0.6, 1.0), "r": 50.0, "e": 0.8, "d": 0.5}, ## Arcane Patlama Yıldız Tozu (madde 563; eski fx_mage_passive_burst 60)
 	"res://scenes/fx_buyucu_fastfire.tscn": {"c": Color(1.0, 0.75, 0.2), "r": 44.0, "e": 0.7, "d": 0.5},
-	"res://scenes/fx_buyucu_tornado.tscn": {"c": Color(0.75, 0.85, 1.0), "r": 60.0, "e": 0.35},
+	"res://scenes/fx_buyucu_tornado.tscn": {"c": Color(1.0, 0.8, 0.52), "r": 60.0, "e": 0.3}, ## madde 728: Toz Şeytanı (kum + Set 2 korları) - eski soğuk mavi beyaz huni içindi
 	"res://scenes/fx_assasin_dash.tscn": {"c": Color(0.62, 0.3, 0.9), "r": 30.0, "e": 0.35, "d": 0.4},
 	"res://scenes/fx_assasin_shadow_hit.tscn": {"c": Color(0.6, 0.4, 0.85), "r": 28.0, "e": 0.4, "d": 0.3},
 	"res://scenes/fx_kalkan_yenileme.tscn": {"c": Color(0.4, 0.75, 1.0), "r": 50.0, "e": 0.6},
@@ -172,7 +182,7 @@ const BY_SCENE := {
 	"res://scenes/fx_paladin_cast.tscn": {"c": Color(1.0, 0.88, 0.45), "r": 60.0, "e": 0.75, "d": 0.6},
 	"res://scenes/fx_paladin_shatter.tscn": {"c": Color(0.5, 0.82, 1.0), "r": 60.0, "e": 0.75, "d": 0.5},
 	## Şovalye Q (Kışkırtma, açık kırmızı) ve E açıkken Şovalye'nin emilim efekti (mor-mavi) - 2026-09-25.
-	"res://scenes/fx_sovalye_taunt.tscn": {"c": Color(1.0, 0.42, 0.42), "r": 60.0, "e": 0.55, "o": Vector2(0.0, 30.0)},
+	"res://scenes/fx_sovalye_taunt.tscn": {"c": Color(0.45, 0.75, 1.0), "r": 60.0, "e": 0.55, "o": Vector2(0.0, 28.0)}, ## madde 740: Q artık mavi kalkan yenileme (kırmızı yalnız Meydan Okuma katmanı)
 	"res://scenes/fx_sovalye_guard.tscn": {"c": Color(0.55, 0.52, 1.0), "r": 44.0, "e": 0.45},
 	## Suriyeli Hadime (2026-09-25): Q laneti (uçan küre + kitaptan çıkış + düşüş) hastalıklı yeşil, E Lanet Çukuru'nun
 	## dibindeki lanet ışığı da yeşil (madde 556; eskiden kara deliğin mor diski). Karabasan (R) bilerek parlamaz (bkz. NO_GLOW_SCENES).
@@ -267,6 +277,12 @@ const BY_SCENE := {
 	## Kullanıcı bildirimi (2026-09-25): "yaratıkların atışlarının özel efektlerinin parıltısı aşırı fazla" - bütün "fog"
 	## (düşman) girdileri güç x0.55, yarıçap x0.8 (üstüne genel parıltı -%30, bkz. atmosphere_overlay.gd).
 	"res://scenes/enemy_projectile.tscn": {"cp": "tint", "c": Color(1.0, 0.55, 0.15), "r": 28.8, "e": 0.41, "fog": true},
+	## --- Madde 744 (2026-11-16): eskiden DEFAULT_FX_SCENE'in genel beyazımsı ışığını alanlar -> kendi renkleri ---
+	"res://scenes/fx_melek_ascend.tscn": {"c": Color(1.0, 0.85, 0.35), "r": 70.0, "e": 0.75, "f": 0.1}, ## Melek ULTİ kanatları (altın)
+	"res://scenes/fx_yinyang_hit.tscn": {"c": Color(0.95, 0.93, 1.0), "r": 30.0, "e": 0.55, "d": 0.3}, ## Yin Yang isabeti (ak-mor)
+	## Ürkek Yürek (madde 742): kalp yalnız ilk ~0,6 sn çarpar, düğüm 6 sn yaşar (rüzgâr çizgileri) -> kısa kırmızı flaş.
+	"res://scenes/fx_item_fear_heart.tscn": {"c": Color(1.0, 0.35, 0.4), "r": 24.0, "e": 0.4, "d": 0.8},
+	"res://scenes/fx_pompali_hit.tscn": {"c": Color(1.0, 0.82, 0.48), "r": 28.0, "e": 0.7, "d": 0.18}, ## = fx_tufek_hit (ateşli silah isabeti)
 }
 
 ## Sahnesiz, kodla kurulan (set_script / X.new()) efektler ve objeler.
@@ -324,10 +340,12 @@ const BY_SCRIPT := {
 	"res://scripts/shield_visual.gd": {"c": Color(0.3, 0.72, 1.0), "r": 44.0, "e": 0.4},
 	"res://scripts/fx_spirit_blink.gd": {"c": Color(0.75, 0.55, 1.0), "r": 40.0, "e": 0.7, "d": 0.45},
 	"res://scripts/fx_totem_fire_bolt.gd": {"cp": "bolt_color", "c": Color(1.0, 0.55, 0.25), "r": 34.0, "e": 0.85},
-	"res://scripts/necro_skull.gd": {"c": Color(0.45, 0.9, 0.75), "r": 50.0, "e": 0.8},
 	"res://scripts/totem_attack.gd": {"c": Color(1.0, 0.45, 0.25), "r": 34.0, "e": 0.45, "o": Vector2(-1.0, -10.0)}, ## o: Q rün taşının rün merkezi (= BOLT_ORIGIN_OFFSET, madde 557)
 	"res://scripts/totem_shield.gd": {"c": Color(0.45, 0.75, 1.0), "r": 40.0, "e": 0.45, "o": Vector2(-1.0, -8.0)}, ## o: E rün taşının rün merkezi (= ORB_ORIGIN_OFFSET, madde 557)
 	"res://scripts/totem_link_ribbon.gd": {"c": Color(0.45, 0.75, 1.0), "r": 40.0, "e": 0.4}, ## Shaman E kalkan şeridi boyunca (madde 567)
+	## Shaman E "Işık Perdesi" aura sınırı (madde 586 / 744): halka boyunca (get_glow_segment -> kapalı kırık çizgi), açılış/sönüşle
+	## (get_night_glow_energy). r 40: 220'lik halkada 48 leke ~29 birim arayla dizilir, daha küçük yarıçap boncuk gibi kopuk görünür.
+	"res://scripts/totem_aura_border.gd": {"c": Color(0.45, 0.72, 1.0), "r": 40.0, "e": 0.3},
 	## (Vampir'in yarasa sürüsü ve kan efektleri (vampir_bat_swarm.gd / vampir_fx.gd) BİLEREK yok: kan/yarasa ışık
 	## saçmaz - kan sıçramalarıyla aynı kural, bkz. NO_GLOW_SCENES.)
 	"res://scripts/oakley_flower.gd": {"c": Color(1.0, 0.7, 0.85), "r": 30.0, "e": 0.35},
@@ -337,8 +355,19 @@ const BY_SCRIPT := {
 	## Evcil hayvanlar (2026-10-13, kullanıcı: "kelebek ruhu ve peri karanlıktayken parıldamalı"): kukla kopyaları aynı betikten kurulur.
 	## Kelebek Ruhu pembe ışık küresi (atışları da pembe), Peri soğuk mavi-beyaz; ikisi de hafif titrek.
 	"res://scripts/kelebek_ruhu.gd": {"c": Color(1.0, 0.55, 0.85), "r": 44.0, "e": 0.55, "f": 0.15},
-	"res://scripts/fx_kelebek_bolt.gd": {"c": Color(1.0, 0.55, 0.85), "r": 32.0, "e": 0.8},
+	"res://scripts/fx_kelebek_beam.gd": {"c": Color(1.0, 0.55, 0.85), "r": 32.0, "e": 0.8},
 	"res://scripts/peri_pet.gd": {"c": Color(0.7, 0.88, 1.0), "r": 44.0, "e": 0.55, "f": 0.15},
+	## --- Madde 744 (2026-11-16 gece ışığı taraması): kodla kurulduğu için hiç ışık almayan büyü efektleri ---
+	## Peri'nin can basma büyüsü (sahibin gövdesine eklenir, LIFE 1,3 sn) - yeşil, göğüs hizasında, ömrü boyunca söner.
+	"res://scripts/fx_peri_heal.gd": {"c": Color(0.47, 0.92, 0.55), "r": 40.0, "e": 0.6, "d": 1.3, "o": Vector2(0.0, -20.0)},
+	## Minik Cadı (slime) büyü küresi (gövdeye eklenir; göğüs = _chest varsayılanı) + büyü sürerken gövdedeki pembe hat (kısık;
+	## SlimeBuffFx modulate.a'yı gövdenin saydamlığından kopyalar -> çalıda / Hayalet örtüsünde ışık da söner).
+	"res://scripts/fx_slime_spell.gd": {"c": Color(1.0, 0.44, 0.73), "r": 40.0, "e": 0.6, "o": Vector2(0.0, -20.0)},
+	"res://scripts/slime_buff_fx.gd": {"c": Color(1.0, 0.55, 0.8), "r": 34.0, "e": 0.3, "o": Vector2(0.0, -20.0)},
+	## Melek pasifi "Artı Işıltısı" (müttefiğin başının üstünde, ~1,35 sn) - küçük mavi-beyaz.
+	"res://scripts/fx_melek_heal_sparkle.gd": {"c": Color(0.55, 0.78, 1.0), "r": 22.0, "e": 0.45, "d": 1.35},
+	## Yin Yang Kitabı ak küresi (yang; kara küre yinyang_projectile.gd BİLEREK parlamaz) - ak-krem, küreyle uçar.
+	"res://scripts/yinyang_light.gd": {"c": Color(1.0, 0.97, 0.88), "r": 34.0, "e": 0.6},
 	## Yerdeki sandığın ışık sütunu (2026-10-17, madde 243, kullanıcı: "gece sandığın ışık sütunu parlasın"; 2026-09-25'te sandık ışığı
 	## seçilmemişti, sütunla değişti). Renk sandıktan (cp: normal sıcak altın / elit mor), ofset sütunun alt-ortası; sandıklar yerde
 	## uzun kalır -> perm (bütçe doluyken de takılır). Görüş dışında sandık gizli -> ışık da söner; açılınca sandıkla birlikte solar.
@@ -372,6 +401,34 @@ const BY_SCRIPT := {
 	"res://scripts/mission_copy_bolt.gd": {"c": Color(0.8, 0.35, 0.95), "r": 24.0, "e": 0.44, "fog": true},
 	"res://scripts/fx_enemy_bolt_impact.gd": {"cp": "color", "c": Color(1.0, 0.55, 0.15), "r": 32.0, "e": 0.44, "d": 0.35, "fog": true},
 	"res://scripts/fx_lich_flame_impact.gd": {"cp": "color", "c": Color(0.24, 0.94, 0.8), "r": 32.0, "e": 0.44, "d": 0.36, "fog": true}, ## madde 280 Ruh Alevi isabeti
+	## --- Madde 744 (2026-11-16): yaratık yetenek dünya efektleri (enemy_abilities.gd spawn_world_fx; host + istemci kopyası aynı betik) ---
+	## Banshee çığlık şeridi boyunca (get_glow_segment); uyarıda kısık, dalgada tam (get_night_glow_energy).
+	"res://scripts/banshee_wave.gd": {"c": Color(0.70, 0.89, 1.0), "r": 30.0, "e": 0.5, "fog": true},
+	## Medusa bakışı katalogda DEĞİL: her ışın kendi çizgi ışığını medusa_gaze.gd _ready'de takar (tek düğümde birden çok ışın).
+	## "st" = data.style'a göre profil (listede olmayan stil parlamaz): mızrak / ok / tırpan / uluma / kılıç / toz fiziksel.
+	"res://scripts/creature_shot.gd": {"st": {
+		"spit": {"c": Color(0.55, 0.95, 0.35), "r": 22.0, "e": 0.4, "fog": true},
+		"crystal": {"c": Color(0.75, 0.55, 1.0), "r": 20.0, "e": 0.4, "fog": true},
+	}},
+	"res://scripts/kardes_shot.gd": {"st": {
+		"fireball": {"c": Color(1.0, 0.5, 0.18), "r": 32.0, "e": 0.5, "f": 0.3, "fog": true},
+		"ice": {"c": Color(0.55, 0.88, 1.0), "r": 26.0, "e": 0.45, "fog": true},
+	}},
+	"res://scripts/creature_nova.gd": {"st": {
+		"fire": {"c": Color(1.0, 0.5, 0.18), "r": 70.0, "e": 0.55, "f": 0.3, "fog": true},
+		"fuse": {"c": Color(1.0, 0.6, 0.25), "r": 22.0, "e": 0.35, "f": 0.5, "fog": true},
+		"blast": {"c": Color(1.0, 0.55, 0.2), "r": 90.0, "e": 0.9, "d": 0.6, "f": 0.2, "fog": true},
+		"ember": {"c": Color(1.0, 0.45, 0.15), "r": 60.0, "e": 0.5, "f": 0.3, "fog": true}, ## İblis 2 Kor Yağmuru (iniş noktası)
+		"orbs": {"c": Color(1.0, 0.52, 0.16), "r": 46.0, "e": 0.45, "f": 0.3, "fog": true}, ## İblis 3 Alev Küreleri (sahibin çevresi)
+	}},
+	"res://scripts/kardes_zone.gd": {"st": {
+		"bolt": {"c": Color(1.0, 0.92, 0.5), "r": 60.0, "e": 0.6, "f": 0.3, "fog": true},
+		"spikes": {"c": Color(0.55, 0.88, 1.0), "r": 50.0, "e": 0.45, "fog": true},
+		"meteor": {"c": Color(1.0, 0.5, 0.18), "r": 80.0, "e": 0.7, "f": 0.25, "fog": true},
+		"spark": {"c": Color(0.8, 0.65, 1.0), "r": 40.0, "e": 0.5, "fog": true},
+	}},
+	## Cadı'nın Delilik İksiri sarmalı (yaratığın başı üstünde) - korku göstergesiyle (fx_fear_status) aynı boy, mor-pembe.
+	"res://scripts/fx_cadi_mad_status.gd": {"c": Color(0.85, 0.5, 1.0), "r": 20.0, "e": 0.3},
 	## Yaratık yeteneklerinin ortak sprite oynatıcısı - neyin oynadığına göre (hayalet/vampir sisi parlamaz).
 	"res://scripts/fx_enemy_ability.gd": {"frames": {
 		"laser_flash": {"c": Color(0.95, 0.6, 1.0), "r": 35.2, "e": 0.5, "d": 0.3, "fog": true},
@@ -424,6 +481,14 @@ static func resolve(node: Node, raw: Dictionary) -> Dictionary:
 	if node.get("night_glow_off") == true:
 		return {}
 	var p: Dictionary = raw
+	## "st": sahibin data.style'ına göre profil (madde 744: yaratık yetenek dünya efektleri - aynı betik fiziksel ve büyülü türleri
+	## çizer). Listede olmayan stil parlamaz. data add_child'dan ÖNCE kurulur (enemy_abilities.gd spawn_world_fx), ışık deferred takılır.
+	if raw.has("st"):
+		var dv: Variant = node.get("data")
+		var style: String = str((dv as Dictionary).get("style", "")) if dv is Dictionary else ""
+		p = (raw["st"] as Dictionary).get(style, {})
+		if p.is_empty():
+			return {}
 	if raw.has("frames"):
 		var frames: Variant = node.get("frames")
 		var fpath: String = (frames as Resource).resource_path if frames is Resource else ""

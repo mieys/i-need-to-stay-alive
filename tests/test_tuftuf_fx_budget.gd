@@ -35,7 +35,7 @@ func test_poison_status_fx_is_capped_but_poison_logic_is_not() -> void:
 	_cleanup()
 
 
-## Madde 410: Zehir Asası isabeti artık fx_poison_hit değil taç sıçraması + gölcük (poison_drip_fx.gd) - bütçe yöneticinin tavanları.
+## Madde 749: Zehir Asası isabeti "B - Kabarcık" sahnesi (fx_hit_kabarcik.tscn) - sahnedeki impact_max_alive (8) bütçesiyle sınırlı.
 func test_dart_impact_fx_budget() -> void:
 	if get_tree().current_scene == null:
 		get_tree().current_scene = self
@@ -45,12 +45,9 @@ func test_dart_impact_fx_budget() -> void:
 	for i in range(40):
 		dart.call("_spawn_impact")
 	assert(get_tree().get_node_count_in_group("impact_fx_fx_poison_hit.tscn") == 0, "eski zehir patlaması çıkmaz")
-	var mgr: Node = get_tree().current_scene.get_node_or_null(PoisonDripFx.NODE_NAME)
-	assert(mgr != null, "sıçrama yöneticisi")
-	assert(int(mgr.call("drop_count")) <= PoisonDripFx.MAX_DROPS and int(mgr.call("puddle_count")) <= PoisonDripFx.MAX_PUDDLES, "tavan")
-	assert(mgr.get_child_count() == 0, "damla başına düğüm yok (tek _draw)")
-	mgr.free()
-	var g: Node = get_tree().current_scene.get_node_or_null("PoisonDripGround")
-	if g != null:
-		g.free()
+	var alive: int = get_tree().get_node_count_in_group("impact_fx_fx_hit_kabarcik.tscn")
+	assert(alive == int(dart.get("impact_max_alive")) and alive == 8, "aynı anda en çok 8 kabarcık isabeti: %d" % alive)
+	assert(get_tree().current_scene.get_node_or_null(PoisonDripFx.NODE_NAME) == null, "isabet damla / gölcük üretmez")
+	for n in get_tree().get_nodes_in_group("impact_fx_fx_hit_kabarcik.tscn"):
+		n.free()
 	_cleanup()

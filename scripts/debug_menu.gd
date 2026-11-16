@@ -34,6 +34,8 @@ const ATMO_WEATHERS := ["Açık", "Rüzgarlı", "Yağmurlu", "Sağanak"]
 const ATMO_FAST_TIME_SCALE := 20.0
 const ChestMenuScript := preload("res://scripts/chest_menu.gd")
 const PerfProbeScript := preload("res://scripts/perf_probe.gd")
+const MapProfilesScript := preload("res://scripts/map_profiles.gd")
+const BossBarArtScript := preload("res://scripts/boss_bar_art.gd") ## boss adları (bar ile aynı)
 
 var _dim: ColorRect = null
 var _panel: PanelContainer = null
@@ -42,6 +44,7 @@ var _tab_buttons: Array[Button] = []
 var _status_label: Label = null
 
 var _creature_buttons: Dictionary = {} ## id -> Button
+var _boss_buttons: Dictionary = {} ## boss kimliği -> true (Üç Kardeş: yalnız ilk kardeşin kimliği)
 var _selected_creature: String = ""
 var _tier: int = 1
 var _tier_label: Label = null
@@ -276,26 +279,89 @@ func _build_creature_page(page: VBoxContainer) -> void:
 	spawn.size_flags_vertical = Control.SIZE_SHRINK_END
 	spawn.pressed.connect(_on_spawn_pressed)
 	top.add_child(spawn)
+	## Sahayı temizle (madde 731): bütün yaratıklar ödülsüz kaybolur (boss testini baştan almak / ikinci Üç Kardeş için).
+	var clear := _button("Sahayı temizle", "red", Vector2(300, 110), FS_LABEL)
+	clear.size_flags_vertical = Control.SIZE_SHRINK_END
+	clear.pressed.connect(_on_clear_pressed)
+	top.add_child(clear)
+
+	if MapProfilesScript.is_test_map():
+		var note := Label.new()
+		note.text = "TEST HARİTASI: hiçbir yaratık kendiliğinden doğmaz - yalnız buradan."
+		UIKit.style_label(note, FS_LABEL, UIKit.C_GOOD)
+		page.add_child(note)
+
+	var spawner: Node = _find_enemy_spawner()
+	var ids: Array = spawner.call("get_debug_creature_ids") if spawner else []
+	var boss_ids: Array = spawner.call("debug_boss_ids") if spawner else []
+	var trio: Array = spawner.call("debug_trio_ids") if spawner else []
+	## BOSSLAR (madde 731): gerçek boss kurulumu (sabit statlar, boss barı, müzik); seçince kademe bossun OYUNDAKİ kademesine geçer (değiştirilebilir).
+	## ÜÇ KARDEŞ tek düğme - basınca üç kardeş birlikte doğar (enemy_spawner.gd debug_spawn_creature).
+	var bosses: Array = []
+	for id in boss_ids:
+		var sid: String = String(id)
+		if trio.has(sid) and sid != String(trio[0]):
+			continue
+		if ids.has(sid):
+			bosses.append(sid)
+	bosses.sort_custom(func(a: String, b: String) -> bool:
+		var ta: int = _boss_tier_of(spawner, a)
+		var tb: int = _boss_tier_of(spawner, b)
+		return ta < tb if ta != tb else _boss_label(a, trio) < _boss_label(b, trio))
+	if not bosses.is_empty():
+		_header(page, "Bosslar (seçince kademe oyundakine ayarlanır)")
+		var boss_grid := _grid(page, 3)
+		for sid: String in bosses:
+			var bb := _button("%s  K%d" % [_boss_label(sid, trio), _boss_tier_of(spawner, sid)], "wood", Vector2(440, 76))
+			bb.pressed.connect(func() -> void: _select_creature(sid))
+			boss_grid.add_child(bb)
+			_creature_buttons[sid] = bb
+			_boss_buttons[sid] = true
 
 	_header(page, "Yaratık seç (seçili = yeşil)")
 	var grid := _grid(page, 5)
-	var spawner: Node = _find_enemy_spawner()
-	var ids: Array = spawner.call("get_debug_creature_ids") if spawner else []
-	ids.sort()
+	var regular: Array = []
 	for id in ids:
-		var b2 := _button(_pretty(String(id)), "wood", Vector2(255, 76))
-		var sid: String = String(id)
+		if not boss_ids.has(id):
+			regular.append(String(id))
+	regular.sort()
+	for sid: String in regular:
+		var b2 := _button(_pretty(sid), "wood", Vector2(255, 76))
 		b2.pressed.connect(func() -> void: _select_creature(sid))
 		grid.add_child(b2)
 		_creature_buttons[sid] = b2
-	if not ids.is_empty():
-		_select_creature(String(ids[0]))
+	if not regular.is_empty():
+		_select_creature(regular[0])
+
+
+## Boss düğmesinin adı: boss barındaki ad ("MİNOTAUR"...); Üç Kardeş "ÜÇ KARDEŞ (3'Ü)" (üçü birlikte doğar). 48 px yazıda 440 px'e sığar.
+static func _boss_label(id: String, trio: Array) -> String:
+	if trio.has(id):
+		return "%s (3'Ü)" % BossBarArtScript.TRIO_NAME
+	return BossBarArtScript.display_name(id)
+
+
+static func _boss_tier_of(spawner: Node, id: String) -> int:
+	return int(spawner.call("debug_boss_tier", id)) if spawner else 1
 
 
 func _select_creature(id: String) -> void:
 	_selected_creature = id
 	for k in _creature_buttons:
 		UIKit.style_button(_creature_buttons[k], "green" if k == id else "wood", false, FS_BTN)
+	if _boss_buttons.has(id):
+		var t: int = _boss_tier_of(_find_enemy_spawner(), id)
+		_set_tier(t)
+		_set_status("%s seçildi - oyundaki kademesi %d (can / kalkan / hasar o kademenin)." % [_boss_label(id, _trio_ids()), t])
+
+
+func _trio_ids() -> Array:
+	var spawner: Node = _find_enemy_spawner()
+	return spawner.call("debug_trio_ids") if spawner else []
+
+
+func _creature_label(id: String) -> String:
+	return _boss_label(id, _trio_ids()) if _boss_buttons.has(id) else _pretty(id)
 
 
 func _set_tier(v: int) -> void:
@@ -332,10 +398,34 @@ func _on_spawn_pressed() -> void:
 	if _is_client():
 		_set_status("Sadece host yaratık spawnlayabilir.", false)
 		return
+	var label: String = _creature_label(_selected_creature)
 	var spawned: int = spawner.call("debug_spawn_creature", _selected_creature, _tier, _count, player.global_position)
-	_set_status("%d/%d %s spawnlandı (Kademe %d)." % [spawned, _count, _pretty(_selected_creature), _tier], spawned > 0)
+	var err: String = str(spawner.get("debug_last_error"))
+	if _trio_ids().has(_selected_creature):
+		## Üç Kardeş: adet yok sayılır, üçü birlikte (ya da sahada kardeş varken hiç)
+		_set_status(err if err != "" else "Üç Kardeş doğdu: Kılıç + Ok + Büyü Kardeş (Kademe %d)." % _tier, spawned == 3)
+		if spawned > 0:
+			_announce("Üç Kardeş bossunu spawnladı (%d kardeş, Kademe %d)" % [spawned, _tier])
+		return
+	if spawned == 0 and err != "":
+		_set_status(err, false)
+		return
+	_set_status("%d/%d %s spawnlandı (Kademe %d)." % [spawned, _count, label, _tier], spawned > 0)
 	if spawned > 0:
-		_announce("%d x %s spawnladı (Kademe %d)" % [spawned, _pretty(_selected_creature), _tier])
+		_announce("%d x %s spawnladı (Kademe %d)" % [spawned, label, _tier])
+
+
+func _on_clear_pressed() -> void:
+	var spawner: Node = _find_enemy_spawner()
+	if not spawner:
+		return
+	if _is_client():
+		_set_status("Sadece host sahayı temizleyebilir.", false)
+		return
+	var n: int = int(spawner.call("debug_clear_creatures"))
+	_set_status("Saha temizlendi: %d yaratık ödülsüz kaldırıldı." % n, true)
+	if n > 0:
+		_announce("sahayı temizledi (%d yaratık)" % n)
 
 
 ## ------------------------------------------------------------------ Eşya / silah
@@ -492,6 +582,12 @@ func _refresh_toggles() -> void:
 		_immortal_btn.text = "Ölümsüzlük: %s" % ("AÇIK" if on else "KAPALI")
 		UIKit.style_button(_immortal_btn, "green" if on else "wood", false, FS_TAB)
 	if _spawns_btn:
+		if MapProfilesScript.is_test_map():
+			## Test haritasında kendiliğinden doğuş anahtarla da açılmaz (madde 731, enemy_spawner.gd _test_map kapısı)
+			_spawns_btn.text = "Yaratık spawnları: KAPALI (test haritası)"
+			_spawns_btn.disabled = true
+			UIKit.style_button(_spawns_btn, "dark", false, FS_TAB)
+			return
 		var on2: bool = GameManager.debug_enemy_spawns_enabled
 		_spawns_btn.text = "Yaratık spawnları: %s" % ("AÇIK" if on2 else "KAPALI")
 		UIKit.style_button(_spawns_btn, "green" if on2 else "red", false, FS_TAB)
@@ -503,6 +599,7 @@ func _build_mission_page(page: VBoxContainer) -> void:
 	var grid := _grid(page, 2)
 	var wem: Node = _find_world_event_manager()
 	if wem == null:
+		_header(page, "Bu haritada görev sistemi yok%s." % (" (test haritası)" if MapProfilesScript.is_test_map() else ""))
 		return
 	var labels: Dictionary = wem.get("MISSION_LABELS")
 	var names: Dictionary = wem.get("MISSION_KIND_NAMES")

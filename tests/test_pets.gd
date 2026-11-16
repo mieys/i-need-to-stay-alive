@@ -18,6 +18,9 @@ var _saved_pet: String = ""
 class FakeEnemy extends Node2D:
 	var is_dead: bool = false
 	var taken: Array = []
+	var health: float = 100.0
+	var is_boss: bool = false
+	var is_elite: bool = false
 
 	func _ready() -> void:
 		add_to_group("enemies")
@@ -145,7 +148,9 @@ func _fake_weapons(p: Node) -> Array:
 
 func test_kelebek_gives_attack_speed_and_attaches() -> void:
 	_begin()
-	assert(PetCatalog.KELEBEK_ATTACK_SPEED == 0.10 and PetCatalog.KELEBEK_DAMAGE_RATIO == 0.20, "kullanıcı değerleri: %10 hız, %20 hasar")
+	assert(PetCatalog.KELEBEK_ATTACK_SPEED == 0.10 and PetCatalog.KELEBEK_CURRENT_HP_PERCENT == 0.06 and PetCatalog.KELEBEK_BOSS_CURRENT_HP_PERCENT == 0.006,
+			"kullanıcı değerleri: %10 hız, mevcut canın %6'sı (boss/elit %0,6)")
+	assert(PetCatalog.KELEBEK_SHOT_INTERVAL == 0.2 and PetCatalog.KELEBEK_BOSS_SHOT_INTERVAL == 1.0, "aynı hedefe 0,2 sn (boss/elit 1 sn)")
 	var base: Node = _player("")
 	var p: Node = _player("kelebek")
 	assert(p._pet_kind == "kelebek" and p.has_node("KelebekRuhu") and not p.has_node("KorsanParrot"), "kelebek düğümü kurulmalı")
@@ -182,34 +187,51 @@ func test_kelebek_shoots_only_for_first_weapon_hits() -> void:
 	var e4: FakeEnemy = _enemy(Vector2(0, -60))
 	p.evo_weapon_hit(ws[0], e4, 5.0, Vector2.UP)
 	assert(k._bolts == 2, "sahip yerdeyken atış yok")
-	assert(e1.taken.is_empty() and e2.taken.is_empty(), "hasar atış VARINCA verilir, isabet anında değil")
+	assert(e1.taken.is_empty() and e2.taken.is_empty(), "hasar ışının ilk karesinde verilir, isabet çağrısının içinde değil")
 	_end()
 
 
-func test_kelebek_bolt_deals_twenty_percent_attack_power_on_arrival() -> void:
+## 2026-11-15 kullanıcı: saldırı gücünün %20'si yerine hedefin MEVCUT canının %6'sı (boss/elit %0,6); saldırı gücüne bakmaz.
+func test_kelebek_bolt_deals_current_hp_percent_on_arrival() -> void:
 	_begin()
 	var p: Node = _player("kelebek")
 	var k: Node = p.get_node("KelebekRuhu")
 	var ws: Array = _fake_weapons(p)
-	p.damage_bonus = 40.0
+	p.damage_bonus = 999.0 ## saldırı gücü hasarı DEĞİŞTİRMEZ
 	var e: FakeEnemy = _enemy(k.global_position + Vector2(80, 0))
+	e.health = 300.0
 	p.evo_weapon_hit(ws[0], e, 5.0, Vector2.RIGHT)
+	e.health = 200.0 ## silah vuruşundan sonra: varıştaki can okunur
 	var bolt: Node = null
 	for c in k.get_children():
 		if c.has_method("launch"):
 			bolt = c
 	assert(bolt != null, "atış düğümü kelebeğin çocuğu olmalı")
-	bolt._process(0.05)
-	assert(e.taken.is_empty(), "yoldayken hasar yok")
-	bolt._process(1.0)
-	assert(e.taken.size() == 1 and is_equal_approx(e.taken[0], 8.0), "saldırı gücü 40 -> 8 hasar: %s" % str(e.taken))
-	bolt._process(1.0)
-	assert(e.taken.size() == 1, "kıvılcım karesi tekrar hasar vermez")
+	assert(e.taken.is_empty(), "ışın kurulurken (silah vuruşuyla aynı anda) hasar yok")
+	bolt._process(0.016)
+	assert(e.taken.size() == 1 and is_equal_approx(e.taken[0], 12.0), "ilk karede: o anki can 200 -> %%6 = 12 hasar: %s" % str(e.taken))
+	bolt._process(0.1)
+	assert(e.taken.size() == 1, "sönme kareleri tekrar hasar vermez")
+	assert(bolt._frame == 1, "80 ms'lik 3 kare: 0,1 sn'de 2. kare")
+	bolt._process(0.2)
+	assert(bolt.is_queued_for_deletion(), "3 kare (0,24 sn) sonra ışın biter")
 	## Görsel sınırı doluyken: atış görseli yok ama hasar yine verilir.
 	var e2: FakeEnemy = _enemy(k.global_position + Vector2(0, 80))
+	e2.health = 1000.0
 	k._bolts = k.MAX_BOLTS
 	k.fire_at(e2)
-	assert(e2.taken.size() == 1 and is_equal_approx(e2.taken[0], 8.0), "sınır doluyken anında hasar")
+	assert(e2.taken.size() == 1 and is_equal_approx(e2.taken[0], 60.0), "sınır doluyken anında hasar (1000 x %6)")
+	## Boss ve elit: %0,6.
+	var eb: FakeEnemy = _enemy(k.global_position + Vector2(0, -80))
+	eb.health = 10000.0
+	eb.is_boss = true
+	k.fire_at(eb)
+	assert(eb.taken.size() == 1 and is_equal_approx(eb.taken[0], 60.0), "boss 10000 x %%0,6 = 60: %s" % str(eb.taken))
+	var ee: FakeEnemy = _enemy(k.global_position + Vector2(0, -90))
+	ee.health = 5000.0
+	ee.is_elite = true
+	k.fire_at(ee)
+	assert(ee.taken.size() == 1 and is_equal_approx(ee.taken[0], 30.0), "elit 5000 x %0,6 = 30")
 	## Yolda ölen yaratık hasar almaz.
 	k._bolts = 0
 	var e3: FakeEnemy = _enemy(k.global_position + Vector2(-80, 0))

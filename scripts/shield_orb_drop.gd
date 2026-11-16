@@ -32,6 +32,10 @@ const EXPIRE_SECONDS := 300.0
 
 var bob_time: float = 0.0
 var _last_bob_offset: float = 0.0
+## Madde 711 (2026-11-15, göz yorgunluğu): yerdeki tüm eşyalar aynı 3 px / 1,57 sn ritimle (çoğu AYNI fazda) zıplıyordu.
+## Ortak sakin ölçü: genlik 1,5, hız 2,5 rad/sn (~2,5 sn), rastgele faz.
+const BOB_AMP := 1.5
+const BOB_SPEED := 2.5
 var sprite: Sprite2D = null
 
 ## PARILTI: iksir şişelerinde KAPALI (2026-11-11). Eski orbun küreyi çaprazlama geçen cam parlaması 26 px'lik çerçeveydi; 32 px şişenin üstünde
@@ -121,7 +125,7 @@ var _zone_blocked_body: Node = null ## güvenli bölgedeyken dokunan oyuncu (mad
 
 func _process(delta: float) -> void:
 	bob_time += delta
-	var bob_offset: float = sin(bob_time * 4.0) * 3.0
+	var bob_offset: float = sin(bob_time * BOB_SPEED) * BOB_AMP
 	position.y += bob_offset - _last_bob_offset
 	_last_bob_offset = bob_offset
 	var step: int = int(bob_time * SPARKLE_FPS)

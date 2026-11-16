@@ -40,7 +40,41 @@ func _ready() -> void:
 		l = AbilitiesScript.clip_ray_to_domes(get_tree(), global_position, d, l)
 		_dirs.append(d)
 		_lens.append(maxf(l, 8.0))
+	_add_night_glows()
 	queue_redraw()
+
+
+## Gece ışığı (madde 744): tek düğüm birden çok ışın çizdiği için katalog (tek ışık / düğüm) yerine her ışına kendi çizgi ışığı -
+## yaratık büyüsü kuralıyla sisin içinde çizilmez; uyarıda kısık, ışında tam (glow_energy). İstemci kopyası aynı _ready'den kurar.
+const NightGlowScript := preload("res://scripts/night_glow.gd")
+
+
+class RayGlow extends Node2D:
+	var gaze: Node = null
+	var a := Vector2.ZERO
+	var b := Vector2.ZERO
+
+	func get_glow_segment() -> Array:
+		return [a, b]
+
+	func get_night_glow_energy() -> float:
+		return float(gaze.call("glow_energy")) if is_instance_valid(gaze) else 0.0
+
+
+func glow_energy() -> float:
+	if _t < _warn:
+		return 0.3
+	return 1.0 - 0.6 * clampf((_t - _warn) / maxf(_fire, 0.01), 0.0, 1.0)
+
+
+func _add_night_glows() -> void:
+	for i in _dirs.size():
+		var g := RayGlow.new()
+		g.gaze = self
+		g.a = global_position
+		g.b = global_position + _dirs[i] * _lens[i]
+		add_child(g)
+		NightGlowScript.attach(g, {"color": Color(0.8, 0.92, 0.45), "radius": 26.0, "energy": 0.5, "hide_in_fog": true})
 
 
 static func band(a: float) -> float:

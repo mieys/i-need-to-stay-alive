@@ -112,6 +112,21 @@ func _start_endless(sp: Node) -> void:
 	assert(sp.begin_endless(), "zafer sonrası sonsuz mod başlamalı")
 
 
+## Dalgadaki BOSS sayısı: Üç Kardeş tek boss sayılır (3 birim doğar; enemy_spawner.gd with_whole_trio, 2026-11-14).
+func _boss_count(wave: Array[Node]) -> int:
+	var trio: Array = preload("res://scripts/boss_bar_art.gd").TRIO_IDS
+	var n: int = 0
+	var trio_seen: bool = false
+	for b in wave:
+		if trio.has(str(b.get_meta("creature_id", ""))):
+			if not trio_seen:
+				n += 1
+			trio_seen = true
+		else:
+			n += 1
+	return n
+
+
 func _real_bosses() -> Array[Node]:
 	var out: Array[Node] = []
 	for e: Node in get_tree().get_nodes_in_group("boss"):
@@ -302,12 +317,12 @@ func test_endless_boss_wave_spawns_once_at_the_right_time_with_scaled_stats() ->
 	sp._process_endless()
 	sp._check_endless_boss_wave()
 	var wave: Array[Node] = _real_bosses()
-	assert(wave.size() == 2, "ilk dalga 2 boss: %d" % wave.size())
+	assert(_boss_count(wave) == 2, "ilk dalga 2 boss: %d" % _boss_count(wave))
 	for b in wave:
 		assert(int(b.get("_current_tier")) == 13, "boss ölçeği Kat 3 = 13: %d" % int(b.get("_current_tier")))
-		assert(EndlessMathScript.WAVE_POOL.has(str(b.get_meta("creature_id", ""))), "boss dalga havuzundan")
+		assert(sp._endless_wave_pool().has(str(b.get_meta("creature_id", ""))), "boss dalga havuzundan")
 	sp._check_endless_boss_wave()
-	assert(_real_bosses().size() == 2, "aynı kat için ikinci dalga olmamalı")
+	assert(_real_bosses().size() == wave.size(), "aynı kat için ikinci dalga olmamalı")
 	_cleanup()
 
 
@@ -433,9 +448,9 @@ func test_endless_wave_uses_the_new_pool_and_can_be_switched_off() -> void:
 	sp._process_endless()
 	sp._check_endless_boss_wave()
 	var wave: Array[Node] = _real_bosses()
-	assert(wave.size() == 2, "yeni sistemde ilk dalga 2 boss: %d" % wave.size())
+	assert(_boss_count(wave) == 2, "yeni sistemde ilk dalga 2 boss: %d" % _boss_count(wave))
 	for b in wave:
-		assert(EndlessMathScript.WAVE_POOL.has(str(b.get_meta("creature_id", ""))), "boss yeni havuzdan: %s" % str(b.get_meta("creature_id", "")))
+		assert(sp._endless_wave_pool().has(str(b.get_meta("creature_id", ""))), "boss harita havuzundan: %s" % str(b.get_meta("creature_id", "")))
 		assert(int(b.get("_current_tier")) == 13, "ölçek kademesi kat 3 = 13")
 	GameManager.endless_boss_waves = false
 	sp._endless_bosses_spawned.clear()

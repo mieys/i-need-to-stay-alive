@@ -399,7 +399,7 @@ def build_brush():
 
 
 def ensure_base_tiles():
-    """c_taban.png: 0 = düz mavi su (collision su sayar; görünüşü col_su.gdshader), 1 = tamamen saydam (görünmez engel)."""
+    """c_taban.png: 0 = düz mavi su (collision su sayar; görünüşü scenes/su.gdshader sabit renk, madde 714), 1 = tamamen saydam (görünmez engel)."""
     img = Image.new('RGBA', (32, 16), (0, 0, 0, 0))
     for y in range(16):
         for x in range(16):

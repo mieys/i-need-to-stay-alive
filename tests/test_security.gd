@@ -235,6 +235,16 @@ func test_debug_flag_can_only_open_when_dev_allowed() -> void:
 	assert(not gm.debug_mode_unlocked)
 
 
+## Madde 741: "Debug Modu" düğmesiyle başlayan oyunda (content_unlock_mode) chat kodu exportta da debug açabilir; kendiliğinden açılmaz.
+func test_content_mode_allows_chat_code_debug() -> void:
+	var gm: Node = Engine.get_main_loop().root.get_node("GameManager")
+	gm.content_unlock_mode = true
+	assert(gm.debug_allowed(), "kilit açık modda chat kodu çalışır")
+	assert(not gm.debug_mode_unlocked, "debug kendiliğinden açılmaz, kod gerekir")
+	gm.content_unlock_mode = false
+	assert(gm.debug_allowed() == Guard.dev_allowed(), "mod kapanınca eski kapı")
+
+
 func test_install_scan_is_silent_in_editor() -> void:
 	_begin()
 	Guard.scan_install()

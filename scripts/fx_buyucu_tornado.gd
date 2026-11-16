@@ -209,7 +209,7 @@ func begin_out() -> void:
 		queue_free()
 
 
-## Temas anı: yaratığın gövdesinde rüzgâr kesikleri - yerelde + diğer oyunculara "hitscan_impact" (aynı sahne).
+## Temas anı: yaratıktan yukarı savrulan kum çizgileri + çakıl (madde 728 Toz Şeytanı; eskiden rüzgâr kesikleri) - yerelde + diğer oyunculara "hitscan_impact" (aynı sahne).
 func _spawn_hit_fx(pos: Vector2) -> void:
 	if get_tree() == null or get_tree().current_scene == null:
 		return

@@ -28,6 +28,12 @@ const HP_GREEN_UNTIL := 0.5
 ## Kalkan çubuğu dolgusu (oyuncu paneli + grup paneli). Değer yazısı madde 511 den beri can yazısıyla aynı krem.
 const SHIELD_BAR := Color(0.24, 0.59, 0.91)
 const HP_RED_BELOW := 0.2 ## bunun altında düz kırmızı (düşük can uyarısı turuncuya kaymasın)
+## Ayaz Dağı ısı çubuğu (overhead_bar.gd set_warmth, madde 709): dolu = kor turuncusu, WARMTH_COLD_BELOW altında buz mavisi (uyarı); donarken
+## boş yuva buz tutar (WARMTH_FROST).
+const WARMTH_BAR := Color("#ef9a45")
+const WARMTH_BAR_COLD := Color("#8cc0e6") ## = STAT_TAKEN
+const WARMTH_FROST := Color("#bcdcf0")
+const WARMTH_COLD_BELOW := 0.25
 
 
 static func hp_color(pct: float, green: Color = HP_GREEN) -> Color:
@@ -68,6 +74,10 @@ const EVO_FINAL_FILL := Color("#332123")
 const SAVED := GOOD ## "KAYITLI" yazısı, kilit simgesi, ayrıntıdaki kayıt satırı
 ## Seçim kartı KÖŞEBENTLERİ (madde 538, karakter seçimi): seçili = ACCENT, üstünde / odakta = ahşapla altın arası (RIM -> ACCENT %50)
 const PICK_HOVER := Color("#ad8550")
+## Seçili kartın Gömme Tepsi çerçevesi ALTIN (madde 759, kullanıcı "D ile B'yi birleştir"): açık kenar / ahşap = ACCENT / koyu ahşap.
+## Üstündeki: ACCENT_SOFT / PICK_HOVER / RIM. Seçim okunun (pick_arrow.gd) üst sırası da PICK_FRAME_HI.
+const PICK_FRAME_HI := Color("#f6d9a9") ## ACCENT %40 açık
+const PICK_FRAME_LO := Color("#b07a32") ## koyu altın
 const SAVED_EDGE := Color("#8fb466") ## kayıtlı yuva / satır / ayrıntı kuyusu kenarı (GOOD'un bir ton koyusu)
 const SAVED_FILL := Color("#2d2b17") ## kayıtlı yuvanın içi (INSET -> yosun #3a4c22 %34)
 const SAVED_FILL_HOVER := Color("#2f2f18") ## üstündeyken (%42)
@@ -87,8 +97,11 @@ const WIN_PANEL2 := STRIPE ## iç kart / satır şeridi
 const WIN_PANEL3 := PLATE_ON ## seçili / üstüne gelinen kart
 const WIN_LINE := RIM_LO ## kenar çizgisi
 const WIN_LINE_HI := RIM ## vurgulu kenar
-## Silah simgesi yuvası (madde 679): silah çizimleri siyah konturlu, WIN_INSET kuyusunda kayboluyordu -> açık ahşap kuyu. Okuyan: lobby_select_desktop.gd _kind_slot.
-const ITEM_WELL := Color("#a8875e")
+## Silah simgesi yuvası (madde 679): silah çizimleri siyah konturlu, WIN_INSET kuyusunda kayboluyordu -> açık ahşap kuyu (#a8875e).
+## Madde 759 (kullanıcı: "çok parlak, göz yoruyor, önceki halindeki texture'a benzer"): koyu ahşap + ahşap damar (lobby_select_desktop.gd
+## _weapon_well). Eski karo zemini (STRIPE) ve WIN_PANEL3 de denendi: koyu kahve gövdeli silahlar (Arcane, Tırpan sapı) kayboluyordu ->
+## bir ton açık RIM_LO. Okuyan: _weapon_well (seçim karosu + oyuncu kartı yuvası).
+const ITEM_WELL := RIM_LO
 
 ## YARATIK HASAR SAYILARI (madde 429, kullanıcı 2026-11-06: "hasar sayıları çok göz yoruyor, karmaşık"): saf beyaz + saf siyah kontür yerine
 ## sıcak krem + OUTLINE kahvesi; kritik doygun kırmızı yerine turuncu-altın; süreli hasar kendi soluk tonunda. Okuyan: damage_numbers.gd spawn_hit (madde 429).

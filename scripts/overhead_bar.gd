@@ -127,6 +127,23 @@ func _time_icon_lift() -> float:
 	return 0.0
 
 
+## AYAZ DAĞI ISI ÇUBUĞU (madde 709): kalkan (yoksa can) çubuğunun altında ince şerit - dolu = sıcak, boşaldıkça donmaya yaklaşır; donarken boş
+## yuva buz tutar. kis_soguk.gd apply_bar besler (player.gd kendi değeri, remote_player.gd extra["kc"]); sıcakken (ve diğer haritalarda) gizli.
+const WARMTH_HEIGHT := 3
+var warmth_ratio: float = 1.0
+var warmth_frozen: bool = false
+var show_warmth: bool = false
+
+
+func set_warmth(ratio: float, frozen: bool, on: bool) -> void:
+	if is_equal_approx(ratio, warmth_ratio) and frozen == warmth_frozen and on == show_warmth:
+		return
+	warmth_ratio = clampf(ratio, 0.0, 1.0)
+	warmth_frozen = frozen
+	show_warmth = on
+	queue_redraw()
+
+
 func set_health(current: float, max_value: float) -> void:
 	health_current = current
 	health_max = max(max_value, 0.001)
@@ -300,6 +317,15 @@ func _draw() -> void:
 	var x0: int = int(round(-WIDTH * 0.5))
 	var y0: int = int(round(y_offset))
 	_draw_carved_bar(Rect2i(x0, y0, int(WIDTH), int(HEIGHT)), health_ratio, _health_fill_color(), true)
+	var bottom: int = y0 + int(HEIGHT)
 	if show_shield:
 		var sh_rect := Rect2i(x0, y0 + int(HEIGHT + GAP), int(WIDTH), int(round(HEIGHT * 0.72)))
 		_draw_carved_bar(sh_rect, shield_ratio, HudTheme.SHIELD_BAR, false)
+		bottom = sh_rect.end.y
+	if show_warmth:
+		var wr := Rect2i(x0, bottom + int(GAP), int(WIDTH), WARMTH_HEIGHT)
+		var col: Color = HudTheme.WARMTH_BAR if warmth_ratio > HudTheme.WARMTH_COLD_BELOW else HudTheme.WARMTH_BAR_COLD
+		_draw_carved_bar(wr, warmth_ratio, col, false)
+		if warmth_frozen:
+			_px(wr.position.x, wr.position.y, wr.size.x, wr.size.y, HudTheme.WARMTH_FROST)
+			_px(wr.position.x, wr.position.y, wr.size.x, 1, HudTheme.WARMTH_FROST.lightened(0.5))

@@ -1,0 +1,294 @@
+<title>Şovalye Q Prototipi</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Düzen: üstte oynatma çubuğu (zaman + kalkan tikleri), altında 2x2 sahne ızgarası, en altta seçim (efekt + ikon). */
+@font-face { font-family: "m5x7"; src: url(__FONT__) format("truetype"); font-display: swap; }
+:root {
+  --bg: #1b1714;        /* koyu ceviz */
+  --panel: #262019;
+  --line: #4a3c30;
+  --cream: #f1e3c4;
+  --muted: #a8977d;
+  --gold: #e6b450;
+  --blue: #8ccaff;
+  --red: #ff8f78;
+  --pix: "m5x7", "Courier New", monospace;
+  --body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--cream); font-family: var(--body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 20px 48px; }
+.wrap { max-width: 1260px; margin: 0 auto; display: grid; gap: 22px; }
+h1, h2, h3, .pix { font-family: var(--pix); font-weight: normal; letter-spacing: 0.02em; text-wrap: balance; margin: 0; }
+h1 { font-size: 48px; line-height: 0.9; color: var(--gold); }
+h2 { font-size: 32px; line-height: 1; color: var(--gold); }
+h3 { font-size: 32px; line-height: 1; }
+p { margin: 0; max-width: 72ch; }
+.lead { color: var(--cream); }
+.note { color: var(--muted); font-size: 13.5px; }
+.key-blue { color: var(--blue); } .key-red { color: var(--red); }
+.bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-block: 10px; border-bottom: 1px solid var(--line);
+  display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.seg button { font-family: var(--pix); font-size: 16px; line-height: 1; background: transparent; color: var(--muted); border: 0; padding: 8px 12px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--line); color: var(--cream); }
+.seg button.red[aria-pressed="true"] { color: var(--red); }
+.seg button:focus-visible, .btn:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.btn { font-family: var(--pix); font-size: 16px; line-height: 1; background: var(--gold); color: #1b1714; border: 0; border-radius: 4px; padding: 9px 14px; cursor: pointer; }
+.time { display: flex; align-items: center; gap: 10px; flex: 1 1 280px; min-width: 0; }
+.time output { font-family: var(--pix); font-size: 32px; line-height: 1; color: var(--cream); font-variant-numeric: tabular-nums; min-width: 4.2ch; }
+.track { position: relative; flex: 1; height: 26px; min-width: 120px; }
+.track input { width: 100%; margin: 0; position: absolute; inset: 7px 0 auto; accent-color: var(--gold); }
+.ticks { position: absolute; inset: auto 0 0; height: 8px; pointer-events: none; }
+.ticks i { position: absolute; bottom: 0; width: 2px; height: 7px; background: var(--blue); transform: translateX(-1px); }
+.ticks i.end { background: var(--red); }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 560px), 1fr)); gap: 18px; }
+.scene { display: grid; gap: 8px; min-width: 0; }
+.scene header { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.scene header .tag { font-family: var(--pix); font-size: 16px; color: var(--muted); }
+.scene canvas { width: 100%; max-width: calc(440px * var(--z, 1.333)); image-rendering: pixelated; border: 1px solid var(--line); border-radius: 3px; display: block; background: #7aad55; }
+.scene p { font-size: 14px; color: var(--muted); }
+.scene.cur h3 { color: var(--muted); }
+.pick { display: grid; gap: 16px; border-top: 1px solid var(--line); padding-top: 22px; }
+.choices { display: flex; flex-wrap: wrap; gap: 8px; }
+.choice { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 4px; padding: 8px 12px; cursor: pointer; }
+.choice:has(input:checked) { border-color: var(--gold); background: #2f271f; }
+.choice span { font-family: var(--pix); font-size: 16px; }
+.icons { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 270px), 1fr)); gap: 10px; }
+.ic { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; align-items: center; border: 1px solid var(--line); border-radius: 4px; padding: 10px; cursor: pointer; min-width: 0; }
+.ic:has(input:checked) { border-color: var(--gold); background: #2f271f; }
+.ic input { position: absolute; opacity: 0; pointer-events: none; }
+.ic canvas { image-rendering: pixelated; width: 120px; height: 100px; border-radius: 3px; background: #7aad55; grid-row: span 2; }
+.ic .nm { font-family: var(--pix); font-size: 16px; line-height: 1.1; }
+.ic .nm b { color: var(--gold); font-weight: normal; }
+.ic .ds { font-size: 13px; color: var(--muted); line-height: 1.35; min-width: 0; }
+.ic img { width: 48px; height: 48px; image-rendering: pixelated; }
+.row { display: grid; gap: 8px; }
+label.lbl { font-family: var(--pix); font-size: 16px; color: var(--muted); }
+textarea, .out { width: 100%; background: var(--panel); color: var(--cream); border: 1px solid var(--line); border-radius: 4px; padding: 10px; font: 14px/1.4 var(--body); }
+textarea { min-height: 64px; resize: vertical; }
+.out { font-family: ui-monospace, Consolas, monospace; font-size: 13.5px; white-space: pre-wrap; word-break: break-word; }
+.copyrow { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+@media (max-width: 600px) { h1 { font-size: 32px; } .ic canvas { width: 96px; height: 80px; } }
+</style>
+
+<div class="wrap">
+  <header class="row">
+    <h1>Şovalye Q Prototipi</h1>
+    <p class="lead">Aldric'in Q'su (Kışkırtma) 6 sn boyunca her saniye mana kalkanı yeniler; <span class="key-red">Meydan Okuma</span> evrimiyle ayrıca çevredeki yaratıkları 5 sn kışkırtır. Üç yeni efekt seçeneği bugünkü efektle yan yana, oyundaki ölçekte oynuyor (kamera yakınlaştırma 2). Oyuna bağlı değil.</p>
+    <p class="note"><span class="key-blue">Mavi</span> = kalkan yenileme: her seçenekte saniyede bir “tik” görünür (çubuktaki mavi çizgiler). <span class="key-red">Kırmızı</span> = Meydan Okuma katmanı. Kışkırtılan orkların başındaki işaret aşağıdan seçtiğin ikon. Ork boyu yaklaşık.</p>
+  </header>
+
+  <div class="bar" role="toolbar" aria-label="Oynatma">
+    <div class="seg" aria-label="Evrim">
+      <button id="m-base" aria-pressed="true">Temel</button>
+      <button id="m-mo" class="red" aria-pressed="false">Meydan Okuma</button>
+    </div>
+    <div class="seg" aria-label="Oynat">
+      <button id="play" aria-pressed="true">Oynat</button>
+      <button id="sp1" aria-pressed="true">1x</button>
+      <button id="sp05" aria-pressed="false">0,5x</button>
+      <button id="sp025" aria-pressed="false">0,25x</button>
+    </div>
+    <div class="seg" aria-label="Boyut">
+      <button id="z1" aria-pressed="false">1080p</button>
+      <button id="z133" aria-pressed="true">1440p</button>
+      <button id="z2" aria-pressed="false">Yakın</button>
+    </div>
+    <div class="time">
+      <output id="tout">0,0 sn</output>
+      <div class="track"><input id="scrub" type="range" min="0" max="7500" step="10" value="1500" aria-label="Zaman"><div class="ticks" id="ticks"></div></div>
+    </div>
+  </div>
+
+  <section class="grid" id="scenes"></section>
+
+  <section class="pick">
+    <h2>Seçim</h2>
+    <div class="row">
+      <label class="lbl">Q efekti</label>
+      <div class="choices" id="fxchoices"></div>
+    </div>
+    <div class="row">
+      <label class="lbl">Kışkırtma ikonu (kışkırtılan yaratığın başında; Raven Fantasy Icons, 16x16)</label>
+      <div class="icons" id="icons"></div>
+    </div>
+    <div class="row">
+      <label class="lbl" for="idea">Kendi fikrin</label>
+      <textarea id="idea" placeholder="Ör. C'nin mühürü ama A'nın şok dalgasıyla; ikon biraz daha büyük olsun…"></textarea>
+    </div>
+    <div class="row">
+      <div class="copyrow"><button class="btn" id="copy">Seçimimi kopyala</button><span class="note" id="copied"></span></div>
+      <div class="out" id="summary"></div>
+      <p class="note">Kopyalayıp sohbete yapıştır; seçtiğin efekti oyuna alırım.</p>
+    </div>
+  </section>
+</div>
+
+<script>
+const D = __DATA__;
+const M = D.meta;
+const SC = 2;                       // tuval px / dünya px (1080p, kamera zoom 2)
+const VW = 220, VH = 140;           // sahne (dünya px)
+const CH = 0.903, ORC = 0.85, ICON = 0.667, CUR_T = 0.606, CUR_B = 0.5;
+const KX = 110, KY = 92;            // Şovalye ayak noktası
+const ORCS = [{x: 34, y: 78, row: 3}, {x: 188, y: 72, row: 2}, {x: 176, y: 126, row: 2}];
+const LOOP = 7.5, PRE = 0.5, DUR = 6.0, TAUNT = 5.0;
+const SCENES = [
+  {id: "cur", name: "Şu an", tag: "oyundaki", desc: "Temel: Melek'le ortak mavi altıgen + kıvılcımlar, 1,6 sn. Meydan Okuma: ince kırmızı halkalar, içeri oklar ve “!”, 5 sn; başlarda çizilmiş 💢."},
+  {id: "a", name: "A · Kalkan Darbesi", tag: "yerden", desc: "Ayak altından dolu şok dalgası ve sıçrayan kırıntılar; sonra her saniye ayaktan göğse yükselen ışık halkası. Meydan Okuma: dış kırmızı dalga + içeri çekilen çizgiler."},
+  {id: "b", name: "B · Işık Kalkanı", tag: "gövdede", desc: "Toplanan zerrelerden önünde yarı saydam ışık kalkanı belirir, parlayıp kırılır; belinde dönen iki kuyruklu zerre her saniye parlar. Meydan Okuma: kalkan kırmızı parlar + iki yana haykırış yayları."},
+  {id: "c", name: "C · Haç Mühür", tag: "zeminde", desc: "Ayak altında kendini çizen mühür ve kısa ışık sütunu; mühür yavaş döner, her saniye nabız atıp zerre yükseltir. Meydan Okuma: mühürden kırmızı dikenler + dalga."},
+];
+
+const I = {};
+const state = {mode: "base", playing: !matchMedia("(prefers-reduced-motion: reduce)").matches, speed: 1, t: 1.5, z: 1.333, fx: "", icon: 684};
+
+function loadAll() {
+  return Promise.all(Object.entries(D.img).map(([k, src]) => new Promise(res => {
+    const im = new Image(); im.onload = () => { I[k] = im; res(); }; im.onerror = () => res(); im.src = src;
+  })));
+}
+
+function blit(ctx, im, sx, sy, sw, sh, wx, wy, s) {
+  if (!im) return;
+  ctx.drawImage(im, sx, sy, sw, sh, Math.round(wx * SC), Math.round(wy * SC), Math.round(sw * s * SC), Math.round(sh * s * SC));
+}
+
+const TUFTS = (() => { let s = 12345; const r = () => (s = (s * 1103515245 + 12345) % 2147483648) / 2147483648;
+  return Array.from({length: 46}, () => ({x: r() * VW, y: r() * VH, d: r() < 0.6})); })();
+
+function ground(ctx, w, h) {
+  ctx.fillStyle = "#7aad55"; ctx.fillRect(0, 0, w, h);
+  for (const t of TUFTS) { if (t.x * SC > w || t.y * SC > h) continue;
+    ctx.fillStyle = t.d ? "#649b51" : "#8cbe5f"; ctx.fillRect(Math.round(t.x) * SC, Math.round(t.y) * SC, 3 * SC, SC); }
+}
+
+function drawKnight(ctx, now) { blit(ctx, I.knight, (Math.floor(now * 4) % 4) * 48, 0, 48, 48, KX - 24 * CH, KY - 41 * CH, CH); }
+function drawOrc(ctx, o, now) { blit(ctx, I.orc, (Math.floor(now * 6 + o.x) % 4) * 64, o.row * 64, 64, 64, o.x - 27 * ORC, o.y - 46 * ORC, ORC); }
+
+function drawIcon(ctx, o, key, now) {
+  const top = o.y - 32 * ORC - 3;
+  if (key === "cur") {
+    const f = Math.floor(now * 8) % 6;
+    blit(ctx, I.cur_status, f * 16, 0, 16, 16, o.x - 8 * ICON, top - 16 * ICON, ICON);
+  } else {
+    blit(ctx, I["fa" + key], 0, 0, 16, 16, o.x - 8 * ICON, top - 16 * ICON, ICON);
+  }
+}
+
+function clip(ctx, v, name, layer, idx, alpha) {
+  const key = `${v}_${name}`, n = M.clips[key];
+  if (idx < 0 || idx >= n || alpha <= 0) return;
+  ctx.globalAlpha = alpha;
+  blit(ctx, I[`${key}_${layer}`], (idx % M.cols) * M.w, Math.floor(idx / M.cols) * M.h, M.w, M.h, KX - M.ox * CH, KY - M.oy * CH, CH);
+  ctx.globalAlpha = 1;
+}
+
+function scene(ctx, v, st, mode, icon, now) {
+  const w = ctx.canvas.width, h = ctx.canvas.height;
+  ctx.imageSmoothingEnabled = false;
+  ground(ctx, w, h);
+  const mo = mode === "mo";
+  const layers = [];
+  if (v === "cur") {
+    if (mo && st >= 0 && st < TAUNT) {        // fx_sovalye_taunt: karakterin arkasında
+      ctx.globalAlpha = Math.min(1, Math.max(0, (TAUNT - st) / 0.4));
+      if (st < 0.7) blit(ctx, I.cur_burst, Math.floor(st * 20) * 176, 0, 176, 120, KX - 88 * CUR_T, KY - 80 * CUR_T, CUR_T);
+      else blit(ctx, I.cur_aura, (Math.floor((st - 0.7) * 12) % 12) * 110, 0, 110, 60, KX - 55 * CUR_T, KY - 30 * CUR_T, CUR_T);
+      ctx.globalAlpha = 1;
+    }
+  } else {
+    const a = Math.min(1, Math.max(0, (DUR - st) / 0.4));
+    if (st >= 0 && st < DUR) {
+      const c = st < 1 ? ["cast", Math.floor(st * M.fps)] : ["loop", Math.floor(((st - 1) % 1) * M.fps)];
+      clip(ctx, v, c[0], "back", c[1], a); layers.push([c[0], c[1], a]);
+    }
+    if (mo && st >= 0 && st < 1.2) { clip(ctx, v, "taunt", "back", Math.floor(st * M.fps), 1); layers.push(["taunt", Math.floor(st * M.fps), 1]); }
+  }
+  const ents = ORCS.map(o => ({y: o.y, draw: () => drawOrc(ctx, o, now)}));
+  ents.push({y: KY, draw: () => drawKnight(ctx, now)});
+  ents.sort((p, q) => p.y - q.y).forEach(e => e.draw());
+  for (const [n, i, a] of layers) clip(ctx, v, n, "front", i, a);
+  if (v === "cur" && !mo && st >= 0 && st < 1.6) {   // fx_kalkan_yenileme: önde, yumuşak süzme
+    const f = Math.floor(st * 20);
+    ctx.imageSmoothingEnabled = true;
+    blit(ctx, I.cur_base, (f % 28) * 144, Math.floor(f / 28) * 146, 144, 146, KX - 72 * CUR_B, KY - 16.5 - 77 * CUR_B, CUR_B);
+    ctx.imageSmoothingEnabled = false;
+  }
+  if (mo && st >= 0 && st < TAUNT) for (const o of ORCS) drawIcon(ctx, o, v === "cur" ? "cur" : icon, now);
+}
+
+/* ---------- arayüz ---------- */
+const $ = id => document.getElementById(id);
+const canv = {};
+function build() {
+  const g = $("scenes");
+  for (const s of SCENES) {
+    const el = document.createElement("article");
+    el.className = "scene" + (s.id === "cur" ? " cur" : "");
+    el.innerHTML = `<header><h3>${s.name}</h3><span class="tag">${s.tag}</span></header><canvas width="${VW * SC}" height="${VH * SC}" aria-label="${s.name} önizleme"></canvas><p>${s.desc}</p>`;
+    g.appendChild(el);
+    canv[s.id] = el.querySelector("canvas").getContext("2d");
+  }
+  const tk = $("ticks");
+  for (let i = 0; i <= 6; i++) { const e = document.createElement("i"); e.style.left = ((PRE + i) / LOOP * 100) + "%"; if (i === 6) e.className = "end"; tk.appendChild(e); }
+  const fc = $("fxchoices");
+  for (const s of SCENES) {
+    const id = "fx-" + s.id;
+    fc.insertAdjacentHTML("beforeend", `<label class="choice" for="${id}"><input type="radio" name="fx" id="${id}" value="${s.id}"><span>${s.id === "cur" ? "Şu anki kalsın" : s.name}</span></label>`);
+  }
+  fc.addEventListener("change", e => { state.fx = e.target.value; summary(); });
+  const ic = $("icons");
+  ic.insertAdjacentHTML("beforeend", `<label class="ic" for="ic-cur"><input type="radio" name="ic" id="ic-cur" value="cur"><canvas width="160" height="130"></canvas><span class="nm"><b>Şu an</b> · çizilmiş 💢</span><span class="ds">Kodla çizilmiş öfke damarı (oyundaki).</span></label>`);
+  for (const c of D.icons) {
+    ic.insertAdjacentHTML("beforeend", `<label class="ic" for="ic-${c.n}"><input type="radio" name="ic" id="ic-${c.n}" value="${c.n}"${c.n === state.icon ? " checked" : ""}><canvas width="160" height="130"></canvas><span class="nm"><b>fa${c.n}</b> · ${c.name} <img src="${D.img["fa" + c.n]}" alt="" style="vertical-align:middle;margin-left:4px"></span><span class="ds">${c.desc}</span></label>`);
+  }
+  ic.addEventListener("change", e => { const v = e.target.value; state.icon = v === "cur" ? "cur" : +v; if (state.mode !== "mo") setMode("mo"); summary(); });
+  $("idea").addEventListener("input", summary);
+  $("m-base").onclick = () => setMode("base"); $("m-mo").onclick = () => setMode("mo");
+  $("play").onclick = () => { state.playing = !state.playing; ui(); };
+  const sp = {sp1: 1, sp05: 0.5, sp025: 0.25};
+  for (const k in sp) $(k).onclick = () => { state.speed = sp[k]; for (const j in sp) $(j).setAttribute("aria-pressed", j === k); };
+  const zz = {z1: 1, z133: 1.333, z2: 2};
+  for (const k in zz) $(k).onclick = () => { state.z = zz[k]; for (const j in zz) $(j).setAttribute("aria-pressed", j === k); document.documentElement.style.setProperty("--z", zz[k]); };
+  $("scrub").addEventListener("input", e => { state.t = e.target.value / 1000; state.playing = false; ui(); });
+  $("copy").onclick = () => {
+    const txt = $("summary").textContent;
+    const done = () => { $("copied").textContent = "Kopyalandı."; };
+    try { navigator.clipboard.writeText(txt).then(done, () => selectSummary()); } catch (e) { selectSummary(); }
+  };
+  summary(); ui();
+}
+function selectSummary() { const r = document.createRange(); r.selectNodeContents($("summary")); const s = getSelection(); s.removeAllRanges(); s.addRange(r); $("copied").textContent = "Seçili; Ctrl+C ile kopyala."; }
+function setMode(m) { state.mode = m; ui(); }
+function ui() {
+  $("m-base").setAttribute("aria-pressed", state.mode === "base"); $("m-mo").setAttribute("aria-pressed", state.mode === "mo");
+  $("play").setAttribute("aria-pressed", state.playing); $("play").textContent = state.playing ? "Durdur" : "Oynat";
+}
+function summary() {
+  const fx = SCENES.find(s => s.id === state.fx);
+  const ic = state.icon === "cur" ? "şu anki 💢 kalsın" : "fa" + state.icon + " (" + (D.icons.find(c => c.n === state.icon) || {}).name + ")";
+  const idea = $("idea").value.trim();
+  $("summary").textContent = `Şovalye Q efekti: ${fx ? (fx.id === "cur" ? "şu anki kalsın" : fx.name) : "(seçilmedi)"}\nKışkırtma ikonu: ${ic}` + (idea ? `\nNot: ${idea}` : "");
+}
+
+let last = performance.now(), now = 0;
+function frame(ts) {
+  const dt = Math.min(0.1, (ts - last) / 1000); last = ts; now += dt;
+  if (state.playing) { state.t = (state.t + dt * state.speed) % LOOP; $("scrub").value = Math.round(state.t * 1000); }
+  const st = state.t - PRE;
+  $("tout").textContent = (st < 0 ? "−" : "") + Math.abs(st).toFixed(1).replace(".", ",") + " sn";
+  for (const s of SCENES) scene(canv[s.id], s.id, st, state.mode, state.icon, now);
+  document.querySelectorAll(".ic").forEach(lab => {
+    const c = lab.querySelector("canvas").getContext("2d"), v = lab.querySelector("input").value;
+    c.imageSmoothingEnabled = false; c.save(); c.translate(-(176 - 40) * SC, -(126 - 50) * SC);
+    ground(c, 2000, 2000); drawOrc(c, ORCS[2], now); drawIcon(c, ORCS[2], v === "cur" ? "cur" : +v, now); c.restore();
+  });
+  requestAnimationFrame(frame);
+}
+loadAll().then(() => { build(); requestAnimationFrame(frame); });
+</script>

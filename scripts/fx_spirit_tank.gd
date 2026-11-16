@@ -1,113 +1,147 @@
 extends Node2D
 
-## Ruhani Yetenek "Tank" (F): 10sn boyunca gövdeyi saran yarı saydam ÇELİK-MAVİ + ALTIN pixel bariyer (altıgen kalkan aurası).
-## DÜZELTME (2026-09-23, kalkan/arı/sarmaşık dönüşümünün devamı - "aynı şeyi ruhani büyüler için de yap"): steady-state altıgen
-## çerçeve+dither dolgu+perçinler HER karede ~1200+ draw_rect() çağrısıyla yeniden çiziliyordu, 10sn boyunca SÜREKLİ - birden
-## fazla oyuncu aynı anda Tank açarsa bu katlanıyordu. İki katman artık PNG'ye pişirildi (assets/fx/spirit_tank/hex_outer.png +
-## hex_inner.png, referans açı 0) ve script'te rotation/scale/modulate ile döndürülüp büyütülüyor/soluyor (bkz.
-## oakley_bee_swarm_ring.gd'deki AYNI "statik doku + script rotation" deseni) - draw_rect sayısı ~1200 -> 2'ye indi.
-## Açılış şok halkası (~0.55sn, tek seferlik) VE kenar parıltısı (sweep, 3 px()/kare - zaten ucuz) PROSEDÜREL bırakıldı;
-## asıl kazanç zaten SÜREKLİ çizilen kısımdaydı.
-##  - açılış: metalik beyaz-mavi şok halkası + içe toplanan 6 çizgi (prosedürel)
-##  - süre boyunca: yavaş dönen ince altıgen çerçeve + köşelerinde altın perçinler (baked, döndürülür) + üstünden geçen
-##    parlak şerit (prosedürel, ucuz)
-##  - pulse(): hasar yansıtıldığında (player.gd _spirit_tank_on_hit) çerçeve kısa süre parlar (self_modulate ile)
-## Player/RemotePlayer'ın ÇOCUĞU, sabit ömürlü (DURATION = spiritual_skills.gd TANK_DURATION).
+## Ruhani Yetenek "Tank" (F): 10 sn hasar yansıtma + kalkan yenileme. Görünüm = prototip "B Rün Mührü" (madde 730, kullanıcı
+## seçimi 2026-11-16, madde 734) - eski dönen altıgen çelik bariyer dokuları + şok halkaları silindi.
+##  - ayak altında yavaşça dönen basık altıgen (köşelerde altın perçin; assets/fx/ruhani/tank_hex.png: 6 çizim + 24 dönüş karesi,
+##    60 derece = tam döngü) 0,3 sn'de kenar kenar çizilir
+##  - her köşeden yukarı 30 px ince çelik-mavi ışık sütunu (3 düz bant, yukarı söner); arkadaki köşelerinki karakterin ARKASINDA,
+##    öndekiler önünde
+##  - zap(hedef): yansıyan her vuruşta saldırana EN YAKIN köşe parlar, o köşeden saldırana ince altın çizgi çakar (köşe tarafından
+##    geri çekilir) + saldıranın üstünde krem pırıltı. Kaster player.gd _spirit_tank_on_hit'ten çağırır ve "spirit_tank_zap"
+##    vfx'iyle yayınlar; uzak kopyada network_manager.gd aynı zap()'ı çağırır (MP iki-yer kuralı).
+## Kök ayakta, 1 yerel birim = 1 dünya birimi (bkz. spirit_fx_util.gd).
 
-const PixelDraw := preload("res://scripts/pixel_draw.gd")
+const U := preload("res://scripts/spirit_fx_util.gd")
 const SpiritualSkillsScript: GDScript = preload("res://scripts/spiritual_skills.gd")
-const HEX_OUTER_TEX := preload("res://assets/fx/spirit_tank/hex_outer.png")
-const HEX_INNER_TEX := preload("res://assets/fx/spirit_tank/hex_inner.png")
+const HEX_TEX := preload("res://assets/fx/ruhani/tank_hex.png")
 
-const BODY_CENTER := Vector2(0, -4)
-const FADE_OUT := 0.5
-const RADIUS := 36.0
-const ROT_SPEED := 0.35 ## rad/sn - eski `rot = _t*0.35` ile aynı
+const HEX_FRAMES := 30
+const HEX_RX := 18.0
+const HEX_RY := 8.0
+const ROT_SPEED := 0.3
+const DRAW_IN := 0.3
+const PILLAR_H := 30.0
+const FADE := 0.5
 
 var _t: float = 0.0
 var _duration: float = SpiritualSkillsScript.TANK_DURATION
-var _pulse: float = 0.0
-
-var _hex_outer: Sprite2D = null
-var _hex_inner: Sprite2D = null
+var _zaps: Array = [] ## [doğuş _t, hedef global konum]
+var _front: Node2D = null
 
 
 func _ready() -> void:
-	z_index = 2
-	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-
-	_hex_outer = Sprite2D.new()
-	_hex_outer.texture = HEX_OUTER_TEX
-	_hex_outer.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_hex_outer.position = BODY_CENTER
-	add_child(_hex_outer)
-
-	_hex_inner = Sprite2D.new()
-	_hex_inner.texture = HEX_INNER_TEX
-	_hex_inner.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_hex_inner.position = BODY_CENTER
-	add_child(_hex_inner)
+	U.setup_root(self)
+	show_behind_parent = true
+	_front = U.front_layer(self, _draw_front)
 
 
-## Hasar yansıyınca çağrılır: çerçeve ~0.25sn parlar.
-func pulse() -> void:
-	_pulse = 0.25
+## Yansıyan vuruş: saldıranın global konumu.
+func zap(target_global: Vector2) -> void:
+	_zaps.append([_t, target_global])
+	if _zaps.size() > 6:
+		_zaps.pop_front()
 
 
 func _process(delta: float) -> void:
 	_t += delta
-	_pulse = maxf(0.0, _pulse - delta)
-	if _t >= _duration + FADE_OUT:
+	if _t >= _duration + FADE:
 		queue_free()
 		return
-
-	var fade: float = clampf((_duration + FADE_OUT - _t) / FADE_OUT, 0.0, 1.0)
-	var open: float = clampf(_t / 0.25, 0.0, 1.0) * fade
-	var rot: float = _t * ROT_SPEED
-	var bright: float = 1.0 + (_pulse / 0.25) * 0.8
-
-	_hex_outer.rotation = rot
-	_hex_outer.scale = Vector2.ONE * open
-	_hex_outer.modulate = Color(bright, bright, bright, minf(1.0, open))
-	_hex_inner.rotation = -rot * 0.8
-	_hex_inner.scale = Vector2.ONE * open
-	_hex_inner.modulate.a = open
-
+	modulate.a = U.band(clampf((_duration + FADE - _t) / FADE, 0.0, 1.0), 4)
+	_zaps = _zaps.filter(func(z: Array) -> bool: return _t - float(z[0]) < 0.45)
 	queue_redraw()
+	_front.queue_redraw()
 
 
-func _hex_points(radius: float, rot: float) -> Array:
-	var pts: Array = []
+func _hex_frame() -> int:
+	if _t < DRAW_IN:
+		return clampi(int(_t / DRAW_IN * 6.0), 0, 5)
+	var steps: int = int((_t - DRAW_IN) * ROT_SPEED / (TAU / 6.0) * 24.0)
+	return 6 + steps % 24
+
+
+## Pişmiş karedeki köşeler: [x, y, sin] x6 ve görünen köşe sayısı.
+func _verts() -> Array:
+	var fr: int = _hex_frame()
+	var rot: float = 0.0 if fr < 6 else float(fr - 6) * (TAU / 6.0) / 24.0
+	var out: Array = []
 	for k in range(6):
 		var a: float = rot + float(k) * TAU / 6.0
-		pts.append(BODY_CENTER + Vector2(cos(a) * radius, sin(a) * radius * 0.92))
-	return pts
+		out.append(Vector3(HEX_RX * cos(a), HEX_RY * sin(a), sin(a)))
+	return out
 
 
-## Sadece açılış patlaması + kenar parıltısı (sweep) - steady-state çerçeve artık Sprite2D (bkz. _ready/_process).
-func _draw() -> void:
-	## Açılış: metalik şok halkası + içe toplanan çizgiler
-	if _t < 0.55:
-		var pk: float = _t / 0.55
-		PixelDraw.ring(self, BODY_CENTER, 8.0 + pk * 84.0, Color(0.8, 0.92, 1.0, 1.0 - pk), 1)
-		PixelDraw.ring(self, BODY_CENTER, 4.0 + pk * 56.0, Color(1.0, 0.85, 0.4, 0.8 * (1.0 - pk)), 1, 3, 3, _t * 20.0)
-		for k in range(6):
-			var a: float = float(k) * TAU / 6.0 + 0.3
-			var r1: float = 70.0 * (1.0 - pk) + 14.0
-			PixelDraw.line(self, BODY_CENTER + Vector2(cos(a), sin(a)) * r1, BODY_CENTER + Vector2(cos(a), sin(a)) * (r1 + 14.0), Color(0.75, 0.9, 1.0, 1.0 - pk), 1)
-	var fade: float = clampf((_duration + FADE_OUT - _t) / FADE_OUT, 0.0, 1.0)
-	var open: float = clampf(_t / 0.25, 0.0, 1.0) * fade
-	if open <= 0.0:
+func _visible_verts() -> int:
+	var fr: int = _hex_frame()
+	return mini(6, fr + 2) if fr < 6 else 6
+
+
+func _nearest(verts: Array, p: Vector2) -> int:
+	var best: int = 0
+	var bd: float = INF
+	for k in range(6):
+		var v: Vector3 = verts[k]
+		var d: float = Vector2(v.x, v.y).distance_squared_to(p)
+		if d < bd:
+			bd = d
+			best = k
+	return best
+
+
+func _flashes(verts: Array) -> PackedFloat32Array:
+	var f := PackedFloat32Array([0, 0, 0, 0, 0, 0])
+	for z in _zaps:
+		var age: float = _t - float(z[0])
+		if age < 0.3:
+			var j: int = _nearest(verts, to_local(z[1]))
+			f[j] = maxf(f[j], 1.0 - age / 0.3)
+	return f
+
+
+func _pillar(ci: CanvasItem, v: Vector3, flash: float, front: bool) -> void:
+	var gk: float = U.ease_out((_t - 0.2) / 0.3)
+	if gk <= 0.0:
 		return
-	var rot: float = _t * ROT_SPEED
-	var outer: Array = _hex_points(RADIUS * open, rot)
-	## Kenarlardan geçen parlak şerit
-	var sweep: float = fmod(_t * 0.9, 1.0) * 6.0
-	var edge: int = int(sweep) % 6
-	var f: float = sweep - floorf(sweep)
-	var s_a: Vector2 = outer[edge]
-	var s_b: Vector2 = outer[(edge + 1) % 6]
-	var s_p: Vector2 = s_a.lerp(s_b, f)
-	PixelDraw.px(self, s_p, 1, Color(1.0, 1.0, 1.0, open))
-	PixelDraw.px(self, s_a.lerp(s_b, clampf(f - 0.08, 0.0, 1.0)), 1, Color(0.85, 0.95, 1.0, 0.7 * open))
-	PixelDraw.px(self, s_a.lerp(s_b, clampf(f - 0.16, 0.0, 1.0)), 1, Color(0.75, 0.9, 1.0, 0.4 * open))
+	var h: float = PILLAR_H * gk
+	var x: float = floorf(v.x)
+	var col: Color = U.CREAM if flash > 0.3 else U.STEEL3
+	var bands: Array = [[v.y - h / 3.0, v.y, 0.55], [v.y - 2.0 * h / 3.0, v.y - h / 3.0, 0.32], [v.y - h, v.y - 2.0 * h / 3.0, 0.14]]
+	for b in bands:
+		var ya: float = roundf(float(b[0]))
+		var yb: float = roundf(float(b[1]))
+		if yb - ya < 1.0:
+			continue
+		var al: float = U.band(maxf(float(b[2]) * (0.85 if front else 1.0), flash * 0.9), 4)
+		ci.draw_rect(Rect2(x, ya, 1.0, yb - ya), U.with_a(col, al))
+
+
+func _draw() -> void:
+	U.frame(self, HEX_TEX, HEX_FRAMES, _hex_frame(), 0.0, 0.0, Color.WHITE)
+	var verts: Array = _verts()
+	var fl: PackedFloat32Array = _flashes(verts)
+	for k in range(_visible_verts()):
+		var v: Vector3 = verts[k]
+		if v.z < 0.0:
+			_pillar(self, v, fl[k], false)
+
+
+func _draw_front() -> void:
+	var verts: Array = _verts()
+	var fl: PackedFloat32Array = _flashes(verts)
+	for k in range(_visible_verts()):
+		var v: Vector3 = verts[k]
+		if v.z >= 0.0:
+			_pillar(_front, v, fl[k], true)
+		if fl[k] > 0.4:
+			U.sparkle(_front, v.x, v.y, 2, U.CREAM, U.GOLD2, 1.0)
+	for z in _zaps:
+		var age: float = _t - float(z[0])
+		var tgt: Vector2 = to_local(z[1])
+		var v: Vector3 = verts[_nearest(verts, tgt)]
+		var top := Vector2(v.x, v.y - 4.0)
+		if age < 0.18:
+			var a: Vector2 = top.lerp(tgt, age / 0.18)
+			_front.draw_line(a.floor() + Vector2(0.5, 0.5), tgt.floor() + Vector2(0.5, 0.5), U.GOLD4, 1.0)
+			_front.draw_line(a.floor() + Vector2(0.5, 1.5), tgt.floor() + Vector2(0.5, 1.5), U.with_a(U.GOLD2, 0.6), 1.0)
+		if age > 0.04 and age < 0.3:
+			U.sparkle(_front, tgt.x, tgt.y, 3 - int((age - 0.04) / 0.09), U.CREAM, U.GOLD3, 1.0)

@@ -7,7 +7,7 @@ extends Node2D
 ##  - Hayaletler: yol boyunca GHOST_FRACS noktalarında, sıçrayış oradan geçtiği an mor silüet (shaders/assasin_ghost.gdshader).
 ##    Kare: gidiş yönündeki atılma pozu dash_<yön> (kullanıcı isteği 2026-10-16: "sabit durmasın, koşarkenki atılmaya benzer
 ##    framelerden biri olsun gittiği yöne doğru, o şekilde görünsün gölgesi" - CharAnim.DASH_POSE_*); klip yoksa o anki kare.
-##    Hepsi TAM DOLU başlar, GHOST_HOLDS kadar dolu kalır (kuyruktaki en kısa) ve Bayer deseniyle piksel piksel dağılır.
+##    Hepsi TAM DOLU başlar, GHOST_HOLDS kadar dolu kalır (kuyruktaki en kısa) ve düz alfa ile söner (madde 711; eskiden Bayer dağılması).
 ## Düğüm dünya konumunda `from`'da durur, rotation = sıçrayış açısı (+x = yön). Hayaletler döndürülmez (sahneye eklenir).
 
 const TEXEL := 1.212

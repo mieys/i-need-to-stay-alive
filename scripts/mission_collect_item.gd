@@ -71,7 +71,7 @@ func _process(delta: float) -> void:
 	## yukarı-aşağı sallanma - farkedilir/canlı dursun diye (bkz. xp_orb.gd PULSE_* notu).
 	_bob_time += delta
 	if _sprite:
-		_sprite.position.y = round(sin(_bob_time * 2.2) * 2.0) * TEXEL ## tam texel adımlarıyla (pixel kalsın)
+		_sprite.position.y = round(sin(_bob_time * 2.2) * 1.0) * TEXEL ## tam texel adımlarıyla (pixel kalsın); madde 711: genlik 2 -> 1 texel
 	if _day_glow:
 		if _atmosphere == null or not is_instance_valid(_atmosphere):
 			_atmosphere = get_tree().get_first_node_in_group("atmosphere")
@@ -91,10 +91,8 @@ func _process(delta: float) -> void:
 
 ## PİKSEL HALE (kullanıcı bildirimi 2026-09-27: "parıltıların pixel parıltı olması gerekiyor"): eskiden yumuşak bir
 ## GradientTexture2D idi. Artık 1 doku pikseli = 1 sanat pikseli (TEXEL), güç DAY_GLOW_STEP'lik düz bantlara bölünür,
-## bant sınırları 4x4 Bayer dither'lı - gece ışığıyla aynı dil (atmosphere_grade.gdshader pixel_light).
+## bant sınırları DÜZ (madde 711, 2026-11-15: dither kalıcı yasak; eskiden 4x4 Bayer) - gece ışığıyla aynı dil (atmosphere_grade.gdshader pixel_light).
 const DAY_GLOW_STEP := 0.2
-const DAY_GLOW_DITHER := 0.4
-const BAYER4: Array[int] = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5]
 static var _day_glow_tex: ImageTexture = null
 
 
@@ -109,10 +107,7 @@ static func _make_day_glow_texture() -> ImageTexture:
 			var d: float = Vector2(float(x) + 0.5 - r_tex, float(y) + 0.5 - r_tex).length() / float(r_tex)
 			## Eski gradyanla aynı profil: merkez 1, d=0.35'te 0.45, kenarda 0.
 			var a: float = lerpf(1.0, 0.45, d / 0.35) if d < 0.35 else lerpf(0.45, 0.0, clampf((d - 0.35) / 0.65, 0.0, 1.0))
-			var v: float = a / DAY_GLOW_STEP
-			var t: float = clampf((fposmod(v, 1.0) - 0.5) / DAY_GLOW_DITHER + 0.5, 0.0, 1.0)
-			var threshold: float = (float(BAYER4[(y % 4) * 4 + (x % 4)]) + 0.5) / 16.0
-			var q: float = (floorf(v) + (1.0 if t > threshold else 0.0)) * DAY_GLOW_STEP
+			var q: float = roundf(a / DAY_GLOW_STEP) * DAY_GLOW_STEP
 			img.set_pixel(x, y, Color(DAY_GLOW_COLOR, clampf(q, 0.0, 1.0)))
 	_day_glow_tex = ImageTexture.create_from_image(img)
 	return _day_glow_tex

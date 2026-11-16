@@ -73,6 +73,7 @@ static func fill_stats_grid(grid: GridContainer, stats_by_peer: Dictionary) -> v
 		var entry: Dictionary = stats_by_peer[peer_id]
 		var name_lbl := Label.new()
 		name_lbl.text = str(entry.get("name", "?"))
+		name_lbl.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED ## oyuncu adı çevrilmez ("Can" -> "Health" olmasın, 2026-11-15)
 		UIKit.style_label(name_lbl, STAT_FS, UIKit.C_TEXT, 0)
 		grid.add_child(name_lbl)
 		_add_cell(grid, "%d" % int(round(float(entry.get("dealt", 0.0)))), Color(UIKit.INK["damage"]))

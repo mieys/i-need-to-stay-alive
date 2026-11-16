@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Karakter Stat Çubukları</title>
+<!-- Madde 748: seçim ekranı vitrin başlığındaki karakter çubukları (characters.gd STAT_BARS). Yalnız gösterim, oyuna etkisi yok.
+     Çubuğa tıkla -> değer; alttaki metni kopyalayıp Claude'a yapıştır. -->
+<style>
+:root {
+  --bg: #1d1712; --panel: #2a211a; --line: #4a3a2c; --text: #f1e4cf; --muted: #b39d82;
+  --accent: #e8b25a; --good: #8fcf6a; --input: #15100c; --empty: #342316; --empty-lo: #20150d;
+  --c-dmg: #f09a80; --c-def: #3d96e8; --c-agi: #f6d27e; --c-sup: #b5d98a;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.4 system-ui, "Segoe UI", sans-serif; padding: 16px; }
+h1 { font-size: 20px; margin: 0 0 4px; color: var(--accent); }
+p.sub { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
+.box { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px; margin-bottom: 14px; }
+.wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; min-width: 860px; }
+th, td { padding: 7px 8px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; vertical-align: middle; }
+th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .03em; }
+td.name { font-weight: 600; min-width: 200px; }
+td.name small { display: block; font-weight: 400; color: var(--muted); font-size: 12px; white-space: normal; max-width: 220px; }
+tr.changed td.name { color: var(--accent); }
+.bar { display: inline-flex; gap: 2px; cursor: pointer; padding: 3px 0; vertical-align: middle; }
+.pip { width: 12px; height: 14px; background: var(--empty); border-bottom: 3px solid var(--empty-lo); }
+.pip.on { border-bottom-color: rgba(0,0,0,.35); box-shadow: inset 0 3px 0 rgba(255,255,255,.3); }
+.val { display: inline-block; width: 46px; margin-left: 6px; font-weight: 700; font-variant-numeric: tabular-nums; vertical-align: middle; }
+.val .was { color: var(--muted); font-weight: 400; font-size: 12px; }
+.sum { color: var(--muted); font-variant-numeric: tabular-nums; }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 0; align-items: center; }
+button { background: #3a2d22; color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 6px 12px; font: inherit; cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); color: #1d1712; border-color: var(--accent); font-weight: 700; }
+textarea { width: 100%; min-height: 330px; background: var(--input); color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 8px; font: 13px/1.45 Consolas, monospace; }
+.note { font-size: 12px; color: var(--muted); }
+#copied { color: var(--good); font-size: 13px; }
+</style>
+</head>
+<body>
+<h1>Karakter Stat Çubukları</h1>
+<p class="sub">Seçim ekranında karakter adının altındaki 4 çubuk (1-10). Çubukta istediğin dilime tıkla. Turuncu ad = değiştirilmiş satır.
+Bitince <b>Kopyala</b>'ya bas, metni bana yapıştır. Yalnız gösterim: oyundaki gerçek statları değiştirmez.</p>
+
+<div class="box wrap">
+<table>
+<thead><tr><th>Karakter</th><th>Hasar</th><th>Savunma</th><th>Çeviklik</th><th>Destek</th><th>Toplam</th></tr></thead>
+<tbody id="rows"></tbody>
+</table>
+<div class="btns">
+  <button id="reset">Hepsini sıfırla (şimdiki değerler)</button>
+  <span class="note">Taslak bu tarayıcıda saklanır; sayfayı kapatsan da kaybolmaz.</span>
+</div>
+</div>
+
+<div class="box">
+<div class="btns" style="margin:0 0 8px">
+  <button class="primary" id="copy">Kopyala</button><span id="copied"></span>
+</div>
+<textarea id="out" readonly></textarea>
+</div>
+
+<script>
+// characters.gd STAT_BARS (2026-11-16, kullanıcı ayarı) - [Hasar, Savunma, Çeviklik, Destek]
+const CHARS = [
+  [1,  "Talon",     "silah salvosu + hamle, 110 can",          [9, 6, 6, 2]],
+  [2,  "Oakley",    "arı / sarmaşık, Hayat Ağacı, çiçek",      [5, 5, 2, 8]],
+  [3,  "Matthew",   "en hızlı (265), şimşek, yıldırım kalkanı", [7, 4, 9, 2]],
+  [4,  "Lyra",      "büyücü, 80 can",                          [9, 3, 3, 2]],
+  [5,  "Kestrel",   "suikastçı, kritik, iki hamle",            [9, 3, 9, 1]],
+  [7,  "Aldric",    "150 can, kışkırtma, bariyer / baloncuk",  [3, 10, 2, 7]],
+  [8,  "Elara",     "nişancı, Sıvışma",                        [8, 3, 7, 1]],
+  [9,  "Flint",     "bombalar, 110 can",                       [10, 2, 2, 3]],
+  [10, "Seraphine", "can basma, kalkan yenileme",              [2, 4, 1, 10]],
+  [11, "Corvina",   "kemik savaşçı / okçu ordusu",             [9, 2, 1, 4]],
+  [12, "Ulric",     "totemler, golem",                         [6, 6, 3, 7]],
+  [13, "Nox",       "can emme, yarasa formu",                  [7, 5, 6, 2]],
+  [14, "Hadime",    "lanetler, hayalet dirilişi",              [9, 3, 2, 4]],
+  [15, "Hazel",     "zehir, süpürge, iksirler",                [4, 4, 6, 7]],
+];
+const COLS = ["--c-dmg", "--c-def", "--c-agi", "--c-sup"];
+const KEY = "karakter_stat_cubuklari_v2";
+const $ = (id) => document.getElementById(id);
+let vals = CHARS.map((c) => c[3].slice());
+try {
+  const saved = JSON.parse(localStorage.getItem(KEY) || "null");
+  if (Array.isArray(saved) && saved.length === CHARS.length) vals = saved;
+} catch (e) {}
+
+function save() { try { localStorage.setItem(KEY, JSON.stringify(vals)); } catch (e) {} }
+
+function render() {
+  const tb = $("rows");
+  tb.innerHTML = "";
+  CHARS.forEach((c, r) => {
+    const tr = document.createElement("tr");
+    const changed = vals[r].some((v, i) => v !== c[3][i]);
+    if (changed) tr.className = "changed";
+    const tn = document.createElement("td");
+    tn.className = "name";
+    tn.innerHTML = c[1] + "<small>" + c[2] + "</small>";
+    tr.appendChild(tn);
+    for (let s = 0; s < 4; s++) {
+      const td = document.createElement("td");
+      const bar = document.createElement("span");
+      bar.className = "bar";
+      const col = getComputedStyle(document.documentElement).getPropertyValue(COLS[s]);
+      for (let p = 1; p <= 10; p++) {
+        const pip = document.createElement("span");
+        pip.className = "pip" + (p <= vals[r][s] ? " on" : "");
+        if (p <= vals[r][s]) pip.style.background = col;
+        pip.title = p;
+        pip.onclick = () => { vals[r][s] = p; save(); render(); };
+        bar.appendChild(pip);
+      }
+      td.appendChild(bar);
+      const v = document.createElement("span");
+      v.className = "val";
+      v.innerHTML = vals[r][s] + (vals[r][s] !== c[3][s] ? ' <span class="was">(' + c[3][s] + ")</span>" : "");
+      td.appendChild(v);
+      tr.appendChild(td);
+    }
+    const ts = document.createElement("td");
+    ts.className = "sum";
+    ts.textContent = vals[r].reduce((a, b) => a + b, 0);
+    tr.appendChild(ts);
+    tb.appendChild(tr);
+  });
+  output();
+}
+
+function output() {
+  const lines = ["Karakter stat çubukları (Hasar, Savunma, Çeviklik, Destek):", ""];
+  CHARS.forEach((c, r) => {
+    const id = (c[0] + ":").padEnd(4);
+    const arr = ("[" + vals[r].join(", ") + "],").padEnd(16);
+    const mark = vals[r].some((v, i) => v !== c[3][i]) ? "  ## DEĞİŞTİ (eski " + c[3].join("/") + ")" : "";
+    lines.push("\t" + id + arr + "## " + c[1] + mark);
+  });
+  $("out").value = lines.join("\n");
+}
+
+$("reset").onclick = () => { vals = CHARS.map((c) => c[3].slice()); save(); render(); };
+$("copy").onclick = async () => {
+  const t = $("out");
+  try { await navigator.clipboard.writeText(t.value); } catch (e) { t.select(); document.execCommand("copy"); }
+  $("copied").textContent = "Kopyalandı";
+  setTimeout(() => { $("copied").textContent = ""; }, 1500);
+};
+render();
+</script>
+</body>
+</html>

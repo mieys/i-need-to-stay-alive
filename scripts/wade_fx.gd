@@ -20,6 +20,7 @@ extends Node
 const EnemyQueryScript := preload("res://scripts/enemy_world/enemy_query.gd")
 const MapProfilesScript := preload("res://scripts/map_profiles.gd")
 const SHADER := preload("res://scenes/bataklik_su_ayak.gdshader")
+const WaterFxScript := preload("res://scripts/water_fx.gd")
 const MASK_TEXEL := 2.0
 const FLYING_FAMILIES := {"hayalet": true, "yarasa": true, "ucansetan": true, "banshee": true, "rontgen": true, "underground": true,
 	"sandworm": true}
@@ -230,6 +231,10 @@ func _update(n: Node2D, view: Rect2, delta: float, creature: bool) -> void:
 		depth_max = clampf(body.y * DEPTH_CREATURE_RATIO, 2.0, DEPTH_CREATURE_MAX) + (CREATURE_SHADOW_PAD if creature else 0.0)
 	## kıyıda sığ: derinlik kıyıya uzaklıkla artar (yumuşak), tam sayıya yuvarlanır (piksel ızgarası)
 	var depth: float = roundf(lerpf(DEPTH_MIN, depth_max, smoothstep(0.0, 1.0, w)))
+	## Kara Bataklık batma (bataklik_tehlike.gd): oyuncu / kukla gömüldükçe su çizgisi tam piksel derinleşir (yerel: player.gd, kukla: extra["wsk"]).
+	var sink: Variant = n.get("wade_sink_px")
+	if sink is int and int(sink) > 0:
+		depth += float(sink)
 	var moving: bool = ov.last_pos != Vector2.INF and ov.last_pos.distance_to(pos) / maxf(delta, 0.0001) > MOVE_EPS
 	ov.last_pos = pos
 	## halkalar: hareket ederken sık ve güçlü, dururken seyrek ve soluk
@@ -279,6 +284,13 @@ func _make_overlay(n: Node2D) -> Overlay:
 	m.set_shader_parameter("maske_boyut", _mask_size)
 	m.set_shader_parameter("maske_teksel", MASK_TEXEL)
 	m.set_shader_parameter("halka_maks", RING_GROW)
+	## madde 714: su ana haritanın shader'ı, sabit renkli - örtü aynı rengi çizer (profil "su_doku")
+	var su_cfg: Dictionary = MapProfilesScript.current().get("su_doku", {})
+	if su_cfg.has("renk"):
+		m.set_shader_parameter("su_rengi", su_cfg["renk"])
+	if su_cfg.has("sirt"):
+		m.set_shader_parameter("parilti_rengi", su_cfg["sirt"])
+	WaterFxScript.apply_murk(m, su_cfg) ## bulanık su: örtü suyla aynı dip + pis su rengini çizer (yoksa ayakta dikdörtgen)
 	ov.mat = m
 	ov.material = m
 	ov.visible = false

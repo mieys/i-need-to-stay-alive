@@ -11,6 +11,7 @@
 extends RefCounted
 
 const CharAnimScript := preload("res://scripts/char_anim.gd")
+const VampirMathScript := preload("res://scripts/vampir_math.gd")
 
 ## Slot türü (WeaponFollowMath.slot_kind: 0 tepe, 1 sağ, 2 sol) -> (dünya dx, dünya dy, yukarı ucun açısı derece, göreli ölçek).
 ## Kanonik = ARKADAN bakış (sırt bize dönük), x ekran sağı. Önden bakışta x ve açı aynalanır; yandan bakışta x sırta sıkışır.
@@ -126,7 +127,11 @@ static func place(back: Sprite2D, owner: Node2D, icon: Node2D, mp: Dictionary, b
 	if back == null or not is_instance_valid(back):
 		return
 	var spr: CanvasItem = owner.get_node_or_null(NodePath(SPRITE_NAME)) as CanvasItem
-	if not visible or icon == null or not is_instance_valid(icon) or (spr != null and not spr.visible):
+	## Nox yarasa formunda sırtta silah YOK (kullanıcı 2026-11-16: "yarasa formundayken arkasında silahlar gözüküyor, kaldır"):
+	## "Silahlı Yarasa" evriminde silahlar çekilmediği için düşman görünmeyince yarasanın sırtına oturuyordu. Klip adı ağdan gelir,
+	## yerel + kukla aynı kural.
+	if not visible or icon == null or not is_instance_valid(icon) or (spr != null and not spr.visible) \
+			or (spr is AnimatedSprite2D and VampirMathScript.is_bat_anim(str((spr as AnimatedSprite2D).animation))):
 		back.visible = false
 		return
 	_sync_art(back, icon)

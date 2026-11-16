@@ -32,6 +32,15 @@ func test_every_weapon_has_unique_stat_bars() -> void:
 		seen[str(v)] = key
 
 
+func test_every_character_has_stat_bars() -> void:
+	for cid in Characters.DEFS:
+		assert(Characters.STAT_BARS.has(cid), "%s karakter stat çubuğu değerleri yok" % cid)
+		var v: Array = Characters.stat_bars(int(cid))
+		assert(v.size() == 4, "%s: 4 değer bekleniyordu" % cid)
+		for n in v:
+			assert(int(n) >= 1 and int(n) <= WeaponCatalog.STAT_BAR_MAX, "%s: değer 1..%d dışında" % [cid, WeaponCatalog.STAT_BAR_MAX])
+
+
 func test_invalid_selection_falls_back_to_default() -> void:
 	var old: String = GameManager.selected_start_weapon
 	GameManager.selected_start_weapon = "yok_boyle_silah"
@@ -91,6 +100,11 @@ func test_character_select_has_weapon_picker() -> void:
 	desk.call("_set_tab", "pet")
 	assert(not bars.visible, "EVCİL sekmesinde silah çubukları görünmemeli")
 	desk.call("_set_tab", "weapon")
+	## 2026-11-16 (madde 748): seçili karakterin Hasar/Savunma/Çeviklik/Destek çubukları orta panelde, yeteneklerin üstünde.
+	var cbars: Control = desk.get("_char_bars")
+	assert(cbars != null, "orta panelde karakter stat çubukları yok")
+	var sel_char: int = int(desk.get("_sel_char"))
+	assert(cbars.call("values") == Characters.stat_bars(sel_char), "karakter çubukları seçili karakterin değerlerini göstermiyor")
 	## 2026-10-19: 17 silahla ızgara 4 satıra çıkınca sağ panel OYUNU BAŞLAT'ın altına taşıyordu.
 	await get_tree().process_frame
 	var panel: Control = desk.get("_tab_grid")
@@ -100,6 +114,36 @@ func test_character_select_has_weapon_picker() -> void:
 	print("sağ panel alt=%.0f  başlat üst=%.0f  ızgara=%s" % [panel.get_global_rect().end.y, start.get_global_rect().position.y, (desk.get("_tab_grid") as Control).size])
 	assert(panel.get_global_rect().end.y <= start.get_global_rect().position.y + 0.5,
 		"sağ panel (alt %.0f) OYUNU BAŞLAT düğmesinin (üst %.0f) üstüne taşıyor" % [panel.get_global_rect().end.y, start.get_global_rect().position.y])
+	## Madde 759: sağ panel HER sekmede kendi kutusunda kalmalı - boyu değişirse PixelBox damar dokusu kayar (grain_offset kutu boyuna bağlı),
+	## sekme değiştirince pencerenin arka planı "değişiyor" görünür (silah sekmesi ok payıyla 908 -> 910 olmuştu).
+	var right_rect: Rect2 = desk.get("RIGHT")
+	for tab: String in ["weapon", "pet", "spirit"]:
+		desk.call("_set_tab", tab)
+		await get_tree().process_frame
+		await get_tree().process_frame
+		assert(absf(panel.size.y - right_rect.size.y) < 0.5, "%s sekmesinde sağ panel boyu değişti (%.0f != %.0f): damar dokusu kayar" % [tab, panel.size.y, right_rect.size.y])
+	desk.call("_set_tab", "weapon")
+	await get_tree().process_frame
+	assert(panel.get_global_rect().end.x <= start.get_global_rect().end.x + 0.5,
+		"karakter çubukları sağ paneli genişletiyor (sağ %.0f > %.0f)" % [panel.get_global_rect().end.x, start.get_global_rect().end.x])
+	## Orta panel (ad + statlar + çubuklar + 4 yetenek) kendi kutusunu aşıp büyümemeli.
+	var midp: Control = desk.get("_skills")
+	while midp.get_parent() != desk:
+		midp = midp.get_parent()
+	var mid_rect: Rect2 = desk.get("MID")
+	print("orta panel boyu=%.0f  hedef=%.0f" % [midp.size.y, mid_rect.size.y])
+	assert(midp.size.y <= mid_rect.size.y + 0.5, "orta panel çubuklarla taştı (%.0f > %.0f)" % [midp.size.y, mid_rect.size.y])
+	assert(cbars.get_global_rect().end.x <= midp.get_global_rect().end.x, "karakter çubukları orta panelin dışına taşıyor")
+	## Çubuklar ad ile temel statların arasında (madde 748): HER karakterde ad satırı orta panelin iç genişliğine sığmalı.
+	var nh: Control = (desk.get("_stats") as Control).get_parent()
+	for cid in Characters.DEFS:
+		desk.call("show_character", int(cid), false)
+		var used: float = 0.0
+		for c in nh.get_children():
+			used += (c as Control).get_combined_minimum_size().x
+		assert(used <= mid_rect.size.x - 32.0 + 0.5, "%s: ad satırı sığmıyor (%.0f > %.0f)" % [cid, used, mid_rect.size.x - 32.0])
+	assert(midp.size.x <= mid_rect.size.x + 0.5, "orta panel genişledi (%.0f)" % midp.size.x)
+	desk.call("show_character", sel_char, false)
 	GameManager.selected_start_weapon = old
 	MetaProgressScript.set_unlock_all(false)
 	scene.queue_free()

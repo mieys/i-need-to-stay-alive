@@ -4,7 +4,7 @@ extends SceneTree
 ## kare alır (alev/kor/yansıma değişiyor mu). Çıktı: tools/proto_20261115/kamp_menu/out/menu_<n>.png (+ _yakin = sahnenin ortası tam çözünürlük).
 ## Gizli masaüstünde: kamp_run.ps1 -Script menu_capture.gd. KAMP_MENU_SCENE ile başka sahne (ör. res://scenes/lobby_menu.tscn) denenebilir.
 
-## Hava denemeleri (gunbatimi = shader varsayılanları, yani oyundaki hâl).
+## Hava denemeleri (gunbatimi = shader varsayılanları; OYUNDAKİ hâl "ay2" = menu_camp_scene.gd SKY; önce "gece3" idi).
 const HAVA := {
 	"gece": {
 		"dusk_color": Color(0.30, 0.34, 0.62), "gold_color": Color(0.42, 0.47, 0.80), "dim": 0.62, "vignette": 0.45,
@@ -21,6 +21,47 @@ const HAVA := {
 		"fire_radius": 520.0, "fire_falloff": 1.35, "fire_halo": 0.06,
 		"water_tint": Color(0.50, 0.60, 0.88), "sky_far": Color(0.10, 0.14, 0.26), "sky_near": Color(0.20, 0.28, 0.48),
 		"sky_amount": 0.7, "glint_color": Color(0.70, 0.82, 1.0),
+	},
+	## gece2 + AY IŞIĞI (kullanıcı: "gece iyi ama çok karanlık, ay ışığı hissiyatı olmalı ortamda"): genel loşluk açıldı, ay tarafı (sağ üst,
+	## sun_uv) daha parlak + soğuk, açık yüzeylerde mavi-beyaz ay parlaması (warm_glow alanı soğuk renkle), hafif ay pusu, nehirde güçlü ay
+	## yansıması; ateş başı aynı.
+	"gece3": {
+		"dusk_color": Color(0.42, 0.50, 0.72), "gold_color": Color(0.62, 0.72, 0.95), "desat": 0.45, "dim": 0.66, "vignette": 0.30,
+		"warm_glow": Color(0.05, 0.08, 0.14), "haze_color": Color(0.05, 0.07, 0.12),
+		"fire_color": Color(1.0, 0.42, 0.15), "fire_core": Color(1.0, 0.68, 0.34), "fire_strength": 1.0, "fire_lum": 0.8,
+		"fire_radius": 520.0, "fire_falloff": 1.35, "fire_halo": 0.06,
+		"water_tint": Color(0.58, 0.68, 0.95), "sky_far": Color(0.18, 0.24, 0.40), "sky_near": Color(0.42, 0.52, 0.78),
+		"sky_amount": 1.0, "glint_color": Color(0.85, 0.92, 1.0),
+	},
+	## COZY GECE denemeleri (kullanıcı: "ışıklandırmayı beğenmedim, daha cozy yap ortam hissini"; gece3 soğuk mavi-gri, soluk, sağ üstte gri
+	## sis, sıcaklık yalnız ateşin dibindeydi). Hepsinde: renkler daha az solar, ateşin çok geniş zayıf ikinci ışığı sahneyi sarar
+	## (fire_wide_*), havada sıcak parıltı (fire_bloom), nehirde ateş yansıması (water_fire), kenar karartması kampa odaklı; ateş böcekleri sahnede.
+	"sicak": {
+		"dusk_color": Color(0.36, 0.40, 0.66), "gold_color": Color(0.52, 0.56, 0.82), "desat": 0.2, "dim": 0.6, "vignette": 0.45,
+		"vignette_center": Vector2(0.56, 0.62), "warm_glow": Color(0.02, 0.02, 0.05), "haze_color": Color(0.03, 0.03, 0.07),
+		"fire_color": Color(1.0, 0.44, 0.18), "fire_core": Color(1.0, 0.64, 0.34), "fire_strength": 0.9, "fire_lum": 0.5,
+		"fire_radius": 560.0, "fire_falloff": 1.25, "fire_halo": 0.05,
+		"fire_wide_radius": 1250.0, "fire_wide_strength": 0.28, "fire_bloom": 0.10, "fire_bloom_radius": 140.0, "water_fire": 0.6,
+		"water_tint": Color(0.50, 0.56, 0.92), "sky_far": Color(0.12, 0.12, 0.30), "sky_near": Color(0.28, 0.30, 0.58),
+		"sky_amount": 0.9, "glint_color": Color(0.80, 0.86, 1.0),
+	},
+	"mor": {
+		"dusk_color": Color(0.48, 0.38, 0.66), "gold_color": Color(0.66, 0.52, 0.78), "desat": 0.12, "dim": 0.68, "vignette": 0.40,
+		"vignette_center": Vector2(0.56, 0.62), "warm_glow": Color(0.05, 0.02, 0.04), "haze_color": Color(0.06, 0.03, 0.06),
+		"fire_color": Color(1.0, 0.44, 0.18), "fire_core": Color(1.0, 0.64, 0.34), "fire_strength": 0.9, "fire_lum": 0.5,
+		"fire_radius": 560.0, "fire_falloff": 1.25, "fire_halo": 0.05,
+		"fire_wide_radius": 1300.0, "fire_wide_strength": 0.30, "fire_bloom": 0.10, "fire_bloom_radius": 140.0, "water_fire": 0.6,
+		"water_tint": Color(0.62, 0.52, 0.90), "sky_far": Color(0.22, 0.14, 0.32), "sky_near": Color(0.46, 0.30, 0.52),
+		"sky_amount": 0.9, "glint_color": Color(1.0, 0.80, 0.90),
+	},
+	"ay2": {
+		"dusk_color": Color(0.40, 0.48, 0.70), "gold_color": Color(0.58, 0.66, 0.88), "desat": 0.25, "dim": 0.66, "vignette": 0.38,
+		"vignette_center": Vector2(0.56, 0.62), "warm_glow": Color(0.04, 0.06, 0.10), "haze_color": Color(0.02, 0.03, 0.06),
+		"fire_color": Color(1.0, 0.44, 0.18), "fire_core": Color(1.0, 0.64, 0.34), "fire_strength": 0.9, "fire_lum": 0.5,
+		"fire_radius": 560.0, "fire_falloff": 1.25, "fire_halo": 0.05,
+		"fire_wide_radius": 1200.0, "fire_wide_strength": 0.22, "fire_bloom": 0.09, "fire_bloom_radius": 140.0, "water_fire": 0.5,
+		"water_tint": Color(0.58, 0.68, 0.95), "sky_far": Color(0.18, 0.24, 0.40), "sky_near": Color(0.42, 0.52, 0.78),
+		"sky_amount": 1.0, "glint_color": Color(0.85, 0.92, 1.0),
 	},
 	"gunbatimi": {},
 	"gunduz": {
@@ -47,6 +88,9 @@ func _run() -> void:
 	var menu: Node = (load(path) as PackedScene).instantiate()
 	root.add_child(menu)
 	current_scene = menu
+	if OS.get_environment("KAMP_NO_FF") == "1": ## denetim: ateş böceklerini gizle (sudaki dalgacık farkını ölçerken karışmasın)
+		for ff: Node in menu.find_children("Fireflies", "", true, false):
+			(ff as CanvasItem).visible = false
 	for shot in range(2):
 		for _i in range(45 if shot == 0 else 20):
 			await process_frame
@@ -56,7 +100,7 @@ func _run() -> void:
 		var h: int = img.get_height()
 		var yakin: Image = img.get_region(Rect2i(int(w * 0.40), int(h * 0.42), int(w * 0.40), int(h * 0.50)))
 		yakin.save_png(_out.path_join("menu_%d_yakin.png" % shot))
-		img.get_region(Rect2i(int(w * 0.42), int(h * 0.08), int(w * 0.18), int(h * 0.22))).save_png(_out.path_join("menu_%d_balik.png" % shot)) ## Talon'un oltası
+		img.get_region(Rect2i(int(w * 0.40), int(h * 0.12), int(w * 0.20), int(h * 0.28))).save_png(_out.path_join("menu_%d_balik.png" % shot)) ## Talon'un oltası
 		img.resize(960, 540, Image.INTERPOLATE_BILINEAR)
 		img.save_png(_out.path_join("menu_%d.png" % shot))
 		print("SHOT menu_", shot, " ", w, "x", h)
@@ -69,7 +113,7 @@ func _run() -> void:
 		var base: Dictionary = {}
 		for v: Dictionary in HAVA.values():
 			for k: String in v.keys():
-				base[k] = mat.get_shader_parameter(k)
+				base[k] = RenderingServer.shader_get_parameter_default(mat.shader.get_rid(), k) ## shader varsayılanı = günbatımı
 		for ad: String in hava.split(",", false):
 			for k: String in base.keys():
 				mat.set_shader_parameter(k, base[k])

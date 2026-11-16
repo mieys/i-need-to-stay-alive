@@ -991,7 +991,7 @@ func _section_column(items: Array) -> Control:
 	for k: String in SECTIONS:
 		var n: Vector2i = _counts(items, k)
 		var can: int = _can_n(items, k)
-		var sub: String = ("%d/%d seviye" if k == PAGE_UPGRADES else "%d/%d açık") % [n.x, n.y]
+		var sub: String = (Loc.t("%d/%d seviye") if k == PAGE_UPGRADES else Loc.t("%d/%d açık")) % [n.x, n.y] ## biçimlenmiş metin kendiliğinden çevrilmez
 		if k == PAGE_KEYS:
 			sub = Loc.t("%d anahtar") % _keys_total() ## madde 605: kaç anahtar elde (açık/toplam sayılmaz)
 		if can > 0:
@@ -1026,7 +1026,7 @@ func _list_column(items: Array) -> Control:
 	th.add_child(FM.lbl(_sec_title(_page), 40, C_TEXT))
 	th.add_child(_sp(0, 0, true))
 	var n: Vector2i = _counts(items, _page)
-	var count_text: String = ("%d / %d seviye" if _page == PAGE_UPGRADES else "%d / %d açık") % [n.x, n.y]
+	var count_text: String = (Loc.t("%d / %d seviye") if _page == PAGE_UPGRADES else Loc.t("%d / %d açık")) % [n.x, n.y]
 	if _page == PAGE_KEYS:
 		count_text = Loc.t("%d anahtar") % _keys_total()
 	th.add_child(_lbl(count_text, 24, C_DIM))

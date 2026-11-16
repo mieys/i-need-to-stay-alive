@@ -1,106 +1,87 @@
 extends Node2D
 
-## Ruhani Yetenek "Adc" (F): 10sn boyunca (saldırı hızı/kalkan delme/can emme) karakteri saran KIZIL-TURUNCU pixel güç aurası.
-## DÜZELTME (2026-09-23, "aynı şeyi ruhani büyüler için de yap"): zemin dither elipsi + 9 alev dili HER karede ~650+
-## draw_rect() maliyetine yol açıyordu, 10sn boyunca SÜREKLİ. Zemin artık statik bir doku (titreşim atlandı - ihmal
-## edilebilir detay), alevler ise TAM BİR SALINIM PERİYODUNU (2π/11sn, orijinal `sin(_t*11+..)` formülüyle BİREBİR
-## örtüşüyor) kapsayan 12 kareli, kusursuz döngülenen bir animasyon olarak pişirildi (bkz. assets/fx/spirit_adc/) -
-## draw_rect sayısı ~650+ -> 2'ye indi. Dönen 3 elmas TEK bir sabit dokuya pişirilip script'te döndürülüyor (bkz.
-## oakley_bee_swarm_ring.gd'deki AYNI desen) - ön/arka parlaklık farkı basitlik için atlandı. Açılış patlaması
-## (~0.6sn, tek seferlik) ve yükselen kıvılcımlar (birkaç px()/parçacık - zaten ucuz) PROSEDÜREL kaldı.
-## Player/RemotePlayer'ın ÇOCUĞU, sabit ömürlü (DURATION = spiritual_skills.gd ADC_DURATION).
+## Ruhani Yetenek "Adc" (F): 10 sn saldırı hızı / kalkan delme / can emme. Görünüm = prototip "B Rün Mührü" (madde 730, kullanıcı
+## seçimi 2026-11-16, madde 734) - eski kızıl zemin + 12 kareli alev + dönen elmaslar + kıvılcım serpintisi silindi.
+##  - ayak altında kızıl mühür: iki ince halka 0,25 sn'de saat yönünde çizilerek açılır (assets/fx/ruhani/adc_sigil.png, 5 kare)
+##    + üzerinde dönen 3 krem elmas
+##  - açılışta genişleyen tek açık sarı yer halkası
+##  - süre boyunca 0,42 sn'de bir, gövdenin iki yanından sırayla yükselen çift ok başı (hız ritmi; yüzü örtmez)
+## Mühür karakterin ARKASINDA (show_behind_parent), ok başları önünde. Kök ayakta, 1 yerel birim = 1 dünya birimi.
 
-const PixelDraw := preload("res://scripts/pixel_draw.gd")
+const U := preload("res://scripts/spirit_fx_util.gd")
 const SpiritualSkillsScript: GDScript = preload("res://scripts/spiritual_skills.gd")
-const GROUND_TEX := preload("res://assets/fx/spirit_adc/ground.png")
-const FLAME_FRAMES := preload("res://assets/fx/spirit_adc/flames_frames.tres")
-const DIAMONDS_TEX := preload("res://assets/fx/spirit_adc/diamonds.png")
+const SIGIL_TEX := preload("res://assets/fx/ruhani/adc_sigil.png")
+const RING_TEX := preload("res://assets/fx/ruhani/ring_ground.png")
 
-const BODY_CENTER := Vector2(0, -4)
-const FADE_OUT := 0.5
-const DIAMOND_SPIN := 5.0 ## rad/sn - eski `a2 = _t*5.0+...` ile aynı
-
-## bkz. gen_spirit_perf_sprites.py gen_adc() - ground/flame dokuları CANVAS'ın (48,82) noktasını "yer düzlemi merkezi"
-## (dünya (0,26)) olarak pişirdi; centered=false + bu offset ile doğru world konumuna oturtuluyor.
-const GROUND_ANCHOR := Vector2(48, 82)
-const GROUND_WORLD_POS := Vector2(0, 26)
+const FADE := 0.5
+const SIGIL_RX := 15.8
+const SIGIL_RY := 6.6
+const CHEV_EVERY := 0.42
+const CHEV_LIFE := 0.75
 
 var _t: float = 0.0
 var _duration: float = SpiritualSkillsScript.ADC_DURATION
-var _sparks: Array = [] ## [pos, vel, age, life]
-var _acc: float = 0.0
-
-var _ground: Sprite2D = null
-var _flames: AnimatedSprite2D = null
-var _diamonds: Sprite2D = null
+var _top: Node2D = null ## mühür dokusunun üstüne elmaslar (aynı z, sonra çizilir)
+var _front: Node2D = null
 
 
 func _ready() -> void:
-	show_behind_parent = true ## alevler karakterin ARKASINDA (siblings sonra çizilir)
-	z_index = 0
-	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-
-	_ground = Sprite2D.new()
-	_ground.texture = GROUND_TEX
-	_ground.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_ground.centered = false
-	_ground.offset = -GROUND_ANCHOR
-	_ground.position = GROUND_WORLD_POS
-	add_child(_ground)
-
-	_flames = AnimatedSprite2D.new()
-	_flames.sprite_frames = FLAME_FRAMES
-	_flames.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_flames.centered = false
-	_flames.offset = -GROUND_ANCHOR
-	_flames.position = GROUND_WORLD_POS
-	add_child(_flames)
-	_flames.play("loop")
-
-	_diamonds = Sprite2D.new()
-	_diamonds.texture = DIAMONDS_TEX
-	_diamonds.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_diamonds.position = BODY_CENTER
-	add_child(_diamonds)
+	U.setup_root(self)
+	show_behind_parent = true
+	_top = Node2D.new()
+	add_child(_top)
+	_top.draw.connect(_draw_top)
+	_front = U.front_layer(self, _draw_front)
 
 
 func _process(delta: float) -> void:
 	_t += delta
-	if _t >= _duration + FADE_OUT:
+	if _t >= _duration + FADE:
 		queue_free()
 		return
-	if _t < _duration:
-		_acc += delta
-		while _acc > 0.04:
-			_acc -= 0.04
-			_sparks.append([BODY_CENTER + Vector2(randf_range(-18.0, 18.0), randf_range(8.0, 28.0)), Vector2(randf_range(-8.0, 8.0), randf_range(-64.0, -30.0)), 0.0, randf_range(0.5, 0.85)])
-	for s in _sparks:
-		s[2] += delta
-		s[0] += s[1] * delta
-	_sparks = _sparks.filter(func(s): return float(s[2]) < float(s[3]))
-
-	var fade: float = clampf((_duration + FADE_OUT - _t) / FADE_OUT, 0.0, 1.0)
-	var open: float = clampf(_t / 0.2, 0.0, 1.0) * fade
-	_ground.modulate.a = open
-	_flames.modulate.a = open
-	_diamonds.rotation = _t * DIAMOND_SPIN
-	_diamonds.modulate.a = open
-
+	modulate.a = U.band(clampf((_duration + FADE - _t) / FADE, 0.0, 1.0), 4)
 	queue_redraw()
+	_top.queue_redraw()
+	_front.queue_redraw()
+
+
+func _sweep() -> float:
+	return clampf(_t / 0.25, 0.0, 1.0)
 
 
 func _draw() -> void:
-	## Açılış patlaması (prosedürel, tek seferlik/ucuz)
-	if _t < 0.6:
-		var pk: float = _t / 0.6
-		PixelDraw.ring(self, BODY_CENTER, 8.0 + pk * 92.0, Color(1.0, 0.35 + 0.4 * pk, 0.12, 1.0 - pk), 1)
-		for k in range(10):
-			var a: float = float(k) * TAU / 10.0 + 0.1
-			var r0: float = 18.0 + pk * 42.0
-			PixelDraw.line(self, BODY_CENTER + Vector2(cos(a), sin(a)) * r0, BODY_CENTER + Vector2(cos(a), sin(a)) * (r0 + 18.0 * (1.0 - pk)), Color(1.0, 0.6, 0.2, 1.0 - pk), 1)
-	## Yükselen ince kıvılcımlar (prosedürel, ucuz)
-	var fade: float = clampf((_duration + FADE_OUT - _t) / FADE_OUT, 0.0, 1.0)
-	var open: float = clampf(_t / 0.2, 0.0, 1.0) * fade
-	for s in _sparks:
-		var k2: float = float(s[2]) / float(s[3])
-		PixelDraw.px(self, s[0], 1, Color(1.0, 0.75 - 0.5 * k2, 0.2, (1.0 - k2) * open))
+	var f: float = _sweep()
+	if f > 0.04:
+		U.frame(self, SIGIL_TEX, 5, int(ceilf(f * 5.0)) - 1, 0.0, 0.0, Color.WHITE)
+	if _t < 0.32:
+		var kk: float = _t / 0.32
+		var rx: float = 8.0 + 16.0 * U.ease_out(kk)
+		U.frame(self, RING_TEX, 23, int(roundf(rx)) - 4, 0.0, 0.0, U.with_a(U.FIRE4, U.band(1.0 - kk, 4)))
+
+
+func _draw_top() -> void:
+	var f: float = _sweep()
+	for k in range(3):
+		if float(k) / 3.0 > f:
+			continue
+		var an: float = -PI / 2.0 + float(k) * TAU / 3.0 + _t * 1.1
+		U.glyph(_top, U.DIAM, SIGIL_RX * cos(an), SIGIL_RY * sin(an), U.CREAM)
+
+
+func _draw_front() -> void:
+	var n: int = int(_t / CHEV_EVERY)
+	for i in range(maxi(0, n - 3), n + 1):
+		var born: float = 0.15 + float(i) * CHEV_EVERY
+		if born >= _duration:
+			continue
+		var age: float = _t - born
+		if age < 0.0 or age >= CHEV_LIFE:
+			continue
+		var k: float = age / CHEV_LIFE
+		var s: float = -1.0 if i % 2 == 0 else 1.0
+		var cx: float = s * 13.0
+		var cy: float = -5.0 - 28.0 * U.ease_out(k)
+		var al: float = U.band(1.0 - pow(k, 1.5), 4)
+		U.glyph(_front, U.CHEVRON, cx, cy + 1.0, U.with_a(U.FIRE2, al * 0.8))
+		U.glyph(_front, U.CHEVRON, cx, cy, U.with_a(U.CREAM, al))
+		U.glyph(_front, U.CHEVRON, cx, cy + 3.0, U.with_a(U.FIRE3, al * 0.7))

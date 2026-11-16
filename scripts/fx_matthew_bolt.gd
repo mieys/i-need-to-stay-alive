@@ -40,6 +40,7 @@ func setup(length: float, _color: Color = Color.WHITE) -> void:
 	var stretch: float = len_px / (float(n) * float(ML.BOLT_TILE_LEN))
 	var step: float = float(ML.BOLT_TILE_LEN) * stretch * ML.WORLD_TEXEL
 	var prev_mid: int = -1
+	var glow_mat: ShaderMaterial = ML.glow_material(Vector2(float(ML.BOLT_TILE_W), float(ML.BOLT_TILE_H))) ## hafif parıltı (matthew_lightning.gd FX_GLOW)
 	for k in range(n):
 		var row: int
 		if k == 0:
@@ -55,6 +56,7 @@ func setup(length: float, _color: Color = Color.WHITE) -> void:
 		var spr := Sprite2D.new()
 		spr.texture = tex
 		spr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		spr.material = glow_mat
 		spr.centered = false
 		spr.region_enabled = true
 		spr.offset = Vector2(-float(ML.BOLT_TILE_PAD), -(float(ML.BOLT_TILE_CY) + 0.5)) ## parçanın orta satırı yerel y=0'a, içeriğin sol kenarı x=0'a

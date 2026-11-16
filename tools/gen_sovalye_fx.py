@@ -7,9 +7,7 @@ Q icin tum yaratiklarin dikkatini ustune cekiyormus gibi gorunen acik kirmizi bi
 durum efekti. Hepsini spritesheete donustur."
 
 Uretilenler (hepsi 1 sanat pikseli = TEXEL 1.212 yerel birim, projedeki FX dili; kareler PNG + SpriteFrames .tres):
-  taunt_burst   (176x120, 14 kare, 20 fps, tek sefer): disa yayilan acik kirmizi "savas cigligi" halkalari + her yonden
-                Sovalye'ye dogru ICERI kosan oklar (dikkat ona cekiliyor) + basinin ustunde "!" parlamasi.
-  taunt_aura    (110x60, 12 kare, 12 fps, dongu): kiskirtma suresince ayak altinda nabiz atan elips + iceri suzulen oklar.
+  (taunt_burst / taunt_aura 2026-11-16 kaldirildi - Q efekti tools/gen_sovalye_q_fx.py, madde 740)
   taunt_status  (16x16, 6 kare, 8 fps, dongu): yaratigin basinin ustunde nabiz atan ofke damari isareti.
   guard_bubble  (80x80, 24 kare, 10 fps, dongu; back + front iki sayfa): dostun etrafinda iki egik yorungede donen
                 mor-mavi serit + soluk baloncuk kenari; yorungenin arka yarisi karakterin ARKASINDA, on yarisi ONUNDE cizilir.
@@ -131,120 +129,7 @@ def ease_out(t):
     return 1 - (1 - t) ** 3
 
 
-# ====================================================================== Q - taunt_burst
-EXCL = [
-    ".ooo.",
-    "oHLLo",
-    "oLLLo",
-    "oLLLo",
-    "oLLLo",
-    ".oLo.",
-    ".oLo.",
-    "..o..",
-    ".....",
-    ".ooo.",
-    "oLLLo",
-    "oLLLo",
-    ".ooo.",
-]
-
-
-def taunt_burst():
-    W, H = 176, 120
-    gx, gy = 88, 80  # ayak alti (zemin) merkezi
-    frames = []
-    n = 14
-    for f in range(n):
-        t = f / (n - 1)
-        img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-        # 1) disa yayilan iki halka (savas cigligi)
-        # ilk karelerde ayak altinda dither'li yari saydam dolgu (cigligin "patlama" ani)
-        if t < 0.35:
-            rr = 12 + 50 * ease_out(t / 0.35)
-            for yy in range(int(gy - rr * 0.5), int(gy + rr * 0.5) + 1):
-                for xx in range(int(gx - rr), int(gx + rr) + 1):
-                    if ((xx - gx) / rr) ** 2 + ((yy - gy) / (rr * 0.5)) ** 2 <= 1 and (xx + yy) % 2 == 0:
-                        plot(img, xx, yy, R_MID, 0.3 * (1 - t / 0.35))
-        for delay, thick, base in ((0.0, 3, 1.0), (0.16, 2, 0.85)):
-            tt = (t - delay) / (1 - delay)
-            if tt <= 0 or tt >= 1:
-                continue
-            r = 10 + 74 * ease_out(tt)
-            a = base * (1 - tt) ** 0.45
-            for ang, x, y in ellipse_pts(gx, gy, r, r * 0.5):
-                front = math.sin(ang) > 0
-                aa = a if front else a * 0.7
-                plot(img, x, y, R_WHITE if tt < 0.4 else R_PALE, aa, keep_brighter=False)
-                plot(img, x, y + 1, R_LIGHT, aa)
-                if thick > 2:
-                    plot(img, x, y + 2, R_MID, aa * 0.8)
-                    plot(img, x, y - 1, R_MID, aa * 0.55)
-        # 2) her yonden Sovalye'ye dogru iceri kosan oklar (dikkat ona cekiliyor)
-        k = 10
-        for i in range(k):
-            ang = 2 * math.pi * i / k + 0.3
-            tt = (t - 0.12) / 0.8
-            if tt <= 0 or tt >= 1:
-                continue
-            r = 82 - 64 * (tt ** 1.4)
-            x = gx + r * math.cos(ang)
-            y = gy + r * 0.5 * math.sin(ang)
-            point_to = math.atan2((gy - y) * 2.0, gx - x)  # elipsi daire gibi dusun
-            a = min(1.0, tt * 4) * (1 - max(0.0, (tt - 0.75) / 0.25))
-            chevron(img, x, y, point_to, 3, R_LIGHT, a, R_OUT, R_WHITE)
-        # 3) basinin ustunde "!" (ilk yarida belirip parlar)
-        if t < 0.72:
-            a = min(1.0, t * 6) * (1 - max(0.0, (t - 0.5) / 0.22))
-            bob = -2 if f in (2, 3) else (-1 if f in (1, 4) else 0)
-            ex, ey = gx - 2, 4 + bob
-            for y, row in enumerate(EXCL):
-                for x, ch in enumerate(row):
-                    if ch == "o":
-                        plot(img, ex + x, ey + y, R_OUT, a)
-                    elif ch == "H":
-                        plot(img, ex + x, ey + y, R_WHITE, a, keep_brighter=False)
-                    elif ch == "L":
-                        plot(img, ex + x, ey + y, R_PALE if f in (2, 3) else R_LIGHT, a, keep_brighter=False)
-        # 4) ayak altinda ilk karelerde kisa bir parlama
-        if t < 0.3:
-            a = 1 - t / 0.3
-            for ang, x, y in ellipse_pts(gx, gy, 14, 7):
-                plot(img, x, y, R_PALE, a)
-        frames.append(img)
-    save("taunt_burst", frames, "burst", False, 20)
-
-
-def taunt_aura():
-    W, H = 110, 60
-    gx, gy = 55, 30
-    frames = []
-    n = 12
-    for f in range(n):
-        t = f / n
-        img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-        pulse = 0.5 + 0.5 * math.cos(2 * math.pi * t)
-        # dis elips (sabit, nabiz atan) + ic elips
-        for ang, x, y in ellipse_pts(gx, gy, 46, 22):
-            front = math.sin(ang) > 0
-            if int(math.degrees(ang) + 360 * t / 4) % 24 < 16:  # kesik cizgi, yavasca doner: ritim hissi
-                aa = (0.6 + 0.35 * pulse) * (1 if front else 0.65)
-                plot(img, x, y, R_LIGHT if front else R_MID, aa)
-                plot(img, x, y + 1, R_MID, aa * 0.7)
-        for ang, x, y in ellipse_pts(gx, gy, 22, 11):
-            plot(img, x, y, R_PALE, 0.3 + 0.3 * pulse)
-        # iceri suzulen oklar (periyodik -> kusursuz dongu)
-        k = 6
-        for i in range(k):
-            ang = 2 * math.pi * i / k + (0.5 if i % 2 else 0.0)
-            p = (t + i * 0.37) % 1.0
-            r = 50 - 26 * p
-            x = gx + r * math.cos(ang)
-            y = gy + r * 0.48 * math.sin(ang)
-            point_to = math.atan2((gy - y) * 2.0, gx - x)
-            a = min(1.0, p * 5) * min(1.0, (1 - p) * 4) * 0.9
-            chevron(img, x, y, point_to, 2, R_LIGHT, a, R_OUT, R_WHITE)
-        frames.append(img)
-    save("taunt_aura", frames, "loop", True, 12)
+# Q taunt_burst / taunt_aura KALDIRILDI (madde 740): Q efekti artik tools/gen_sovalye_q_fx.py ("A Kalkan Darbesi").
 
 
 # ====================================================================== taunt_status (ofke damari)
@@ -404,8 +289,6 @@ def guard_absorb():
 
 
 if __name__ == "__main__":
-    taunt_burst()
-    taunt_aura()
     taunt_status()
     ## guard_bubble() ARTIK CAGRILMAZ (madde 581): dostun bariyeri tools/gen_sovalye_bariyer_fx.py ("A5 - Isik Kuyrugu") ayni
     ## guard_bubble_* dosyalarina yazar; burada cagirmak yeni sayfanin ustune eskisini yazardi.

@@ -54,8 +54,8 @@ const SLOT := {
 	"s:korsan_patlat": "q", "s:korsan_bomba": "e", "s:korsan_bombardiman": "r", "s:korsan_pasif": "p",
 	## Melek (hasarı yok; can/kalkan)
 	"s:melek_can": "q", "s:melek_kalkan": "e", "s:melek_korku": "r", "s:melek_pasif": "p",
-	## Necromancer
-	"s:necro_iskelet": "q", "s:necro_golem": "e", "s:necro_kafatasi": "r", "s:necro_kemik": "q", "s:necro_ruh": "p",
+	## Necromancer (kit 2026-11-16: Q savaşçı, E okçu + büyücü diriltmesi, R ordu)
+	"s:necro_savasci": "q", "s:necro_okcu": "e", "s:necro_ordu": "r", "s:necro_ruh": "p",
 	## Shaman
 	"s:shaman_totem": "q", "s:shaman_totem_alan": "q", "s:shaman_kalkan_totemi": "e", "s:shaman_kalkan_alan": "e", "s:shaman_golem_alan": "r",
 	## Vampir
@@ -87,7 +87,7 @@ const NAMES := {
 	"s:elara_sivisma": "Sıvışma", "s:elara_gercek_hasar": "Gerçek hasar", "s:elara_cift_tetik": "Çift tetik",
 	"s:korsan_bomba": "Bomba", "s:korsan_bombardiman": "Bombardıman",
 	"s:melek_can": "Can basma", "s:melek_kalkan": "Kalkan yenileme", "s:melek_korku": "Kutsal korku", "s:melek_pasif": "Pasif",
-	"s:necro_iskelet": "İskelet", "s:necro_golem": "Golem", "s:necro_kafatasi": "Kafatası", "s:necro_kemik": "Kemik fedası",
+	"s:necro_savasci": "Savaşçılar", "s:necro_okcu": "Okçular", "s:necro_ordu": "Ölüler ordusu",
 	"s:shaman_totem": "Totem atışı", "s:shaman_totem_alan": "Totem alanı", "s:shaman_kalkan_totemi": "Kalkan totemi", "s:shaman_kalkan_alan": "Totem alanı", "s:shaman_golem_alan": "Golem alanı",
 	"s:vampir_kan_emme": "Kan emme", "s:vampir_yarasa_temas": "Yarasa teması", "s:vampir_yarasa_r": "Yarasalar", "s:vampir_r_patlama": "Patlama", "s:vampir_pasif": "Can emme",
 	"s:hadime_lanet": "Lanet", "s:hadime_lanet_patlama": "Lanet patlaması", "s:hadime_kuyu": "Lanet çukuru", "s:hadime_kabus": "Karabasan",
@@ -242,7 +242,7 @@ const UTIL_LABELS := {
 	"root": "Sabitlenen yaratık", "slow": "Yavaşlatılan yaratık", "fear": "Korkutulan yaratık", "freeze": "Dondurulan yaratık",
 	"stun": "Sersemletilen yaratık", "mad": "Çıldırtılan yaratık",
 	"surge": "Güçlendirilmiş atış", "bombs": "Patlatılan bomba", "gold": "Kazanılan altın", "souls": "Toplanan ruh",
-	"summon": "Çağrılan", "passenger": "Süpürgeye binen arkadaş", "flower": "Alınan çiçek",
+	"summon": "Çağrılan", "reborn": "Diriltilen iskelet", "passenger": "Süpürgeye binen arkadaş", "flower": "Alınan çiçek",
 	## madde 531: ruhani yetenek / pasif / evcil sayaçları (Para, Savaş Şevki, kullanım sayıları)
 	"uses": "Kullanım", "discount": "Dükkan indirimiyle tasarruf (altın)", "profit": "Toplam kâr (altın)",
 	"ap": "Kazanılan kalıcı saldırı gücü", "execute": "İnfaz edilen düşman",
@@ -498,10 +498,7 @@ static func pet_live_lines(key: String, ink: Dictionary) -> PackedStringArray:
 		"papagan":
 			out.append(Loc.t(fmt_line) % [c_val, "+%d" % int(PetCatalogScript.LUCK_BONUS), Loc.t("şans")])
 		"slime":
-			var ap: float = PetCatalogScript.SLIME_AP_PERCENT
-			if p != null and p.get("pet_ap_percent") != null:
-				ap = float(p.get("pet_ap_percent"))
-			out.append(Loc.t(fmt_line) % [c_val, Loc.pct("+%%%d" % int(round(ap * 100.0))), Loc.t("saldırı gücü")])
+			out.append(Loc.t(fmt_line) % [c_val, Loc.pct("-%%%d" % int(round(PetCatalogScript.SLIME_ULT_CDR * 100.0))), Loc.t("ulti bekleme süresi")])
 			if p != null and p.has_method("slime_buff_active") and p.call("slime_buff_active") == true:
 				out.append(Loc.t("• Büyü açık, kalan: [color=%s][b]%s[/b][/color]") % [c_val, Loc.t("%.1f sn") % float(p.get("_slime_buff_timer"))])
 		"hayalet":

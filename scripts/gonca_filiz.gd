@@ -36,7 +36,7 @@ func setup(owner_enemy: Node2D) -> void:
 
 
 func _boss() -> Node2D:
-	var b: Variant = e.get_meta("summoner", null)
+	var b: Variant = (e.get_meta("summoner") if e.has_meta("summoner") else null)
 	if b == null or not is_instance_valid(b) or (b as Node).get("is_dead") == true:
 		return null
 	return b as Node2D

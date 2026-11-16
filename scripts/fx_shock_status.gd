@@ -5,7 +5,11 @@ extends Node2D
 ## istemcideki enemy.is_shocked() bu düğümün varlığından okunur (Şimşek Dikeni/Çekici'nin "şoklu hedefe +%" bonusu).
 
 const PixelDraw := preload("res://scripts/pixel_draw.gd")
-const FLICKER := 0.09
+## Madde 711 (2026-11-15, göz yorgunluğu): çatlaklar 0,09 sn'de bir (~11 Hz) yeniden çiziliyordu ve şok sürüye yayıldığı için
+## kalabalıkta strobo oluyordu -> 0,3 sn (~3 Hz), alfa 0,95 -> 0,6, uç pikseli 1,0 -> 0,7.
+const FLICKER := 0.3
+const CRACK_COL := Color(1.0, 0.92, 0.35, 0.6)
+const TIP_COL := Color(1.0, 1.0, 0.85, 0.7)
 
 var radius: float = 20.0
 var _flicker: float = 0.0
@@ -35,6 +39,6 @@ func _draw() -> void:
 		for s in range(3):
 			var jag := Vector2(PixelDraw.hash01(_seed + i * 31 + s) - 0.5, PixelDraw.hash01(_seed + i * 47 + s) - 0.5) * 9.0
 			var q: Vector2 = p + jag
-			PixelDraw.line(self, p, q, Color(1.0, 0.92, 0.35, 0.95), 1)
+			PixelDraw.line(self, p, q, CRACK_COL, 1)
 			p = q
-		PixelDraw.px(self, p, 1, Color(1.0, 1.0, 0.85, 1.0))
+		PixelDraw.px(self, p, 1, TIP_COL)

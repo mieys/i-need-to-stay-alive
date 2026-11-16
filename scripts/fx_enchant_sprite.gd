@@ -68,6 +68,9 @@ const GLOW := {
 	"shade_slash": [Color(0.7, 0.45, 1.0), 0.6, 1.4], "spin_slash": [Color(0.95, 0.95, 1.0), 0.35, 0.9],
 	"vortex": [Color(0.9, 0.95, 1.0), 0.4, 1.0],
 	"rainbow_dazzle": [Color(1.0, 0.95, 0.85), 0.8, 0.8], ## Gökkuşağı Asası kamaşma anı (madde 306)
+	## Arcane "C - Kaos Yarığı" yankısı (madde 749): açılan yarık hafif, patlama halkası güçlü pembe-mor.
+	"void_rift_open": [Color(0.94, 0.44, 1.0), 0.55, 0.6], "void_rift_pop_45": [Color(0.94, 0.44, 1.0), 0.85, 0.9],
+	"void_rift_pop_60": [Color(0.94, 0.44, 1.0), 0.85, 0.9],
 }
 
 var sheet: String = ""
@@ -243,7 +246,33 @@ static func spawn(tree: SceneTree, pos: Vector2, data: Dictionary) -> Node2D:
 	n.position = pos
 	tree.current_scene.add_child(n)
 	n.global_position = pos
+	if str(data.get("sfx", "")) != "":
+		_play_oneshot_sfx(tree, pos, str(data["sfx"]), float(data.get("sfx_db", LOOP_SFX_DB)), float(data.get("sfx_pitch", 1.0)))
 	return n
+
+
+## Tek seferlik ses (madde 749, data "sfx" / "sfx_db" / "sfx_pitch"): veri RPC'yle gittiği için diğer oyuncularda da aynı ses.
+## Arcane Kaos Yarığı patlaması (eskiden Korsan patlamasının ATEŞ sesini çalıyordu). Sık tetiklenirse 40 ms'de bir.
+static var _sfx_cache: Dictionary = {}
+
+
+static func _play_oneshot_sfx(tree: SceneTree, pos: Vector2, path: String, db: float, pitch: float) -> void:
+	if NetworkManager.should_throttle("enchant_sprite_sfx_" + path, 0.04):
+		return
+	if not _sfx_cache.has(path):
+		_sfx_cache[path] = load(path) if ResourceLoader.exists(path) else null
+	var st: AudioStream = _sfx_cache[path]
+	if st == null:
+		return
+	var s := AudioStreamPlayer2D.new()
+	s.stream = st
+	s.volume_db = db
+	s.pitch_scale = pitch * randf_range(0.95, 1.05)
+	s.max_distance = 1500.0
+	tree.current_scene.add_child(s)
+	s.global_position = pos
+	s.play()
+	s.finished.connect(s.queue_free)
 
 
 ## Sahibin (peer <= 0 ya da bu makinenin kendisi -> yerel oyuncu, yoksa uzak kukla) ağ slotundaki silah ikonu:

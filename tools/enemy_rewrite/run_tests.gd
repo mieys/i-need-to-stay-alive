@@ -16,6 +16,10 @@ func _run() -> void:
 	var gm: Node = root.get_node_or_null("GameManager")
 	if gm:
 		gm.set("passive_gold_enabled", false)
+	## Testler kaynak dilde (Türkçe) koşar: kullanıcının oyun dili (display_settings.cfg language, 2026-11-15'te "en") yüklenince
+	## Türkçe metin bekleyen testler sahte düşüyordu. Başka dil denemek için TEST_LANG=<kod>.
+	var test_lang: String = OS.get_environment("TEST_LANG")
+	(load("res://scripts/localization.gd") as GDScript).call("apply", test_lang if test_lang != "" else "tr")
 	var path: String = OS.get_environment("TEST_FILE")
 	var script: GDScript = load(path) as GDScript
 	if script == null:

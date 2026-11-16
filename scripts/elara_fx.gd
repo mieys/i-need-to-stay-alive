@@ -40,7 +40,7 @@ const MOVE_SPEED_MIN := 20.0
 const EnemyQueryScript := preload("res://scripts/enemy_world/enemy_query.gd")
 const PhysicsInterpScript := preload("res://scripts/physics_interp.gd")
 
-## Tek shader, üç kip (hepsi piksel dilinde, alfa saydamlığı yerine 4x4 Bayer):
+## Tek shader, üç kip (piksel dilinde). Madde 711 (2026-11-15, dither kalıcı yasak): eski 4x4 Bayer seyreltmesi yerine DÜZ alfa = level:
 ##  0 İKİZ  - dokunun turkuaz silüeti (açık yerler parlak) + EKRAN pikselinde dış kenar (dFdx; ölçek/dönmeden bağımsız, enchant_weapon_glow.gd
 ##            ile aynı yol) - R silah ikizi (level 0.85) ve ikinci tetik mermisi (level 1).
 ##  1 PARILTI - ikon silüetinin içinde, DÜNYA uzayında çapraz kayan kehribar bant (E). glint_c/glint_r ikonun dünya merkezi/yarı köşegeni.
@@ -78,13 +78,13 @@ void fragment() {
 	vec2 tsz = vec2(textureSize(TEXTURE, 0));
 	if (mode == 2) {
 		vec4 t = texture(TEXTURE, UV);
-		if (t.a < 0.5 || bayer(floor(UV * tsz)) >= level) { discard; }
+		if (t.a < 0.5) { discard; }
 		vec2 tp = 1.0 / tsz;
 		float n = min(min(texture(TEXTURE, UV + vec2(tp.x, 0.0)).a, texture(TEXTURE, UV - vec2(tp.x, 0.0)).a),
 				min(texture(TEXTURE, UV + vec2(0.0, tp.y)).a, texture(TEXTURE, UV - vec2(0.0, tp.y)).a));
 		float lum = dot(t.rgb, vec3(0.3333));
 		vec3 c = n < 0.5 ? C1 : (lum > 0.588 ? C4 : (lum > 0.372 ? C3 : C2));
-		COLOR = vec4(c, vcol.a);
+		COLOR = vec4(c, vcol.a * level);
 	} else {
 		vec2 ux = dFdx(UV);
 		vec2 uy = dFdy(UV);
@@ -98,19 +98,17 @@ void fragment() {
 			if (d < pos || d > pos + 2.7) { discard; }
 			COLOR = vec4(mix(t.rgb / max(t.a, 0.001), GLINT, 0.75), vcol.a);
 		} else {
-			float b = bayer(floor(wpos));
 			if (t.a > 0.5) {
-				if (b >= level) { discard; }
 				float lum = dot(t.rgb / max(t.a, 0.001), vec3(0.3333));
-				COLOR = vec4(lum > 0.47 ? C4 : C3, vcol.a);
+				COLOR = vec4(lum > 0.47 ? C4 : C3, vcol.a * level);
 			} else {
 				float m = 0.0;
 				for (int i = 0; i < 8; i++) {
 					vec2 o = DIRS[i] * edge_px;
 					m = max(m, textureLod(TEXTURE, UV + ux * o.x + uy * o.y, lod).a);
 				}
-				if (m < 0.5 || b >= level * 0.8) { discard; }
-				COLOR = vec4(C2, vcol.a);
+				if (m < 0.5) { discard; }
+				COLOR = vec4(C2, vcol.a * level * 0.8);
 			}
 		}
 	}
@@ -342,6 +340,16 @@ static func world_anim(driver: Node2D, anim: Node2D, seq: Array, z: int, flip: b
 
 
 ## Sprite'ın TABAN ölçeği (vuruş sıkışması gibi geçici ölçek oynamaları efekti titretmesin): kaster char_base_anim_scale, uzak _base_anim_scale.
+## Gece ışığı (madde 744): E kehribar halkası / R turkuaz rüzgârı. İç sınıf düğümleri (SheetAnim) night_glow_catalog.gd'nin betik
+## yolu eşlemesine düşmez -> ışık burada doğrudan takılır; düğümün çocuğu olduğu için onunla söner/silinir. Driver kasterde ve uzak
+## kopyada aynı kenardan çalışır -> iki ekranda da. Q (Sıvışma) BİLEREK ışıksız: rüzgâr/ardıl görüntü, gizlilik ailesi.
+const NightGlowScript := preload("res://scripts/night_glow.gd")
+
+static func attach_glow(n: Node2D, col: Color) -> void:
+	if n != null and is_instance_valid(n) and n.is_inside_tree():
+		NightGlowScript.attach(n, {"color": col, "radius": 36.0, "energy": 0.45})
+
+
 static func _base_scale(p: Node, anim: Node2D) -> Vector2:
 	if p != null:
 		var v: Variant = p.get("char_base_anim_scale")
@@ -410,6 +418,7 @@ class Driver extends Node2D:
 			if _e:
 				_e_ground = ElaraFx.char_anim(self, anim, [["e_ring_in", false], ["e_ring_loop", true]], -1, 6)
 				_e_top = ElaraFx.char_anim(self, anim, [["e_cast", false], ["e_chev", true]], 2)
+				ElaraFx.attach_glow(_e_ground, ElaraFx.AMB[3])
 			else:
 				if is_instance_valid(_e_ground):
 					_e_ground.finish("e_ring_out")
@@ -422,6 +431,7 @@ class Driver extends Node2D:
 				ElaraFx.char_anim(self, anim, [["r_cast_ring", false]], -1, 1)
 				_r_back = ElaraFx.char_anim(self, anim, [["r_wisp_back_in", false], ["r_wisp_back_loop", true]], -1, 4)
 				_r_front = ElaraFx.char_anim(self, anim, [["r_wisp_front_in", false], ["r_wisp_front_loop", true]], 2, 4)
+				ElaraFx.attach_glow(_r_back, ElaraFx.RUZ[3])
 			else:
 				if is_instance_valid(_r_back):
 					_r_back.finish("r_wisp_back_out", true)

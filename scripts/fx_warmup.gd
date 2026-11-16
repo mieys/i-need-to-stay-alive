@@ -46,6 +46,7 @@ const EXTRA_SHADERS: Array[String] = [
 	"res://shaders/melek_bond.gdshader",
 	"res://shaders/melek_halo_tint.gdshader",
 	"res://shaders/matthew_glow.gdshader",
+	"res://shaders/fx_pixel_glow.gdshader", ## hafif parıltı: Matthew şimşekleri + Büyücü Arcane Patlama (2026-11-16, fx_pixel_glow.gd)
 	"res://shaders/matthew_fox_shield.gdshader",
 	"res://shaders/lightning_yellow.gdshader",
 	"res://shaders/mana_shield.gdshader",

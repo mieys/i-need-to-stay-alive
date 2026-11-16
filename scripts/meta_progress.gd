@@ -76,10 +76,10 @@ const COSTS := {
 ## kullanıcı oynayıp ayarlar. Listede olmayan içerik yalnız kıymıkla alınır (Matthew/Assasin/Elara/Korsan/Melek, papağan, silahlar, ruhaniler).
 ## 3 anahtar = o haritada 1 zafer ya da 3 kez K5 bossu; 1 anahtar = 1 kez K5 bossu.
 const KEY_COSTS := {
-	CHAR: {12: ["ana", 3], 15: ["bataklik", 3], 14: ["col", 3], 11: ["batik_nekropol", 3], 13: ["lagim_agi", 3]},
-	PET: {"peri": ["ana", 1], "slime": ["bataklik", 1], "kirpi": ["col", 1], "hayalet": ["batik_nekropol", 1], "kelebek": ["lagim_agi", 1]},
+	CHAR: {12: ["ana", 3], 15: ["bataklik", 3], 14: ["col", 3], 11: ["batik_nekropol", 3], 13: ["kis", 3]},
+	PET: {"peri": ["ana", 1], "slime": ["bataklik", 1], "kirpi": ["col", 1], "hayalet": ["batik_nekropol", 1], "kelebek": ["kis", 1]},
 }
-const KEY_MAPS := ["ana", "bataklik", "col", "batik_nekropol", "lagim_agi"] ## key_icon.gd IDS ile aynı
+const KEY_MAPS := ["ana", "bataklik", "col", "kis", "batik_nekropol"] ## key_icon.gd IDS ile aynı (2026-11-16: Lağım Ağı kapalı -> Vampir Çocuk + Kelebek Ayaz Dağı anahtarına taşındı, madde 737; Lağım açılırsa geri eklenir)
 const KEY_CAP := 999 ## bir türün saklanabilecek en çok adedi (bozuk dosya / taşma koruması)
 const KeyIcon := preload("res://scripts/key_icon.gd") ## yalnız görünen ad için (hafif: map_profiles'e tembel erişir)
 

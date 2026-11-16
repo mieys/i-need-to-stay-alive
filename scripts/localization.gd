@@ -116,6 +116,14 @@ static func t(msg: String) -> String:
 	return TranslationServer.translate(msg)
 
 
+## Kısa açıklama kalıbı (madde 756): seçili dilde çevirisi yoksa "" döner -> çağıran çevrilmiş UZUN kalıba düşer. Kaynak dilde kalıbın kendisi.
+static func t_short(msg: String) -> String:
+	if _current == SOURCE:
+		return msg
+	var s: String = TranslationServer.translate(msg)
+	return "" if s == msg else s
+
+
 ## Türkçe yüzde ("%15", "+%2.5") -> İngilizcede "15%", "+2.5%". Hazır biçimlenmiş, sayı içeren metinler için (kalıp çevrilemeyen yerler);
 ## kalıp çevrilebiliyorsa "%%%d" -> "%d%%" çevirisi tercih edilir. Kaynak dilde dokunmaz.
 static func pct(s: String) -> String:
@@ -153,7 +161,17 @@ static func _deep(v: Variant) -> Variant:
 		var d: Dictionary = (v as Dictionary).duplicate()
 		for k in d:
 			var x: Variant = d[k]
-			if x is String and _is_text_key(str(k)):
+			if x is String and str(k).ends_with("short_desc"):
+				## Kısa açıklama (madde 756): bu dilde çevirisi yoksa çevrilmiş UZUN metin gösterilir (yarı Türkçe ekran olmasın).
+				var tx: String = t(x)
+				if tx == x:
+					var lk: String = str(k).trim_suffix("short_desc") + "desc"
+					if not d.has(lk):
+						lk = str(k).trim_suffix("_short_desc")
+					if (v as Dictionary).get(lk) is String:
+						tx = t(str((v as Dictionary)[lk]))
+				d[k] = pct(tx)
+			elif x is String and _is_text_key(str(k)):
 				d[k] = pct(t(x))
 			elif x is Dictionary or x is Array:
 				d[k] = _deep(x)

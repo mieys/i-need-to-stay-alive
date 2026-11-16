@@ -44,6 +44,10 @@ const TARGET_PIXEL_SIZE := 32.0
 
 var bob_time: float = 0.0
 var _last_bob_offset: float = 0.0
+## Madde 711 (2026-11-15, göz yorgunluğu): yerdeki tüm eşyalar aynı 3 px / 1,57 sn ritimle (çoğu AYNI fazda) zıplıyordu.
+## Ortak sakin ölçü: genlik 1,5, hız 2,5 rad/sn (~2,5 sn), rastgele faz.
+const BOB_AMP := 1.5
+const BOB_SPEED := 2.5
 var sprite: Sprite2D = null
 
 
@@ -63,6 +67,7 @@ const EXPIRE_SECONDS := 300.0
 
 func _ready() -> void:
 	add_to_group("food_drops")
+	bob_time = randf() * TAU ## madde 711: aynı fazda zıplamasın
 	body_entered.connect(_on_body_entered)
 	if not sprite:
 		sprite = get_node_or_null("Sprite2D")
@@ -116,7 +121,7 @@ var _zone_blocked_body: Node = null ## güvenli bölgedeyken dokunan oyuncu (mad
 
 func _process(delta: float) -> void:
 	bob_time += delta
-	var bob_offset: float = sin(bob_time * 4.0) * 3.0
+	var bob_offset: float = sin(bob_time * BOB_SPEED) * BOB_AMP
 	position.y += bob_offset - _last_bob_offset
 	_last_bob_offset = bob_offset
 	if _zone_blocked_body != null:

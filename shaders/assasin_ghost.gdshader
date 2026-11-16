@@ -30,10 +30,8 @@ void fragment() {
 		discard;
 	}
 	vec2 px = TEXTURE_PIXEL_SIZE;
-	if (bayer4(floor(UV / px)) >= fade) {
-		discard;
-	}
+	// Madde 711 (2026-11-15, dither kalıcı yasak): Bayer dağılması yerine DÜZ alfa sönme (fade = modulate.a).
 	float n = texture(TEXTURE, UV + vec2(px.x, 0.0)).a * texture(TEXTURE, UV - vec2(px.x, 0.0)).a
 			* texture(TEXTURE, UV + vec2(0.0, px.y)).a * texture(TEXTURE, UV - vec2(0.0, px.y)).a;
-	COLOR = vec4(n < 0.25 ? rim_color.rgb : fill_color.rgb, 1.0);
+	COLOR = vec4(n < 0.25 ? rim_color.rgb : fill_color.rgb, fade);
 }

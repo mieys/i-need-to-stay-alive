@@ -168,6 +168,62 @@ func test_blood_and_dust_do_not_glow() -> void:
 	unknown_fx.free()
 
 
+## Madde 744: yaratık yetenek dünya efektleri türe göre parlar ("st" = data.style) - büyülü türler ışık alır, fiziksel türler
+## (mızrak / ok / tırpan) almaz; kodla kurulan oyuncu büyüleri (Peri / Minik Cadı / Melek / Yin Yang ak küre) katalogda.
+func test_enemy_world_fx_glow_by_style() -> void:
+	var shot := Node2D.new()
+	shot.set_script(load("res://scripts/creature_shot.gd"))
+	shot.set("data", {"style": "crystal"})
+	var raw: Dictionary = GlowCatalog.profile_for(shot)
+	assert(not raw.is_empty())
+	var prof: Dictionary = GlowCatalog.resolve(shot, raw)
+	assert(not prof.is_empty(), "kristal kıymığı parlamalı")
+	assert(bool(prof["hide_in_fog"]), "yaratık büyüsü sisin içinde çizilmez")
+	shot.set("data", {"style": "spear"})
+	assert(GlowCatalog.resolve(shot, raw).is_empty(), "mızrak (fiziksel) parlamaz")
+	shot.set("data", {})
+	assert(GlowCatalog.resolve(shot, raw).is_empty(), "stilsiz veri parlamaz")
+	shot.free()
+	var zone := Node2D.new()
+	zone.set_script(load("res://scripts/kardes_zone.gd"))
+	var zraw: Dictionary = GlowCatalog.profile_for(zone)
+	zone.set("data", {"style": "meteor"})
+	assert(not GlowCatalog.resolve(zone, zraw).is_empty(), "meteor parlamalı")
+	zone.set("data", {"style": "slash"})
+	assert(GlowCatalog.resolve(zone, zraw).is_empty(), "kılıç kesiği parlamaz")
+	zone.free()
+	for path in ["res://scripts/fx_peri_heal.gd", "res://scripts/fx_slime_spell.gd", "res://scripts/fx_melek_heal_sparkle.gd",
+			"res://scripts/yinyang_light.gd", "res://scripts/banshee_wave.gd", "res://scripts/totem_aura_border.gd"]:
+		assert(GlowCatalog.BY_SCRIPT.has(path), path)
+	var stone := Node2D.new()
+	stone.scene_file_path = "res://scenes/fx_petrify.tscn"
+	assert(GlowCatalog.profile_for(stone).is_empty(), "taşlaşma parlamaz")
+	stone.free()
+
+
+## Madde 744: tetiklenen eşya efektleri (item_trigger_fx_base.gd) top_level + dünya orijininde durur - ışık (0,0)'da değil
+## karakterin göğsünde yanmalı ve ömrünün sonunda sönmeli.
+func test_item_trigger_fx_glow_follows_owner() -> void:
+	var owner_body := Node2D.new()
+	owner_body.position = Vector2(900.0, 640.0)
+	add_child(owner_body)
+	var fx: Node2D = (load("res://scenes/fx_item_sun_will.tscn") as PackedScene).instantiate()
+	owner_body.add_child(fx)
+	assert(not GlowCatalog.profile_for(fx).is_empty(), "Güneş İradesi parlamalı")
+	assert(fx.global_position.is_equal_approx(Vector2.ZERO), "taban top_level orijinde (testin varsayımı)")
+	var seg: Array = fx.call("get_glow_segment")
+	assert(seg.size() == 2)
+	assert(Vector2(seg[0]).distance_to(owner_body.global_position) < 40.0, "ışık karakterin üstünde: %s" % str(seg[0]))
+	assert(float(fx.call("get_night_glow_energy")) > 0.99)
+	fx.set("_t", float(fx.get("_life")))
+	assert(float(fx.call("get_night_glow_energy")) < 0.01, "ömür sonunda söner")
+	owner_body.free()
+	var fangs := Node2D.new()
+	fangs.scene_file_path = "res://scenes/fx_item_bone_fangs.tscn"
+	assert(GlowCatalog.profile_for(fangs).is_empty(), "kemik dişler parlamaz")
+	fangs.free()
+
+
 ## 2026-11-14: "gece ve gündüz eşit uzunluklarda sürsün" - saat hızı evreye göre; gündüz = gece (gerçek sn), tam döngü 900 sn.
 func test_day_and_night_last_equally_long_in_real_time() -> void:
 	var real := {"day": 0.0, "dusk": 0.0, "night": 0.0, "dawn": 0.0}

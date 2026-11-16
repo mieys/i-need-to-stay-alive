@@ -61,6 +61,7 @@ func _spawn_stamp(at: Vector2, dir: Vector2) -> void:
 	var spr := Sprite2D.new()
 	spr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	spr.texture = tex
+	spr.material = ML.glow_material(ML.TRAIL_TILE) ## hafif parıltı (matthew_lightning.gd FX_GLOW; gece ışığı aşağıda ayrı)
 	spr.region_enabled = true
 	var variant: int = _count % ML.TRAIL_VARIANTS
 	_count += 1

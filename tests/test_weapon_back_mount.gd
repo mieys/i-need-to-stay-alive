@@ -137,6 +137,42 @@ func test_local_weapon_rests_on_back_and_draws_out_on_sight() -> void:
 	_cleanup()
 
 
+## Kullanıcı 2026-11-16: "yarasa formundayken arkasında silahlar gözüküyor, kaldır" - Nox bat_<yön> klibindeyken sırtta silah yok
+## ("Silahlı Yarasa" evriminde silahlar işlemeye devam eder; temel formda player.gd _process_vampir_weapon_pull ayrıca gizler).
+func test_no_back_weapon_in_bat_form() -> void:
+	var o: FakeOwner = _make_owner(Vector2(9000.0, 9000.0))
+	var spr: AnimatedSprite2D = o.get_node("AnimatedSprite2D")
+	spr.sprite_frames.add_animation(&"bat_down")
+	var w: Node2D = TabancaScene.instantiate()
+	o.add_child(w)
+	await _frames(4)
+	var back: Sprite2D = _back_of(o)
+	assert(back != null and back.visible, "ön koşul: silah sırtta")
+	spr.animation = &"bat_down"
+	await _frames(2)
+	assert(not back.visible, "yarasa formunda sırtta silah görünmez")
+	spr.animation = &"idle_down"
+	await _frames(2)
+	assert(back.visible, "form bitince silah sırta döner")
+	_cleanup()
+
+
+func test_puppet_no_back_weapon_in_bat_form() -> void:
+	var puppet: Node2D = RemotePlayerScene.instantiate() as Node2D
+	add_child(puppet)
+	_track(puppet)
+	puppet.setup(79, 13, "Nox")
+	puppet.call("snap_to_network_position", Vector2(12000.0, 12000.0))
+	puppet.call("update_weapon_visuals", ["tabanca"])
+	await _frames(4)
+	var backs: Array = puppet.get("_wf_backs")
+	assert(backs.size() == 1 and backs[0] != null and (backs[0] as Sprite2D).visible, "ön koşul: kuklada silah sırtta")
+	puppet.call("update_position_and_anim_from_net", Vector2(12000.0, 12000.0), "bat_down")
+	await _frames(3)
+	assert(not (backs[0] as Sprite2D).visible, "kukla yarasa formundayken sırtta silah yok")
+	_cleanup()
+
+
 func test_puppet_weapon_rests_on_back() -> void:
 	var puppet: Node2D = RemotePlayerScene.instantiate() as Node2D
 	add_child(puppet)

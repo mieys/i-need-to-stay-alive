@@ -952,6 +952,13 @@ func update_weapon_visuals(new_weapon_keys: Array, weapon_tiers: Dictionary = {}
 ## [ikon Sprite2D, sprite_forward_angle_deg] - player.gd get_weapon_icon_info ile AYNI imza. slot = sahibin ağ silah slotu
 ## (main.gd "weapon_keys" sırası). update_weapon_visuals sahnesi olmayan anahtarı atladığı için ikon index'i slotla ancak
 ## atlanan yoksa aynıdır - burada aynı atlama kuralıyla eşlenir.
+## Verilen silah anahtarının ilk ikonu (yoksa null) - çakram uzak kopyasının dönüş yuvası (network_manager, madde 591 ek).
+func weapon_icon_for_key(key: String) -> Node2D:
+	var slot: int = _weapon_keys.find(key)
+	var info: Array = get_weapon_icon_info(slot) if slot >= 0 else []
+	return info[0] as Node2D if not info.is_empty() else null
+
+
 func get_weapon_icon_info(slot: int) -> Array:
 	if slot < 0 or slot >= _weapon_keys.size() or slot >= MAX_WEAPON_ICONS:
 		return []
@@ -1829,12 +1836,13 @@ func _apply_talon_form_scale() -> void:
 			_weapon_base_scales[i] = _weapon_base_scales[i] * ratio
 
 
-## Shaman "Dev Golem" (shaman_rf) boyutu: golem formundayken sprite +%30 - player.gd _golem_evo_apply ile AYNI çarpan (form klip
-## adından, evrim extra["evo"] listesinden türetilir; yeni ağ alanı yok). SADECE Shaman'a dokunur (Vampir/Talon ölçeklemesini ezmesin).
+## Shaman golem formu boyutu: golem kareleri (Golem 3 paketi, madde 722) form boyunca FORM_SPRITE_SCALE kat, "Dev Golem" (shaman_rf)
+## evrimiyle +%30 daha - player.gd _golem_evo_apply ile AYNI çağrı (form klip adından, evrim extra["evo"] listesinden türetilir;
+## yeni ağ alanı yok). SADECE Shaman'a dokunur (Vampir/Talon ölçeklemesini ezmesin).
 func _apply_shaman_golem_scale() -> void:
 	if char_id != ShamanGolemMath.CHAR_ID or not (anim and is_instance_valid(anim)):
 		return
-	anim.scale = _base_anim_scale * (ShamanGolemMath.EVO_BIG_SCALE_MULT if (_shaman_golem_form and has_evo("shaman_rf")) else 1.0) * _pet_size_mult
+	anim.scale = _base_anim_scale * (ShamanGolemMath.form_sprite_scale(has_evo("shaman_rf")) if _shaman_golem_form else 1.0) * _pet_size_mult
 
 
 ## Vampir Çocuk Yarasa Formu (E) boyutu: yarasa kareleri (96x112) insan karelerinden büyük olduğu
@@ -1971,6 +1979,22 @@ func _apply_enchant_glows(tiers: Array) -> void:
 		EnchantGlowScript.attach(icon, t)
 
 
+## Ayaz Dağı üşümesi (madde 709): sahibinin ekranından extra["kc"] (tam saniye; sıcakken anahtar yok = 0) - sprite tonu + can barı altındaki ısı
+## çubuğu (kis_soguk.gd). Hız ayrıca gelmez: synced_move_speed sahibin çarpanlı gerçek hızı.
+const KisSogukScript := preload("res://scripts/kis_soguk.gd")
+var kis_cold: float = 0.0
+## Kara Bataklık batma (bataklik_tehlike.gd): sahibinin ekranından extra["wsk"] - su çizgisine eklenen piksel; hız synced_move_speed'le gelir.
+var wade_sink_px: int = 0
+
+
+func set_kis_cold(c: float) -> void:
+	if c == kis_cold:
+		return
+	kis_cold = c
+	KisSogukScript.apply_tint(self, anim, c)
+	KisSogukScript.apply_bar(overhead_bar, c)
+
+
 func update_extra_state_from_net(hp: float, max_hp: float, s_hp: float, s_max: float, p_zone: bool, dead: bool, weapon_keys: Array, extra: Dictionary = {}) -> void:
 	## Yetenek evrimleri (2026-09-28, main.gd extra["evo"]) - görsel kararlardan ÖNCE (bkz. has_evo).
 	_enchant_ward = float(extra.get("ench_ward", 0.0))
@@ -2029,6 +2053,8 @@ func update_extra_state_from_net(hp: float, max_hp: float, s_hp: float, s_max: f
 	is_invisible = bool(extra.get("is_invisible", false)) or buyucu_airborne
 	if buyucu_airborne and anim and is_instance_valid(anim):
 		BuyucuLevitateScript.ensure(self, anim, get_node_or_null("Shadow") as Node2D)
+	set_kis_cold(float(extra.get("kc", 0.0)))
+	wade_sink_px = int(extra.get("wsk", 0)) ## Kara Bataklık batma: sahibinin su çizgisi derinliği (wade_fx.gd okur)
 	## Elara'nın Sıvışma'sı (bkz. main.gd extra dict/player.gd _elara_evasion_timer üstündeki AYNI not) -
 	## is_ghost_now()'da okunuyor ki enemy.gd bu oyuncuya sert yapışmasın.
 	_elara_evasion = extra.get("elara_evasion", false)

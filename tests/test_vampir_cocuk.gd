@@ -118,7 +118,7 @@ func test_sprite_frames_have_every_animation_the_game_asks_for() -> void:
 	var expected: Array = [
 		["idle_", 4, true], ["walk_", 6, true], ["run_", 6, true], ["eat_", 3, false], ["hurt_", 2, false],
 		["read_", 4, true], ["shrug_", 4, false], ["downed_", 2, false], ["death_", 3, false],
-		["strike_", 4, false], ["chop_", 4, false], ["pickup_", 4, false], ["bat_", 4, true],
+		["strike_", 4, false], ["chop_", 4, false], ["pickup_", 4, false], ["bat_", 11, true],
 	]
 	for dir in ["up", "left", "down", "right"]:
 		for e in expected:

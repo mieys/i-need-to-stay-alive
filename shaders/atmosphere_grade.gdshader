@@ -53,9 +53,10 @@ uniform float light_map_scale = 2.0;
 // yapışık kalır), (2) güç light_step'lik düz bantlara bölünür (piksel-art ışığı gibi basamaklı halkalar), (3) bant
 // sınırları dünyaya yapışık 4x4 Bayer dither ile kırılır (light_dither = geçiş bandının genişliği, 0 = sert basamak).
 // Uniform'ları atmosphere_overlay.gd her karede verir.
+// Madde 711 (2026-11-15): light_dither 0,4 -> 0 = DÜZ BANT. Dither kalıcı yasak (kullanıcı: "parazit"); Bayer yolu yalnız geri dönüş için duruyor.
 uniform float light_pixel_size = 1.0;
 uniform float light_step = 0.05;
-uniform float light_dither = 0.4;
+uniform float light_dither = 0.0;
 // Şu anki kamera: ekran(tuval) = dünya * view_zoom + view_origin; view_size = görünür alan (UV 0..1 bunu kaplar).
 uniform vec2 view_origin = vec2(0.0);
 uniform float view_zoom = 1.0;

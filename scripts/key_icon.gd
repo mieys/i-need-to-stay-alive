@@ -11,13 +11,14 @@ const MAP_PROFILES := "res://scripts/map_profiles.gd" ## tembel yüklenir: meta_
 const DIR := "res://assets/ui/anahtar/"
 const ART := 32 ## dokunun kenarı (piksel)
 ## Sıra = anahtarlar bölümünün sırası. SADECE seçilebilir haritaların anahtarı (map_profiles.gd `secilebilir`).
-const IDS := ["ana", "bataklik", "col", "batik_nekropol", "lagim_agi"]
+const IDS := ["ana", "bataklik", "col", "kis", "batik_nekropol"]
 const NAMES := {
 	"ana": "Orman Anahtarı",
 	"bataklik": "Bataklık Anahtarı",
 	"col": "Çöl Anahtarı",
 	"batik_nekropol": "Nekropol Anahtarı",
-	"lagim_agi": "Lağım Anahtarı",
+	"kis": "Ayaz Anahtarı", ## görsel: lagim_agi.png yosunu buz mavisine çevrilmiş (yalnız renk tonu, 2026-11-16) - kullanıcı kendi çizimiyle değiştirebilir
+	"lagim_agi": "Lağım Anahtarı", ## harita kapalı (madde 626): IDS dışında, ad + görsel duruyor
 }
 
 static var _cache: Dictionary = {}

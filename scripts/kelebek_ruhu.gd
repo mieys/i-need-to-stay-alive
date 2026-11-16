@@ -2,7 +2,7 @@ extends Node2D
 
 ## EVCİL HAYVAN "KELEBEK RUHU" (kullanıcı isteği 2026-10-12): pembe ışık küresi + 4 lila kanat. Sahibine +%10 saldırı hızı verir
 ## (player.gd pet_attack_speed) ve sahibin İLK silahının isabet ettiği düşmana minik pembe bir lazer atışı yapar: saldırı gücünün
-## (damage_bonus) %20'si kadar hasar. Sabitler pet_catalog.gd'de; isabet kancası player.gd _kelebek_on_weapon_hit.
+## (damage_bonus) %20'si kadar hasar; 2026-11-15'ten beri hedefin MEVCUT canının %6'sı (boss/elit %0,6), bkz. shot_damage. Sabitler pet_catalog.gd'de; isabet kancası player.gd _kelebek_on_weapon_hit.
 ##
 ## Görsel: sahibin omuz hizasında, ARKA tarafında süzülür (yumuşak takip + 1 piksellik salınım), sahibi nereye bakıyorsa oraya bakar -
 ## 4 yön: fly_down / fly_up / fly_side (sol = flip_h); kareler tools/gen_kelebek_ruhu.py. Karakterin pikseliyle aynı doku yoğunluğu
@@ -15,7 +15,8 @@ extends Node2D
 const CharAnim := preload("res://scripts/char_anim.gd")
 const PetCatalog := preload("res://scripts/pet_catalog.gd")
 const BalanceLogScript: GDScript = preload("res://scripts/balance_log.gd")
-const BoltScript: GDScript = preload("res://scripts/fx_kelebek_bolt.gd")
+## 2026-11-15: uçan mermi (fx_kelebek_bolt.gd, silindi) yerine 2026-10-12 prototipindeki anlık ışın. Ad/sayaç "bolt" olarak kaldı (testler).
+const BoltScript: GDScript = preload("res://scripts/fx_kelebek_beam.gd")
 const FRAMES: SpriteFrames = preload("res://assets/pets/kelebek_ruhu/kelebek_frames.tres")
 
 ## Süzülme noktası karakterin 48x48 hücresinde (sanat pikseli): baş hizası, gövdenin 20 piksel yanında (prototipteki yer).
@@ -128,15 +129,29 @@ func fire_at(target: Node2D) -> void:
 		_broadcast(target.global_position, true)
 
 
-## Atış hedefe vardı (ya da görsel sınırı doluydu): yaratık hâlâ canlıysa saldırı gücünün %20'si.
+## Işın hedefe değdi (ilk karesi; ya da görsel sınırı doluydu): yaratık hâlâ canlıysa mevcut canının %6'sı (boss/elit %0,6) - 2026-11-15.
 func _deal(target: Node2D) -> void:
 	if is_puppet or not is_instance_valid(target) or target.get("is_dead") == true or not target.has_method("take_damage"):
 		return
 	if not is_instance_valid(owner_body) or owner_body.get("is_dead") == true:
 		return
-	var ap: float = maxf(1.0, float(owner_body.get("damage_bonus"))) if "damage_bonus" in owner_body else 1.0
+	var dmg: float = shot_damage(target)
+	if dmg <= 0.0:
+		return
 	BalanceLogScript.tag(&"s:kelebek_ruhu")
-	target.take_damage(ap * PetCatalog.KELEBEK_DAMAGE_RATIO, false)
+	target.take_damage(dmg, false)
+
+
+## Hedefin mevcut canının yüzdesi (saldırı gücüne bakmaz). Boss ve elitte düşük oran.
+static func shot_damage(target: Node) -> float:
+	if not is_instance_valid(target) or not ("health" in target):
+		return 0.0
+	return maxf(0.0, float(target.get("health"))) * (PetCatalog.KELEBEK_BOSS_CURRENT_HP_PERCENT if is_big(target)
+			else PetCatalog.KELEBEK_CURRENT_HP_PERCENT)
+
+
+static func is_big(target: Node) -> bool:
+	return target.get("is_boss") == true or target.get("is_elite") == true
 
 
 func _broadcast(dest: Vector2, shot: bool) -> void:
@@ -159,6 +174,7 @@ func _spawn_bolt(target: Node2D, dest: Vector2, on_hit: Callable) -> void:
 	add_child(b)
 	_bolts += 1
 	b.tree_exiting.connect(_on_bolt_gone)
+	b.source = self ## ışının kökü kelebeğin ağzını izler
 	b.launch(muzzle(), target, dest, absf(global_scale.x), on_hit)
 
 

@@ -85,6 +85,9 @@ func test_grain_only_on_window_fills() -> void:
 	var big := Vector2(400, 300)
 	assert(PixelBox.grain_applies(Color(HT.WIN_PANEL, 0.88), big), "pencere zemini (%88) dokulu olmalı")
 	assert(PixelBox.grain_applies(HT.WIN_PANEL2, big) and PixelBox.grain_applies(HT.WIN_PANEL3, big), "iç kart / seçili kart dokulu olmalı")
+	## madde 753 (kullanıcı seçimi B): kartlarda doku pencereden ZAYIF (%35) - silah/portre çizgileriyle yarışmasın
+	assert(is_equal_approx(PixelBox.grain_card_alpha, 0.35), "kart dokusu %%35 olmalı: %s" % PixelBox.grain_card_alpha)
+	assert(not PixelBox._is_card_fill(Color(HT.WIN_PANEL, 0.88)), "pencere zemini kart sayılmamalı (tam doku)")
 	assert(not PixelBox.grain_applies(HT.WIN_INSET, big), "kuyu (yazı kutusu) düz kalmalı")
 	assert(not PixelBox.grain_applies(HT.ACCENT, big), "altın düğme düz kalmalı")
 	assert(not PixelBox.grain_applies(HT.DEEP, big), "karartma düz kalmalı")

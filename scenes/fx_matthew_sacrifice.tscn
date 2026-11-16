@@ -1,6 +1,6 @@
 [gd_scene load_steps=3 format=3 uid="uid://dg83h5w28q36c"]
 
-[ext_resource type="Script" uid="uid://cd95h1d77x2n7" path="res://scripts/fx_matthew_sacrifice.gd" id="1"]
+[ext_resource type="Script" uid="uid://gujepq485uhp" path="res://scripts/fx_matthew_sacrifice.gd" id="1"]
 [ext_resource type="AudioStream" uid="uid://dqh0urvhuemb" path="res://assets/audio/shield_regen.wav" id="2"]
 
 [node name="FxMatthewSacrifice" type="Node2D"]

@@ -98,7 +98,10 @@ static func mult_for(node: Node, caster: Node, kind: String = "fx") -> float:
 	if mode() == MODE_FULL or caster_in_form(caster):
 		return 1.0
 	node.add_to_group(GROUP)
-	return alpha_for(kind, node.get_tree())
+	## Efekt çoğu zaman sahneye EKLENMEDEN önce soluklaştırılır (fx_enchant_sprite.spawn): ağaçta değilken get_tree() "data.tree is null"
+	## basıyordu (kullanıcının MP günlüğünde yüzlerce satır) - ana döngünün ağacı aynı ağaç.
+	var tree: SceneTree = node.get_tree() if node.is_inside_tree() else Engine.get_main_loop() as SceneTree
+	return alpha_for(kind, tree)
 
 
 ## Uzak bir KİŞİSEL efekti/mermiyi soluklaştırır ve sayaca ekler. kind: "fx" | "proj". Tam modda, formdaki kasterde ya da geçersiz düğümde hiçbir şey yapmaz.

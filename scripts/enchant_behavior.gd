@@ -601,7 +601,8 @@ func _generic_hit(t: Node, dmg: float, is_primary: bool, proj: Node2D) -> void:
 		if _elem_hits % maxi(1, n("shock_every", 1)) == 0:
 			apply_shock_to(t)
 	if f("slow_pct") > 0.0:
-		el(t, "slow", {"pct": f("slow_pct"), "dur": f("slow_dur", 2.0)})
+		## slow_chill (madde 749, Buz Asası): yavaşlayan yaratık hafif buz mavisine döner (enemy.gd _apply_chill_tint_host).
+		el(t, "slow", {"pct": f("slow_pct"), "dur": f("slow_dur", 2.0), "chill": flag("slow_chill")})
 	if n("freeze_after") > 0:
 		## freeze_count_global: sayaç düşmana değil SİLAHA bağlı ("asanın her N. isabeti"). Buz Asası hedeflerini bilerek farklı donmamış düşmanlara dağıttığı için
 		## düşman başına sayaçla aynı düşman N kez neredeyse hiç vurulmuyordu -> "hiç dondurmuyor" (kullanıcı 2026-10-10).
